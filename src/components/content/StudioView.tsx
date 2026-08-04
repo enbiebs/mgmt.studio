@@ -49,7 +49,7 @@ export function StudioView() {
         </div>
         <div className="p-4 flex gap-3">
           <textarea
-            className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 resize-none h-[72px] outline-none text-sm focus:border-blue-400 bg-white"
+            className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 resize-none h-[72px] outline-none text-sm focus:border-blue-400 bg-canvas"
             placeholder='Describe your edit, e.g. "warm teal-orange grade, punch in slowly, glitch the cut"'
           />
           <button className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-xl transition-colors self-end h-[38px]">

@@ -21,7 +21,7 @@ export function Modal({ title, onClose, children, footer }: ModalProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-in fade-in duration-150"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-[460px] max-w-[92vw] p-6 animate-in slide-in-from-bottom-3 duration-200">
+      <div className="bg-canvas rounded-2xl shadow-2xl w-[460px] max-w-[92vw] p-6 animate-in slide-in-from-bottom-3 duration-200">
         <h2 className="font-serif text-lg font-medium mb-5">{title}</h2>
         <div className="space-y-3">{children}</div>
         {footer && <div className="flex gap-2 justify-end mt-6">{footer}</div>}
@@ -39,5 +39,5 @@ export function FormField({ label, children }: { label: string; children: React.
   )
 }
 
-export const inputClass = 'w-full px-2.5 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-400 bg-white'
-export const selectClass = 'w-full px-2.5 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-400 bg-white'
+export const inputClass = 'w-full px-2.5 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-400 bg-canvas'
+export const selectClass = 'w-full px-2.5 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-400 bg-canvas'

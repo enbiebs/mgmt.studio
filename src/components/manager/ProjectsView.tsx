@@ -93,7 +93,7 @@ export function ProjectsView() {
             onClick={() => setFilter(f)}
             className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
               filter === f
-                ? 'bg-gray-900 text-white'
+                ? 'bg-gray-900 text-canvas'
                 : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
             }`}
           >
@@ -119,7 +119,7 @@ export function ProjectsView() {
               className={`border rounded-xl px-4 py-3 ${
                 project.fromArtist && project.status === 'submitted'
                   ? 'border-amber-200 bg-amber-50/30'
-                  : 'border-gray-100 bg-white'
+                  : 'border-gray-100 bg-canvas'
               }`}
             >
               <div className="flex items-start gap-3">
@@ -152,7 +152,7 @@ export function ProjectsView() {
                     <select
                       value={project.assignee ?? ''}
                       onChange={e => assignProject(project.id, e.target.value as Stakeholder)}
-                      className="text-xs text-gray-500 border border-gray-200 rounded-md px-2 py-0.5 bg-white hover:border-gray-300 transition-colors cursor-pointer"
+                      className="text-xs text-gray-500 border border-gray-200 rounded-md px-2 py-0.5 bg-canvas hover:border-gray-300 transition-colors cursor-pointer"
                       title={project.assignee ? STAKEHOLDER_TOOLTIPS[project.assignee] : 'Unassigned'}
                     >
                       <option value="">Unassigned</option>

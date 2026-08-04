@@ -14,10 +14,11 @@
 
 import { create } from 'zustand'
 import type {
-  AppData, Client, Track, Show, Post,
+  AppData, Client, Track, Show, Post, Album,
   MainSection, SongsSub, ContentSub, BizSub, TourSub, Stage, AnalyticsSub,
   UserRole, ProjectStatus, ProjectType, Stakeholder, Project, ArtistTodo,
-  TrackLabelCopy, ReleaseLabelCopy, ChecklistItemKey,
+  TrackLabelCopy, ReleaseLabelCopy, ChecklistItemKey, ChecklistItem, TrackPriority,
+  GuestListEntry, GuestListCategory, ReleaseStakeholder, StakeholderRole,
 } from '@/types'
 import { DEMO_DATA } from '@/lib/demo-data'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
@@ -26,13 +27,15 @@ import { EMPTY_AGENT } from '@/lib/agent-demo'
 import { EMPTY_LEGAL } from '@/lib/legal-demo'
 import { EMPTY_FINANCE } from '@/lib/finance-demo'
 import { EMPTY_TOUR } from '@/lib/advance-demo'
-import { uid, defaultChecklist } from '@/lib/utils'
+import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE } from '@/lib/utils'
 import {
-  loadWorkspaceData, getMyWorkspaceId,
+  loadWorkspaceData, getMyMembership,
   upsertClient, deleteClient as dbDeleteClient,
   upsertTrack, deleteTrack as dbDeleteTrack,
+  upsertAlbum, upsertChecklist,
+  upsertStakeholder, deleteStakeholder as dbDeleteStakeholder,
   upsertShow, deleteShow as dbDeleteShow,
-  upsertPost, deletePost as dbDeletePost,
+  upsertPost, deletePost as dbDeletePost, replaceAutoPosts,
   upsertDeposit, deleteDeposit as dbDeleteDeposit,
   upsertProject, deleteProject as dbDeleteProject,
   upsertArtistTodo, deleteArtistTodo as dbDeleteArtistTodo,
@@ -67,6 +70,10 @@ interface StudioState {
 
   // Role
   role: UserRole
+  // The role a signed-in user is actually assigned in workspace_members —
+  // null in demo mode. Only a real 'manager' may use the role switcher to
+  // preview other roles' views; everyone else is locked to authRole.
+  authRole: UserRole | null
 
   // Navigation
   view: 'dashboard' | 'studio'
@@ -128,10 +135,21 @@ interface StudioState {
   addTrack: (albumId: string, title: string, stage: Stage) => void
   advanceTrack: (trackId: string) => void
   deleteTrack: (trackId: string) => void
+  updateTrackDetails: (trackId: string, patch: { title?: string; notes?: string; priority?: TrackPriority; owner?: string; dueDate?: string; stage?: Stage }) => void
   updateTrackLabelCopy: (trackId: string, patch: TrackLabelCopy) => void
   updateAlbumLabelCopy: (albumId: string, patch: ReleaseLabelCopy) => void
+  scheduleRelease: (albumId: string, releaseDate: string) => void
   toggleChecklistItem: (albumId: string, key: ChecklistItemKey) => void
   updateChecklistNote: (albumId: string, key: ChecklistItemKey, note: string) => void
+
+  // ── Release stakeholders ──
+  addStakeholder: (albumId: string, patch: { name: string; role: StakeholderRole; org?: string; email?: string; phone?: string; notes?: string }) => void
+  deleteStakeholder: (stakeholderId: string) => void
+
+  // ── Guest list ──
+  addGuest: (showId: string, name: string, qty: number, category: GuestListCategory, credential?: string, notes?: string) => void
+  toggleGuestCheckedIn: (guestId: string) => void
+  deleteGuest: (guestId: string) => void
 
   // ── Show actions ──
   addShow: (date: string, city: string, venue: string, time: string) => void
@@ -168,6 +186,7 @@ export const useStore = create<StudioState>((set, get) => ({
   isLoading:   false,
 
   role:          'manager',
+  authRole:      null,
 
   view:          'dashboard',
   clientId:      null,
@@ -197,18 +216,21 @@ export const useStore = create<StudioState>((set, get) => ({
   initFromSupabase: async (userId) => {
     set({ isLoading: true, userId })
     try {
-      const workspaceId = await getMyWorkspaceId()
-      if (!workspaceId) {
+      const membership = await getMyMembership()
+      if (!membership) {
         // New user with no workspace yet — workspace is created by DB trigger,
         // but may take a moment. Fall back to demo data.
         set({ isLoading: false })
         return
       }
+      const { workspaceId, role } = membership
       const appData = await loadWorkspaceData(workspaceId)
       // If workspace is empty, seed with demo data structure (no data, clean slate)
       set({
         workspaceId,
         isLoading: false,
+        role,
+        authRole: role,
         data: appData.clients.length > 0 ? appData : { clients: [] },
       })
       // Clear localStorage since we now use Supabase
@@ -283,7 +305,11 @@ export const useStore = create<StudioState>((set, get) => ({
     const updated = { clients: [...data.clients, newClient] }
     set({ data: updated })
     saveData(updated)
-    if (workspaceId) upsertClient(newClient, workspaceId).catch(console.error)
+    if (workspaceId) {
+      upsertClient(newClient, workspaceId).catch(console.error)
+      const defaultAlbum = newClient.songs.albums[0]
+      if (defaultAlbum.checklist) upsertChecklist(defaultAlbum.checklist, defaultAlbum.id).catch(console.error)
+    }
   },
 
   updateClient: (id, name, genre, color) => {
@@ -388,8 +414,10 @@ export const useStore = create<StudioState>((set, get) => ({
     dbDeleteTrack(trackId).catch(console.error)
   },
 
-  updateTrackLabelCopy: (trackId, patch) => {
-    const { data, clientId } = get()
+  updateTrackDetails: (trackId, patch) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedTrack: Track | undefined
+    let updatedAlbumId: string | undefined
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId) return c
@@ -398,9 +426,13 @@ export const useStore = create<StudioState>((set, get) => ({
           songs: {
             albums: c.songs.albums.map(a => ({
               ...a,
-              tracks: a.tracks.map(t =>
-                t.id !== trackId ? t : { ...t, labelCopy: { ...t.labelCopy, ...patch } }
-              ),
+              tracks: a.tracks.map(t => {
+                if (t.id !== trackId) return t
+                const next = { ...t, ...patch }
+                updatedTrack = next
+                updatedAlbumId = a.id
+                return next
+              }),
             })),
           },
         }
@@ -408,10 +440,203 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
+    if (workspaceId && updatedTrack && updatedAlbumId) upsertTrack(updatedTrack, updatedAlbumId).catch(console.error)
+  },
+
+  updateTrackLabelCopy: (trackId, patch) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedTrack: Track | undefined
+    let updatedAlbumId: string | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          songs: {
+            albums: c.songs.albums.map(a => ({
+              ...a,
+              tracks: a.tracks.map(t => {
+                if (t.id !== trackId) return t
+                const next = { ...t, labelCopy: { ...t.labelCopy, ...patch } }
+                updatedTrack = next
+                updatedAlbumId = a.id
+                return next
+              }),
+            })),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && updatedTrack && updatedAlbumId) upsertTrack(updatedTrack, updatedAlbumId).catch(console.error)
   },
 
   updateAlbumLabelCopy: (albumId, patch) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedAlbum: Album | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          songs: {
+            albums: c.songs.albums.map(a => {
+              if (a.id !== albumId) return a
+              const next = { ...a, labelCopy: { ...a.labelCopy, ...patch } }
+              updatedAlbum = next
+              return next
+            }),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId && updatedAlbum) upsertAlbum(updatedAlbum, clientId).catch(console.error)
+  },
+
+  scheduleRelease: (albumId, releaseDate) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedAlbum: Album | undefined
+    let generatedPosts: Post[] = []
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        const album = c.songs.albums.find(a => a.id === albumId)
+        if (!album) return c
+        const generated: Post[] = ROLLOUT_TEMPLATE.map(item => ({
+          id: 'post-' + uid(),
+          date: addDays(releaseDate, item.offset),
+          title: item.title(album.title),
+          time: item.time,
+          type: item.type,
+          releaseId: albumId,
+          auto: true,
+        }))
+        generatedPosts = generated
+        return {
+          ...c,
+          songs: {
+            albums: c.songs.albums.map(a => {
+              if (a.id !== albumId) return a
+              const next = { ...a, releaseDate }
+              updatedAlbum = next
+              return next
+            }),
+          },
+          content: {
+            posts: [...c.content.posts.filter(p => !(p.auto && p.releaseId === albumId)), ...generated],
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId && updatedAlbum) {
+      upsertAlbum(updatedAlbum, clientId).catch(console.error)
+      replaceAutoPosts(generatedPosts, clientId, albumId).catch(console.error)
+    }
+  },
+
+  toggleChecklistItem: (albumId, key) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedItems: ChecklistItem[] | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          songs: {
+            albums: c.songs.albums.map(a => {
+              if (a.id !== albumId) return a
+              const items = a.checklist && a.checklist.length ? a.checklist : defaultChecklist()
+              const next = items.map(i => i.key === key ? { ...i, done: !i.done } : i)
+              updatedItems = next
+              return { ...a, checklist: next }
+            }),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && updatedItems) upsertChecklist(updatedItems, albumId).catch(console.error)
+  },
+
+  updateChecklistNote: (albumId, key, note) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedItems: ChecklistItem[] | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          songs: {
+            albums: c.songs.albums.map(a => {
+              if (a.id !== albumId) return a
+              const items = a.checklist && a.checklist.length ? a.checklist : defaultChecklist()
+              const next = items.map(i => i.key === key ? { ...i, note } : i)
+              updatedItems = next
+              return { ...a, checklist: next }
+            }),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && updatedItems) upsertChecklist(updatedItems, albumId).catch(console.error)
+  },
+
+  // ── Guest list ──
+  addGuest: (showId, name, qty, category, credential, notes) => {
     const { data, clientId } = get()
+    const newGuest: GuestListEntry = { id: 'gl-' + uid(), showId, name, qty, category, checkedIn: false, credential, notes }
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return { ...c, tour: { ...c.tour, guestList: [...(c.tour.guestList ?? []), newGuest] } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+  },
+
+  toggleGuestCheckedIn: (guestId) => {
+    const { data, clientId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          tour: {
+            ...c.tour,
+            guestList: (c.tour.guestList ?? []).map(g => g.id === guestId ? { ...g, checkedIn: !g.checkedIn } : g),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+  },
+
+  deleteGuest: (guestId) => {
+    const { data, clientId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return { ...c, tour: { ...c.tour, guestList: (c.tour.guestList ?? []).filter(g => g.id !== guestId) } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+  },
+
+  // ── Release stakeholders ──
+  addStakeholder: (albumId, patch) => {
+    const { data, clientId, workspaceId } = get()
+    const newStakeholder: ReleaseStakeholder = { id: 'sh-' + uid(), ...patch }
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId) return c
@@ -419,7 +644,7 @@ export const useStore = create<StudioState>((set, get) => ({
           ...c,
           songs: {
             albums: c.songs.albums.map(a =>
-              a.id !== albumId ? a : { ...a, labelCopy: { ...a.labelCopy, ...patch } }
+              a.id !== albumId ? a : { ...a, stakeholders: [...(a.stakeholders ?? []), newStakeholder] }
             ),
           },
         }
@@ -427,48 +652,28 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
+    if (workspaceId) upsertStakeholder(newStakeholder, albumId).catch(console.error)
   },
 
-  toggleChecklistItem: (albumId, key) => {
-    const { data, clientId } = get()
+  deleteStakeholder: (stakeholderId) => {
+    const { data, clientId, workspaceId } = get()
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId) return c
         return {
           ...c,
           songs: {
-            albums: c.songs.albums.map(a => {
-              if (a.id !== albumId) return a
-              const items = a.checklist && a.checklist.length ? a.checklist : defaultChecklist()
-              return { ...a, checklist: items.map(i => i.key === key ? { ...i, done: !i.done } : i) }
-            }),
+            albums: c.songs.albums.map(a => ({
+              ...a,
+              stakeholders: (a.stakeholders ?? []).filter(s => s.id !== stakeholderId),
+            })),
           },
         }
       }),
     }
     set({ data: updated })
     saveData(updated)
-  },
-
-  updateChecklistNote: (albumId, key, note) => {
-    const { data, clientId } = get()
-    const updated = {
-      clients: data.clients.map(c => {
-        if (c.id !== clientId) return c
-        return {
-          ...c,
-          songs: {
-            albums: c.songs.albums.map(a => {
-              if (a.id !== albumId) return a
-              const items = a.checklist && a.checklist.length ? a.checklist : defaultChecklist()
-              return { ...a, checklist: items.map(i => i.key === key ? { ...i, note } : i) }
-            }),
-          },
-        }
-      }),
-    }
-    set({ data: updated })
-    saveData(updated)
+    if (workspaceId) dbDeleteStakeholder(stakeholderId).catch(console.error)
   },
 
   // ── Show actions ──

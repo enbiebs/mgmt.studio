@@ -16,7 +16,7 @@ export function SocialPanel({ analytics: a }: { analytics: AnalyticsData }) {
         {sorted.map(s => {
           const pc = PLATFORM_COLORS[s.platform] ?? '#4c8df6'
           return (
-            <div key={s.platform} className="bg-white border border-gray-100 rounded-2xl p-4">
+            <div key={s.platform} className="bg-canvas border border-gray-100 rounded-2xl p-4">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <span className="text-2xl">{s.icon}</span>
@@ -51,7 +51,7 @@ export function SocialPanel({ analytics: a }: { analytics: AnalyticsData }) {
       </div>
 
       {/* Engagement comparison */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5">
+      <div className="bg-canvas border border-gray-100 rounded-2xl p-5">
         <SectionHeader>Engagement Rate by Platform</SectionHeader>
         <div className="flex flex-col gap-3">
           {sorted.map(s => {
@@ -77,7 +77,7 @@ export function SocialPanel({ analytics: a }: { analytics: AnalyticsData }) {
       </div>
 
       {/* Combined follower breakdown */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5">
+      <div className="bg-canvas border border-gray-100 rounded-2xl p-5">
         <SectionHeader>Total Social Footprint</SectionHeader>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {sorted.map(s => (

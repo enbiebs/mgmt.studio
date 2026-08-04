@@ -14,7 +14,7 @@ export function AudiencePanel({ analytics: a }: { analytics: AnalyticsData }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
         {/* Countries */}
-        <div className="bg-white border border-gray-100 rounded-2xl p-5">
+        <div className="bg-canvas border border-gray-100 rounded-2xl p-5">
           <SectionHeader>Top Countries</SectionHeader>
           <div className="flex flex-col gap-2.5">
             {aud.topCountries.map((c, i) => (
@@ -33,7 +33,7 @@ export function AudiencePanel({ analytics: a }: { analytics: AnalyticsData }) {
         </div>
 
         {/* Cities */}
-        <div className="bg-white border border-gray-100 rounded-2xl p-5">
+        <div className="bg-canvas border border-gray-100 rounded-2xl p-5">
           <SectionHeader>Top Cities</SectionHeader>
           <div className="flex flex-col gap-2.5">
             {aud.topCities.map((c, i) => (
@@ -59,7 +59,7 @@ export function AudiencePanel({ analytics: a }: { analytics: AnalyticsData }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
         {/* Age */}
-        <div className="bg-white border border-gray-100 rounded-2xl p-5">
+        <div className="bg-canvas border border-gray-100 rounded-2xl p-5">
           <SectionHeader>Age Breakdown</SectionHeader>
           <div className="flex items-end gap-3 h-32">
             {aud.age.map((a, i) => (
@@ -79,7 +79,7 @@ export function AudiencePanel({ analytics: a }: { analytics: AnalyticsData }) {
         </div>
 
         {/* Gender */}
-        <div className="bg-white border border-gray-100 rounded-2xl p-5">
+        <div className="bg-canvas border border-gray-100 rounded-2xl p-5">
           <SectionHeader>Gender</SectionHeader>
           <div className="flex flex-col gap-4 mt-2">
             {aud.gender.map((g, i) => (

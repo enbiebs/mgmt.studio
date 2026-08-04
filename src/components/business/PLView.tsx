@@ -122,7 +122,7 @@ export function PLView() {
             key={m.month}
             onClick={() => setSelectedMonth(m.month)}
             className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-              m.month === active.month ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              m.month === active.month ? 'bg-gray-900 text-canvas' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
             }`}
           >
             {fmtMonth(m.month)}

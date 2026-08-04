@@ -40,7 +40,7 @@ interface StatCardProps {
 
 export function StatCard({ label, value, delta, deltaPct, sub }: StatCardProps) {
   return (
-    <div className="bg-white border border-gray-100 rounded-2xl p-4">
+    <div className="bg-canvas border border-gray-100 rounded-2xl p-4">
       <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">{label}</div>
       <div className="font-serif text-2xl font-semibold">{value}</div>
       {(delta !== undefined || sub) && (

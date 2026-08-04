@@ -3,7 +3,7 @@ import './globals.css'
 import { AuthProvider } from '@/components/AuthProvider'
 
 export const metadata: Metadata = {
-  title: 'Studio',
+  title: 'Mgmt Studio',
   description: 'Music management platform',
 }
 

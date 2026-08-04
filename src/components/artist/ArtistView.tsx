@@ -17,8 +17,15 @@
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import type { ProjectType } from '@/types'
-import { initials } from '@/lib/utils'
+import { initials, fmt } from '@/lib/utils'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
+
+/** Compact number formatter for big at-a-glance stats: 1.8M, 220K, 940 */
+function fmtCompact(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000)     return `${(n / 1_000).toFixed(0)}K`
+  return `${n}`
+}
 
 // ── Stage display (simplified — no internal process labels) ─
 const STAGE_DISPLAY: Record<string, { label: string; pct: number; color: string }> = {
@@ -67,6 +74,20 @@ export function ArtistView() {
   const activeTodos = todos.filter(t => !t.done)
   const doneTodos   = todos.filter(t => t.done)
 
+  // Business snapshot (headline numbers only — no splits/percentages)
+  const usd = client.business.royalties.streams.filter(s => s.currency === 'USD').reduce((a, b) => a + b.amount, 0)
+  const gbp = client.business.royalties.streams.filter(s => s.currency === 'GBP').reduce((a, b) => a + b.amount, 0)
+  const royStr = [usd > 0 ? fmt(usd, 'USD') : '', gbp > 0 ? fmt(gbp, 'GBP') : ''].filter(Boolean).join(' · ') || '—'
+  const pendingPayouts = client.business.banking.deposits.filter(d => !d.done).length
+  const regIssues = client.business.catalog.works.filter(w => w.bmi === 'warn' || w.sx === 'warn' || w.ppl === 'warn').length
+
+  // Analytics snapshot
+  const a = client.analytics
+  const listenersUp = a?.streaming?.monthlyListenersPct >= 0
+
+  // Fandom snapshot
+  const f = client.fandom
+
   function handleAddTodo(e: React.FormEvent) {
     e.preventDefault()
     if (!newTodo.trim()) return
@@ -83,7 +104,7 @@ export function ArtistView() {
   return (
     <div className="flex-1 overflow-auto bg-gray-50">
       {/* Artist hero */}
-      <div className="bg-white border-b border-gray-100 px-6 py-5">
+      <div className="bg-canvas border-b border-gray-100 px-6 py-5">
         <div className="flex items-center gap-4">
           <div
             className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-lg font-bold flex-shrink-0"
@@ -109,7 +130,7 @@ export function ArtistView() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-6">
 
         {/* ── Releases ── */}
-        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+        <div className="bg-canvas rounded-2xl border border-gray-100 p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
               {album?.title ?? 'Your Music'}
@@ -152,7 +173,7 @@ export function ArtistView() {
         </div>
 
         {/* ── Upcoming Shows ── */}
-        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+        <div className="bg-canvas rounded-2xl border border-gray-100 p-5">
           <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">
             Upcoming Shows
           </div>
@@ -183,7 +204,7 @@ export function ArtistView() {
         </div>
 
         {/* ── Scheduled Content ── */}
-        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+        <div className="bg-canvas rounded-2xl border border-gray-100 p-5">
           <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">
             Coming Up — Content
           </div>
@@ -210,8 +231,59 @@ export function ArtistView() {
           )}
         </div>
 
+        {/* ── Business ── */}
+        <div className="bg-canvas rounded-2xl border border-gray-100 p-5">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">Business</div>
+          <div className="flex items-end justify-between">
+            <div>
+              <div className="font-serif text-2xl font-medium">{royStr}</div>
+              <div className="text-xs text-gray-400 mt-0.5">royalties owed · {client.business.royalties.streams.length} streams</div>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              {pendingPayouts > 0 && (
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700">{pendingPayouts} pending payout{pendingPayouts !== 1 ? 's' : ''}</span>
+              )}
+              {regIssues > 0 && (
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-50 text-red-600">{regIssues} reg issue{regIssues !== 1 ? 's' : ''}</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Analytics ── */}
+        <div className="bg-canvas rounded-2xl border border-gray-100 p-5">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">Analytics</div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="font-serif text-2xl font-medium">{fmtCompact(a?.streaming?.monthlyListeners ?? 0)}</div>
+              <div className={`text-xs mt-0.5 ${listenersUp ? 'text-green-600' : 'text-red-500'}`}>
+                {listenersUp ? '↑' : '↓'} {Math.abs(a?.streaming?.monthlyListenersPct ?? 0)}% monthly listeners
+              </div>
+            </div>
+            <div>
+              <div className="font-serif text-2xl font-medium">{a?.momentumScore ?? 0}<span className="text-sm text-gray-300">/100</span></div>
+              <div className="text-xs text-gray-400 mt-0.5">momentum score</div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Fandom ── */}
+        <div className="bg-canvas rounded-2xl border border-gray-100 p-5">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">Fandom</div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <div className="font-serif text-2xl font-medium">{fmtCompact(f?.totalFans ?? 0)}</div>
+              <div className="text-xs text-gray-400 mt-0.5">total fans</div>
+            </div>
+            <div>
+              <div className="font-serif text-2xl font-medium">{f?.avgEngagement ?? 0}%</div>
+              <div className="text-xs text-gray-400 mt-0.5">avg engagement</div>
+            </div>
+          </div>
+        </div>
+
         {/* ── My Todos ── */}
-        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+        <div className="bg-canvas rounded-2xl border border-gray-100 p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
               My To-Dos

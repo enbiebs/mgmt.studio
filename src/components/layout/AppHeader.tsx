@@ -4,7 +4,8 @@ import { initials } from '@/lib/utils'
 import { useState, useRef, useEffect } from 'react'
 
 export function AppHeader() {
-  const { view, section, clientId, data, role, setRole, goToDashboard, openClient, setSection, signOut } = useStore()
+  const { view, section, clientId, data, role, authRole, setRole, goToDashboard, openClient, setSection, signOut } = useStore()
+  const canSwitchRole = authRole === null || authRole === 'manager'
   const client = useStore(s => s.getClient())
   const [switchOpen, setSwitchOpen] = useState(false)
   const [userOpen, setUserOpen] = useState(false)
@@ -36,7 +37,7 @@ export function AppHeader() {
       )}
 
       {/* Logo */}
-      <div className="font-serif font-semibold text-base tracking-tight flex-shrink-0">Studio</div>
+      <div className="font-serif font-semibold text-base tracking-tight flex-shrink-0">Mgmt Studio</div>
 
       {/* Main nav (studio mode, manager role only — agent/lawyer/artist have their own full views) */}
       {view === 'studio' && role === 'manager' && (
@@ -64,8 +65,9 @@ export function AppHeader() {
       {view === 'studio' && role !== 'manager' && <div className="flex-1" />}
 
       <div className="flex items-center gap-2 ml-auto">
-        {/* Role toggle (only when viewing a client) */}
-        {view === 'studio' && client && (
+        {/* Role toggle — only a real manager may preview other roles' views.
+            Everyone else is locked to the role assigned in workspace_members. */}
+        {view === 'studio' && client && canSwitchRole && (
           <div className="flex items-center bg-gray-100 rounded-full p-0.5 text-xs font-semibold gap-0.5">
             {([
               ['manager', 'Manager', 'Full management workspace'],
@@ -78,7 +80,7 @@ export function AppHeader() {
                 onClick={() => setRole(r)}
                 className={`px-3 py-1 rounded-full transition-colors ${
                   role === r
-                    ? 'bg-white text-gray-900 shadow-sm'
+                    ? 'bg-gray-900 text-canvas shadow-sm'
                     : 'text-gray-400 hover:text-gray-600'
                 }`}
                 title={title}
@@ -87,6 +89,11 @@ export function AppHeader() {
               </button>
             ))}
           </div>
+        )}
+        {view === 'studio' && client && !canSwitchRole && (
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-500" title="Your assigned role">
+            {role[0].toUpperCase() + role.slice(1)}
+          </span>
         )}
 
         {/* Client switcher */}
@@ -106,7 +113,7 @@ export function AppHeader() {
             </button>
 
             {switchOpen && (
-              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg min-w-[160px] overflow-hidden z-50">
+              <div className="absolute right-0 top-full mt-1 bg-canvas border border-gray-100 rounded-xl shadow-lg min-w-[160px] overflow-hidden z-50">
                 {data.clients.map(c => (
                   <button
                     key={c.id}
@@ -139,7 +146,7 @@ export function AppHeader() {
             S
           </button>
           {userOpen && (
-            <div className="absolute right-0 top-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg min-w-[140px] overflow-hidden z-50 py-1">
+            <div className="absolute right-0 top-full mt-1 bg-canvas border border-gray-100 rounded-xl shadow-lg min-w-[140px] overflow-hidden z-50 py-1">
               <button
                 onClick={() => { setUserOpen(false); signOut() }}
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left text-gray-600 hover:bg-gray-50 transition-colors"

@@ -9,9 +9,9 @@
 
 import { createClient } from '@/lib/supabase/client'
 import type {
-  AppData, Client, Track, Show, Post,
+  AppData, Client, Track, Show, Post, Album,
   Project, ArtistTodo, TourOffer, Contract,
-  Invoice, Expense, PLMonth,
+  Invoice, Expense, PLMonth, ChecklistItem, ReleaseStakeholder, UserRole,
 } from '@/types'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
 import { EMPTY_FANDOM }    from '@/lib/fandom-demo'
@@ -42,6 +42,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     projects, artistTodos,
     tourOffers, contracts,
     invoices, lineItems, expenses, plMonths,
+    checklistItems, stakeholders,
   ] = await Promise.all([
     supabase.from('albums').select('*').in('client_id', clientIds),
     supabase.from('tracks').select('*'),
@@ -58,11 +59,15 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     supabase.from('invoice_line_items').select('*'),
     supabase.from('expenses').select('*').in('client_id', clientIds),
     supabase.from('pl_months').select('*').in('client_id', clientIds),
+    supabase.from('checklist_items').select('*'),
+    supabase.from('release_stakeholders').select('*'),
   ])
 
   const albumRows     = albums.data       ?? []
   const trackRows     = tracks.data       ?? []
   const albumIds      = albumRows.map(a => a.id)
+  const checklistRows = (checklistItems.data ?? []).filter((i: { album_id: string }) => albumIds.includes(i.album_id))
+  const stakeholderRows = (stakeholders.data ?? []).filter((s: { album_id: string }) => albumIds.includes(s.album_id))
 
   // Build album→tracks lookup (only tracks for albums in this workspace)
   const tracksByAlbum = trackRows
@@ -94,10 +99,41 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
         releaseDate: a.release_date ?? undefined,
         tracks: (tracksByAlbum[a.id] ?? [])
           .sort((x: { num: number }, y: { num: number }) => x.num - y.num)
-          .map((t: { id: string; num: number; title: string; stage: string; version: number; touched: string; notes?: string }) => ({
+          .map((t: {
+            id: string; num: number; title: string; stage: string; version: number; touched: string; notes?: string
+            isrc?: string; writers?: string; producers?: string; publisher?: string; pro?: string
+            explicit?: boolean; duration?: string; language?: string
+            priority?: string; owner?: string; due_date?: string
+          }) => ({
             id: t.id, num: t.num, title: t.title,
             stage: t.stage as Track['stage'],
             version: t.version, touched: t.touched, notes: t.notes,
+            priority: t.priority as Track['priority'],
+            owner: t.owner ?? undefined,
+            dueDate: t.due_date ?? undefined,
+            labelCopy: {
+              isrc: t.isrc ?? undefined, writers: t.writers ?? undefined,
+              producers: t.producers ?? undefined, publisher: t.publisher ?? undefined,
+              pro: t.pro ?? undefined, explicit: t.explicit ?? undefined,
+              duration: t.duration ?? undefined, language: t.language ?? undefined,
+            },
+          })),
+        labelCopy: {
+          upc: a.upc ?? undefined, label: a.label ?? undefined,
+          primaryArtist: a.primary_artist ?? undefined, genre: a.genre ?? undefined,
+          copyrightP: a.copyright_p ?? undefined, copyrightC: a.copyright_c ?? undefined,
+        },
+        checklist: checklistRows
+          .filter((i: { album_id: string }) => i.album_id === a.id)
+          .map((i: { key: string; label: string; phase: string; done: boolean; note?: string }) => ({
+            key: i.key as ChecklistItem['key'], label: i.label,
+            phase: i.phase as ChecklistItem['phase'], done: i.done, note: i.note,
+          })),
+        stakeholders: stakeholderRows
+          .filter((s: { album_id: string }) => s.album_id === a.id)
+          .map((s: { id: string; name: string; role: string; org?: string; email?: string; phone?: string; notes?: string }) => ({
+            id: s.id, name: s.name, role: s.role as ReleaseStakeholder['role'],
+            org: s.org, email: s.email, phone: s.phone, notes: s.notes,
           })),
       }))
 
@@ -111,9 +147,10 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
 
     const cPosts = (posts.data ?? [])
       .filter((p: { client_id: string }) => p.client_id === c.id)
-      .map((p: { id: string; date: string; title: string; time: string; type: string }) => ({
+      .map((p: { id: string; date: string; title: string; time: string; type: string; release_id?: string; auto?: boolean }) => ({
         id: p.id, date: p.date, title: p.title,
         time: p.time, type: p.type as Post['type'],
+        releaseId: p.release_id ?? undefined, auto: p.auto ?? undefined,
       }))
 
     const cRoyalties = (royaltyStreams.data ?? [])
@@ -251,15 +288,24 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
   return { clients }
 }
 
-// ── Get current user's workspace ID ────────────────────────
-export async function getMyWorkspaceId(): Promise<string | null> {
+// ── Get current user's workspace + real role ─────────────────
+// The role a signed-in user actually holds — not the client-side
+// "preview as" toggle. Only a real 'manager' should be able to
+// switch that toggle to look at other roles' views.
+export async function getMyMembership(): Promise<{ workspaceId: string; role: UserRole } | null> {
   const supabase = createClient()
   const { data } = await supabase
     .from('workspace_members')
-    .select('workspace_id')
+    .select('workspace_id, role')
     .limit(1)
     .single()
-  return data?.workspace_id ?? null
+  if (!data) return null
+  return { workspaceId: data.workspace_id, role: data.role as UserRole }
+}
+
+export async function getMyWorkspaceId(): Promise<string | null> {
+  const membership = await getMyMembership()
+  return membership?.workspaceId ?? null
 }
 
 // ── Client upsert ──────────────────────────────────────────
@@ -288,17 +334,71 @@ export async function deleteClient(clientId: string) {
 // ── Track ──────────────────────────────────────────────────
 export async function upsertTrack(track: Track, albumId: string) {
   const supabase = createClient()
+  const lc = track.labelCopy
   await supabase.from('tracks').upsert({
     id: track.id, album_id: albumId,
     num: track.num, title: track.title,
     stage: track.stage, version: track.version,
     touched: track.touched, notes: track.notes ?? null,
+    priority: track.priority ?? null,
+    owner: track.owner ?? null,
+    due_date: track.dueDate ?? null,
+    isrc: lc?.isrc ?? null, writers: lc?.writers ?? null,
+    producers: lc?.producers ?? null, publisher: lc?.publisher ?? null,
+    pro: lc?.pro ?? null, explicit: lc?.explicit ?? false,
+    duration: lc?.duration ?? null, language: lc?.language ?? null,
   })
 }
 
 export async function deleteTrack(trackId: string) {
   const supabase = createClient()
   await supabase.from('tracks').delete().eq('id', trackId)
+}
+
+// ── Album ──────────────────────────────────────────────────
+export async function upsertAlbum(album: Album, clientId: string) {
+  const supabase = createClient()
+  const lc = album.labelCopy
+  await supabase.from('albums').upsert({
+    id: album.id, client_id: clientId, title: album.title,
+    release_date: album.releaseDate ?? null,
+    upc: lc?.upc ?? null, label: lc?.label ?? null,
+    primary_artist: lc?.primaryArtist ?? null, genre: lc?.genre ?? null,
+    copyright_p: lc?.copyrightP ?? null, copyright_c: lc?.copyrightC ?? null,
+  })
+}
+
+// ── Checklist items ──────────────────────────────────────────
+export async function upsertChecklistItem(item: ChecklistItem, albumId: string) {
+  const supabase = createClient()
+  await supabase.from('checklist_items').upsert(
+    { album_id: albumId, key: item.key, label: item.label, phase: item.phase, done: item.done, note: item.note ?? null },
+    { onConflict: 'album_id,key' }
+  )
+}
+
+export async function upsertChecklist(items: ChecklistItem[], albumId: string) {
+  const supabase = createClient()
+  await supabase.from('checklist_items').upsert(
+    items.map(item => ({ album_id: albumId, key: item.key, label: item.label, phase: item.phase, done: item.done, note: item.note ?? null })),
+    { onConflict: 'album_id,key' }
+  )
+}
+
+// ── Release stakeholders ──────────────────────────────────────
+export async function upsertStakeholder(stakeholder: ReleaseStakeholder, albumId: string) {
+  const supabase = createClient()
+  await supabase.from('release_stakeholders').upsert({
+    id: stakeholder.id, album_id: albumId,
+    name: stakeholder.name, role: stakeholder.role,
+    org: stakeholder.org ?? null, email: stakeholder.email ?? null,
+    phone: stakeholder.phone ?? null, notes: stakeholder.notes ?? null,
+  })
+}
+
+export async function deleteStakeholder(stakeholderId: string) {
+  const supabase = createClient()
+  await supabase.from('release_stakeholders').delete().eq('id', stakeholderId)
 }
 
 // ── Show ───────────────────────────────────────────────────
@@ -324,12 +424,27 @@ export async function upsertPost(post: Post, clientId: string) {
     id: post.id, client_id: clientId,
     date: post.date, title: post.title,
     time: post.time, type: post.type,
+    release_id: post.releaseId ?? null, auto: post.auto ?? false,
   })
 }
 
 export async function deletePost(postId: string) {
   const supabase = createClient()
   await supabase.from('posts').delete().eq('id', postId)
+}
+
+/** Replaces the auto-generated rollout posts for a release in one round trip. */
+export async function replaceAutoPosts(posts: Post[], clientId: string, releaseId: string) {
+  const supabase = createClient()
+  await supabase.from('posts').delete().eq('release_id', releaseId).eq('auto', true)
+  if (posts.length > 0) {
+    await supabase.from('posts').insert(
+      posts.map(p => ({
+        id: p.id, client_id: clientId, date: p.date, title: p.title,
+        time: p.time, type: p.type, release_id: releaseId, auto: true,
+      }))
+    )
+  }
 }
 
 // ── Deposit ────────────────────────────────────────────────

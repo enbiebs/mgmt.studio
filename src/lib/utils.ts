@@ -2,7 +2,7 @@
 //  Studio · Utility functions
 // ──────────────────────────────────────────────────────────
 
-import type { Currency, Stage, ChecklistItem } from '@/types'
+import type { Currency, Stage, ChecklistItem, PostType } from '@/types'
 
 /** Format a money amount: $8K, £40K, $200K, $1.2M */
 export function fmt(amount: number, currency: Currency): string {
@@ -47,6 +47,39 @@ export function today(): string {
   return toDateStr(new Date())
 }
 
+/** Add (or subtract, with a negative n) days to an ISO date string */
+export function addDays(dateStr: string, n: number): string {
+  const d = new Date(dateStr + 'T00:00:00')
+  d.setDate(d.getDate() + n)
+  return toDateStr(d)
+}
+
+/**
+ * Release rollout template — the day-by-day content cadence a release
+ * actually follows: countdown posts building to release day, then a
+ * cross-platform push (IG, TikTok, YouTube Shorts, Spotify Clips) in the
+ * weeks after, since a single "official sound" clip gets re-cut across
+ * every platform rather than posted once and left alone.
+ */
+export const ROLLOUT_TEMPLATE: { offset: number; type: PostType; time: string; title: (t: string) => string }[] = [
+  { offset: -16, type: 'laylo',         time: '10:00am', title: t => `Pre-save "${t}" — out this Friday` },
+  { offset: -14, type: 'post',          time: '11:00am', title: t => `Gearing up for "${t}" — behind the scenes` },
+  { offset: -7,  type: 'post',          time: '11:00am', title: t => `One week until "${t}" 🔥` },
+  { offset: -4,  type: 'post',          time: '11:00am', title: t => `"${t}" is out this Friday` },
+  { offset: -2,  type: 'story',         time: '5:00pm',  title: t => `"${t}" — pre-save reminder / countdown` },
+  { offset: -1,  type: 'story',         time: '6:00pm',  title: t => `"${t}" drops tomorrow` },
+  { offset: 0,   type: 'post',          time: '9:00am',  title: t => `${t.toUpperCase()} IS OUT NOW!` },
+  { offset: 0,   type: 'tiktok',        time: '9:00am',  title: t => `"${t}" — out now (Official Sound)` },
+  { offset: 0,   type: 'tweet',         time: '9:00am',  title: t => `"${t}" — streaming everywhere now` },
+  { offset: 1,   type: 'reel',          time: '11:00am', title: t => `"${t}" — reaction & recap` },
+  { offset: 2,   type: 'story',         time: '12:00pm', title: t => `"${t}" — fan reactions` },
+  { offset: 3,   type: 'shorts',        time: '11:00am', title: t => `"${t}" — Official Short` },
+  { offset: 5,   type: 'spotify-clip',  time: '11:00am', title: t => `"${t}" — Spotify Clip` },
+  { offset: 7,   type: 'tiktok',        time: '11:00am', title: t => `"${t}" — week one push` },
+  { offset: 9,   type: 'story',         time: '11:00am', title: t => `"${t}" — behind-the-scenes archive drop` },
+  { offset: 14,  type: 'reel',          time: '11:00am', title: t => `"${t}" — still on repeat` },
+]
+
 /** Calendar grid for a month — returns Date objects including padding days */
 export function calendarDays(year: number, month: number): { date: Date; current: boolean }[] {
   const first = new Date(year, month, 1)
@@ -76,19 +109,45 @@ export const MONTH_NAMES = [
 export const MONTH_SHORT = MONTH_NAMES.map(m => m.slice(0, 3))
 export const DOW_SHORT   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 
-/** Fresh release checklist — all items unchecked */
+/** Parses a "touched" string like "12d" / "3d" / "now" into a day count, or null if unparseable */
+export function touchedDays(touched: string): number | null {
+  if (touched === 'now') return 0
+  const m = touched.match(/^(\d+)d$/)
+  return m ? Number(m[1]) : null
+}
+
+/** A non-done track is "stale" once it's gone 10+ days without an update */
+export function isStale(stage: Stage, touched: string): boolean {
+  if (stage === 'done') return false
+  const days = touchedDays(touched)
+  return days !== null && days >= 10
+}
+
+/** Fresh release checklist — all items unchecked, grouped by phase */
 export function defaultChecklist(): ChecklistItem[] {
   return [
-    { key: 'masters',     label: 'Final masters delivered',           done: false },
-    { key: 'artwork',     label: 'Artwork finalized (3000×3000)',     done: false },
-    { key: 'isrc',        label: 'ISRC codes assigned',               done: false },
-    { key: 'upc',         label: 'UPC / barcode assigned',            done: false },
-    { key: 'splits',      label: 'Splits sheet signed',               done: false },
-    { key: 'labelcopy',   label: 'Label copy completed',              done: false },
-    { key: 'metadata',    label: 'Metadata submitted to distributor', done: false },
-    { key: 'releasedate', label: 'Release date confirmed',            done: false },
-    { key: 'presave',     label: 'Pre-save / pre-order live',         done: false },
-    { key: 'copyright',   label: 'Copyright registration filed',      done: false },
+    // Rights & Credits — has to clear before anything downstream can move
+    { key: 'splits',       phase: 'Rights & Credits',       label: 'Splits gathered from every songwriter/feature', done: false },
+    { key: 'samples',      phase: 'Rights & Credits',       label: 'Sample clearance checked',                      done: false },
+    { key: 'labelcopy',    phase: 'Rights & Credits',       label: 'Label copy / credits finalized',                done: false },
+    // Audio Delivery — timed against the DSP pitching deadline, not the release date
+    { key: 'masters',      phase: 'Audio Delivery',         label: 'Final master delivered',                        done: false },
+    { key: 'stems',        phase: 'Audio Delivery',         label: 'Stems delivered (Atmos mix)',                   done: false },
+    { key: 'extended',     phase: 'Audio Delivery',         label: 'Extended version delivered',                    done: false },
+    { key: 'archived',     phase: 'Audio Delivery',         label: 'Master archived with label',                    done: false },
+    { key: 'metadata',     phase: 'Audio Delivery',         label: 'Delivered to DSPs',                             done: false },
+    // Release Assets
+    { key: 'isrc',         phase: 'Release Assets',         label: 'ISRC codes assigned',                           done: false },
+    { key: 'upc',          phase: 'Release Assets',         label: 'UPC / barcode assigned',                        done: false },
+    { key: 'artwork',      phase: 'Release Assets',         label: 'Artwork finalized (3000×3000)',                 done: false },
+    { key: 'releasedate',  phase: 'Release Assets',         label: 'Release date confirmed',                        done: false },
+    { key: 'copyright',    phase: 'Release Assets',         label: 'Copyright registration filed',                  done: false },
+    // Social & DSP Marketing — re-triggered whenever the master changes
+    { key: 'officialsound', phase: 'Social & DSP Marketing', label: 'TikTok/Meta Official Sound clip approved',     done: false },
+    { key: 'cml',           phase: 'Social & DSP Marketing', label: 'TikTok CML/PML clearance confirmed',           done: false },
+    { key: 'dsppitch',      phase: 'Social & DSP Marketing', label: 'DSP pitch submitted',                          done: false },
+    { key: 'lyrics',        phase: 'Social & DSP Marketing', label: 'Lyrics approved for asset creation',           done: false },
+    { key: 'presave',       phase: 'Social & DSP Marketing', label: 'Pre-save / pre-order live',                    done: false },
   ]
 }
 

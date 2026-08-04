@@ -62,10 +62,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-canvas flex flex-col items-center justify-center px-4">
       {/* Logo */}
       <div className="mb-8 text-center">
-        <div className="font-serif font-semibold text-2xl tracking-tight mb-1">Studio</div>
+        <div className="font-serif font-semibold text-2xl tracking-tight mb-1">Mgmt Studio</div>
         <div className="text-sm text-gray-400">Music Management OS</div>
       </div>
 
@@ -78,7 +78,7 @@ export default function LoginPage() {
               key={m}
               onClick={() => { setMode(m); setMessage(null) }}
               className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                mode === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                mode === m ? 'bg-gray-900 text-canvas shadow-sm' : 'text-gray-400 hover:text-gray-600'
               }`}
             >
               {label}
@@ -145,7 +145,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gray-900 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-1"
+            className="w-full bg-gray-900 text-canvas py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-1"
           >
             {loading ? 'Loading…' : (
               mode === 'login'  ? 'Sign in' :
@@ -166,7 +166,7 @@ export default function LoginPage() {
 
       {/* Footer */}
       <div className="mt-12 text-[10px] uppercase tracking-widest text-gray-300">
-        Studio · Music Management · v0.1
+        Mgmt Studio · Music Management · v0.1
       </div>
     </div>
   )

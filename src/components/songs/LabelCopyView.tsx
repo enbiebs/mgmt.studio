@@ -6,7 +6,7 @@ import type { Track, TrackLabelCopy } from '@/types'
 
 export function LabelCopyView() {
   const client = useStore(s => s.getClient())
-  const { updateAlbumLabelCopy, updateTrackLabelCopy } = useStore()
+  const { updateAlbumLabelCopy, updateTrackLabelCopy, scheduleRelease } = useStore()
   const [editTrack, setEditTrack] = useState<Track | null>(null)
 
   if (!client) return null
@@ -30,6 +30,15 @@ export function LabelCopyView() {
       <div className="bg-gray-50 rounded-xl p-4 mb-6">
         <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Release info</div>
         <div className="grid grid-cols-2 gap-3">
+          <FormField label="Release date">
+            <input type="date" className={inputClass}
+              value={album.releaseDate ?? ''} onChange={e => e.target.value && scheduleRelease(album.id, e.target.value)} />
+          </FormField>
+          <div className="flex items-end pb-2 text-xs text-gray-400">
+            {album.releaseDate
+              ? 'Content calendar auto-populated around this date — see Content › Manage.'
+              : 'Set a date to auto-populate the content calendar with a rollout.'}
+          </div>
           <FormField label="UPC / Barcode">
             <input className={inputClass} placeholder="Not assigned"
               value={lc.upc ?? ''} onChange={e => updateAlbumLabelCopy(album.id, { upc: e.target.value })} />

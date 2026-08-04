@@ -27,7 +27,7 @@ export function StreamingPanel({ analytics: a }: { analytics: AnalyticsData }) {
       </div>
 
       {/* Daily streams chart */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5">
+      <div className="bg-canvas border border-gray-100 rounded-2xl p-5">
         <TrendChart
           data={s.dailyStreams}
           color="#4c8df6"
@@ -37,7 +37,7 @@ export function StreamingPanel({ analytics: a }: { analytics: AnalyticsData }) {
       </div>
 
       {/* DSP Breakdown */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5">
+      <div className="bg-canvas border border-gray-100 rounded-2xl p-5">
         <SectionHeader>Streams by Platform</SectionHeader>
         <div className="space-y-3">
           {s.dspBreakdown.map(dsp => (
@@ -71,7 +71,7 @@ export function StreamingPanel({ analytics: a }: { analytics: AnalyticsData }) {
       </div>
 
       {/* Shazam trend */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5">
+      <div className="bg-canvas border border-gray-100 rounded-2xl p-5">
         <div className="flex items-center justify-between mb-3">
           <SectionHeader>Shazam Trend</SectionHeader>
           <span className="text-sm font-medium text-gray-600">{fmtNum(a.shazamTotal)} total</span>

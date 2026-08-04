@@ -30,7 +30,7 @@ export function ClientCard({ client: c }: { client: Client }) {
 
   return (
     <div
-      className="relative bg-white border border-gray-100 rounded-2xl p-5 cursor-pointer hover:shadow-lg hover:border-gray-200 transition-all duration-200 group"
+      className="relative bg-canvas border border-gray-100 rounded-2xl p-5 cursor-pointer hover:shadow-lg hover:border-gray-200 transition-all duration-200 group"
       onClick={() => openClient(c.id)}
     >
       {/* ── 3-dot menu ── */}
@@ -46,7 +46,7 @@ export function ClientCard({ client: c }: { client: Client }) {
           ⋯
         </button>
         {menuOpen && (
-          <div className="absolute right-0 top-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg min-w-[150px] overflow-hidden z-50">
+          <div className="absolute right-0 top-full mt-1 bg-canvas border border-gray-100 rounded-xl shadow-lg min-w-[150px] overflow-hidden z-50">
             <button
               className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors"
               onClick={() => { openModal('edit-client', { id: c.id }); setMenuOpen(false) }}

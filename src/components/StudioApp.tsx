@@ -20,6 +20,7 @@ import { DashboardModals } from '@/components/dashboard/Modals'
 import { SongsView }    from '@/components/songs/SongsView'
 import { LabelCopyView } from '@/components/songs/LabelCopyView'
 import { ChecklistView } from '@/components/songs/ChecklistView'
+import { StatusView }    from '@/components/songs/StatusView'
 import { TourView }     from '@/components/tour/TourView'
 import { ManageView }   from '@/components/content/ManageView'
 import { StudioView }   from '@/components/content/StudioView'
@@ -40,6 +41,7 @@ import { LawyerView }   from '@/components/lawyer/LawyerView'
 import { AdvanceView }  from '@/components/tour/AdvanceView'
 import { DaySheetView } from '@/components/tour/DaySheetView'
 import { TravelView }   from '@/components/tour/TravelView'
+import { GuestListView } from '@/components/tour/GuestListView'
 
 export function StudioApp() {
   const { view, section, songsSub, contentSub, bizSub, tourSub, data, role, openModal, isLoading } = useStore()
@@ -47,9 +49,9 @@ export function StudioApp() {
   // Show loading spinner while Supabase data is hydrating
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-white">
+      <div className="flex items-center justify-center h-screen bg-canvas">
         <div className="text-center">
-          <div className="font-serif font-semibold text-xl tracking-tight mb-3">Studio</div>
+          <div className="font-serif font-semibold text-xl tracking-tight mb-3">Mgmt Studio</div>
           <div className="w-5 h-5 border-2 border-gray-200 border-t-gray-500 rounded-full animate-spin mx-auto" />
         </div>
       </div>
@@ -57,7 +59,7 @@ export function StudioApp() {
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-white text-gray-900">
+    <div className="flex flex-col h-screen overflow-hidden bg-canvas text-gray-900">
       <AppHeader />
 
       {/* ── Dashboard ── */}
@@ -99,6 +101,7 @@ export function StudioApp() {
             {section === 'songs'    && (
               songsSub === 'labelcopy' ? <LabelCopyView /> :
               songsSub === 'checklist' ? <ChecklistView /> :
+              songsSub === 'status'    ? <StatusView />    :
               <SongsView />
             )}
             {section === 'tour'     && (
@@ -106,7 +109,7 @@ export function StudioApp() {
               tourSub === 'daysheet' ? <DaySheetView />         :
               tourSub === 'travel'   ? <TravelView />           :
               tourSub === 'crew'     ? <CrewPlaceholder />      :
-              tourSub === 'guests'   ? <GuestListPlaceholder /> :
+              tourSub === 'guests'   ? <GuestListView />        :
               <TourView />
             )}
             {section === 'content'  && (
@@ -131,7 +134,7 @@ export function StudioApp() {
 
       {/* Footer */}
       <div className="flex-shrink-0 text-center py-1.5 text-[10px] uppercase tracking-widest text-gray-300 border-t border-gray-100">
-        Studio · Music Management · v0.1
+        Mgmt Studio · Music Management · v0.1
       </div>
     </div>
   )
@@ -143,15 +146,6 @@ function CrewPlaceholder() {
     <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-300">
       <span className="text-5xl">👥</span>
       <span className="text-sm">Crew management — coming soon</span>
-    </div>
-  )
-}
-
-function GuestListPlaceholder() {
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-300">
-      <span className="text-5xl">📋</span>
-      <span className="text-sm">Guest list management — coming soon</span>
     </div>
   )
 }

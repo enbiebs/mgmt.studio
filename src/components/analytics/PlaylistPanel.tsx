@@ -21,17 +21,17 @@ export function PlaylistPanel({ analytics: a }: { analytics: AnalyticsData }) {
     <div className="p-6 space-y-5">
       {/* Summary stats */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 text-center">
+        <div className="bg-canvas border border-gray-100 rounded-2xl p-4 text-center">
           <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Total Playlists</div>
           <div className="font-serif text-2xl font-semibold">{a.streaming.playlistCount.toLocaleString()}</div>
           <div className="text-xs text-green-600 font-semibold mt-0.5">+{a.streaming.playlistCountDelta} this month</div>
         </div>
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 text-center">
+        <div className="bg-canvas border border-gray-100 rounded-2xl p-4 text-center">
           <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Reach (shown)</div>
           <div className="font-serif text-2xl font-semibold">{fmtNum(totFollowers)}</div>
           <div className="text-xs text-gray-400 mt-0.5">combined followers</div>
         </div>
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 text-center">
+        <div className="bg-canvas border border-gray-100 rounded-2xl p-4 text-center">
           <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Editorial</div>
           <div className="font-serif text-2xl font-semibold">{editorial}</div>
           <div className="text-xs text-gray-400 mt-0.5">of {a.playlists.length} shown</div>
@@ -45,7 +45,7 @@ export function PlaylistPanel({ analytics: a }: { analytics: AnalyticsData }) {
             key={f}
             onClick={() => setFilter(f)}
             className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-              filter === f ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              filter === f ? 'bg-gray-900 text-canvas' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
             }`}
           >
             {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -54,7 +54,7 @@ export function PlaylistPanel({ analytics: a }: { analytics: AnalyticsData }) {
       </div>
 
       {/* Playlist table */}
-      <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
+      <div className="bg-canvas border border-gray-100 rounded-2xl overflow-hidden">
         <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-4 px-4 py-2 border-b border-gray-50 text-[10px] font-bold uppercase tracking-widest text-gray-300">
           <span>Playlist</span>
           <span className="text-right">Followers</span>

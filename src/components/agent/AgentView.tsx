@@ -68,7 +68,7 @@ export function AgentView() {
               key={t}
               onClick={() => setTab(t)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                tab === t ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+                tab === t ? 'bg-gray-900 text-canvas' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
               }`}
             >
               {label}
@@ -137,7 +137,7 @@ function PipelineTab({ offers }: { offers: TourOffer[] }) {
 function OfferCard({ offer: o }: { offer: TourOffer }) {
   const cfg = STATUS_CONFIG[o.status]
   return (
-    <div className="border border-gray-100 rounded-xl p-4 bg-white hover:shadow-sm transition-shadow">
+    <div className="border border-gray-100 rounded-xl p-4 bg-canvas hover:shadow-sm transition-shadow">
       <div className="flex items-start justify-between gap-2 mb-2">
         <div>
           <div className="font-semibold text-sm leading-tight">{o.venue}</div>

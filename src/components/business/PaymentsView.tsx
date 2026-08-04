@@ -107,7 +107,7 @@ export function PaymentsView() {
         <div className="flex flex-wrap gap-1">
           <button
             onClick={() => setFilterCat('all')}
-            className={`px-3 py-1 rounded-full text-xs font-medium ${filterCat === 'all' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+            className={`px-3 py-1 rounded-full text-xs font-medium ${filterCat === 'all' ? 'bg-gray-900 text-canvas' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
           >
             All ({expenses.length})
           </button>
@@ -115,7 +115,7 @@ export function PaymentsView() {
             <button
               key={cat}
               onClick={() => setFilterCat(filterCat === cat ? 'all' : cat)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filterCat === cat ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filterCat === cat ? 'bg-gray-900 text-canvas' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
             >
               {CAT_LABELS[cat]} ({count})
             </button>

@@ -1,10 +1,34 @@
 @import "tailwindcss";
 
+/* Dark, modern neutral scale — replaces Tailwind's default light-mode grays.
+   `canvas` is the app's base surface (page/shell/card background); the
+   gray ramp keeps its original semantics (50 = subtlest, 900 = strongest)
+   but running dark→light instead of light→dark. Accent hues (blue, purple,
+   green, etc.) are left at their defaults — pastel chips read great as-is
+   against a dark canvas. */
+@theme {
+  --color-canvas:   #131417;
+
+  --color-gray-50:  #1a1c21;
+  --color-gray-100: #212429;
+  --color-gray-200: #2b2e35;
+  --color-gray-300: #3d4149;
+  --color-gray-400: #7d8290;
+  --color-gray-500: #9297a3;
+  --color-gray-600: #a9adb8;
+  --color-gray-700: #c2c5cd;
+  --color-gray-800: #dde0e6;
+  --color-gray-900: #f4f5f7;
+
+  --color-blue-500: #6c8efa;
+  --color-blue-600: #5a7ce8;
+}
+
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
-  background: #ffffff;
-  color: #1b1d21;
+  background: var(--color-canvas);
+  color: var(--color-gray-900);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;

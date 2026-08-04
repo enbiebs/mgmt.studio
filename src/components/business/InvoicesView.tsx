@@ -78,7 +78,7 @@ export function InvoicesView() {
               onClick={() => setFilter(f)}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                 filter === f
-                  ? 'bg-gray-900 text-white'
+                  ? 'bg-gray-900 text-canvas'
                   : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
               }`}
             >
@@ -163,7 +163,7 @@ function InvoiceDetail({ invoice: inv, onClose }: { invoice: Invoice; onClose: (
   return (
     <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-6" onClick={onClose}>
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden"
+        className="bg-canvas rounded-2xl shadow-xl w-full max-w-lg overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}

@@ -1,4 +1,4 @@
-# Studio — Music Management Platform
+# Mgmt Studio — Music Management Platform
 
 A multi-client music management web app. Manage songs, tour, content scheduling, royalties, banking splits, and works catalog — all in one place.
 
@@ -66,7 +66,7 @@ npm run dev
 
 Open your browser to: **http://localhost:3000**
 
-You'll see the Studio dashboard with 3 demo clients. Data saves automatically in your browser.
+You'll see the Mgmt Studio dashboard with 3 demo clients. Data saves automatically in your browser.
 
 ---
 

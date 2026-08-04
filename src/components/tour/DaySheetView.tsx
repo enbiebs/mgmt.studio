@@ -104,7 +104,7 @@ export function DaySheetView() {
         ) : (
           <div className="max-w-2xl mx-auto py-8 px-6">
             {/* Header */}
-            <div className="bg-gray-900 text-white rounded-2xl px-8 py-6 mb-6">
+            <div className="bg-gray-900 text-canvas rounded-2xl px-8 py-6 mb-6">
               <div className="flex items-start justify-between">
                 <div>
                   <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Day Sheet</div>
@@ -123,7 +123,7 @@ export function DaySheetView() {
 
             {/* Schedule */}
             {advance?.schedule && Object.values(advance.schedule).some(Boolean) && (
-              <div className="bg-white rounded-2xl px-6 py-5 mb-4 shadow-sm">
+              <div className="bg-canvas rounded-2xl px-6 py-5 mb-4 shadow-sm">
                 <Block title="Schedule" accent="border-blue-400 text-blue-500">
                   <Row label="Bus Call"         value={advance.schedule.busCall} />
                   <Row label="Lobby Call"       value={advance.schedule.lobbyCall} />
@@ -147,7 +147,7 @@ export function DaySheetView() {
 
             {/* Hotel */}
             {advance?.hospitality?.hotel && (
-              <div className="bg-white rounded-2xl px-6 py-5 mb-4 shadow-sm">
+              <div className="bg-canvas rounded-2xl px-6 py-5 mb-4 shadow-sm">
                 <Block title="Hotel" accent="border-purple-400 text-purple-500">
                   <Row label="Hotel"        value={advance.hospitality.hotel} />
                   <Row label="Address"      value={advance.hospitality.hotelAddress} />
@@ -165,7 +165,7 @@ export function DaySheetView() {
 
             {/* Venue / Production */}
             {advance?.production && Object.values(advance.production).some(Boolean) && (
-              <div className="bg-white rounded-2xl px-6 py-5 mb-4 shadow-sm">
+              <div className="bg-canvas rounded-2xl px-6 py-5 mb-4 shadow-sm">
                 <Block title="Venue / Production" accent="border-orange-400 text-orange-500">
                   <Row label="Address"      value={advance.logistics?.loadingDockAddress} />
                   <Row label="Stage"        value={[advance.production.stageWidth, advance.production.stageDepth, advance.production.roofHeight].filter(Boolean).join(' × ')} />
@@ -184,7 +184,7 @@ export function DaySheetView() {
 
             {/* Catering */}
             {(advance?.hospitality?.cateringCompany || advance?.hospitality?.mealTimes) && (
-              <div className="bg-white rounded-2xl px-6 py-5 mb-4 shadow-sm">
+              <div className="bg-canvas rounded-2xl px-6 py-5 mb-4 shadow-sm">
                 <Block title="Catering" accent="border-green-400 text-green-600">
                   <Row label="Catering"     value={advance.hospitality.cateringCompany} />
                   <Row label="Meal Times"   value={advance.hospitality.mealTimes} />
@@ -197,7 +197,7 @@ export function DaySheetView() {
 
             {/* Travel */}
             {(advance?.logistics?.flights || advance?.logistics?.groundTransport) && (
-              <div className="bg-white rounded-2xl px-6 py-5 mb-4 shadow-sm">
+              <div className="bg-canvas rounded-2xl px-6 py-5 mb-4 shadow-sm">
                 <Block title="Travel" accent="border-sky-400 text-sky-600">
                   <Row label="Flights"      value={advance.logistics.flights} />
                   <Row label="Airport"      value={advance.logistics.nearestAirport} />
@@ -208,7 +208,7 @@ export function DaySheetView() {
 
             {/* Contacts */}
             {advance?.contacts && advance.contacts.length > 0 && (
-              <div className="bg-white rounded-2xl px-6 py-5 mb-4 shadow-sm">
+              <div className="bg-canvas rounded-2xl px-6 py-5 mb-4 shadow-sm">
                 <Block title="Contacts" accent="border-red-400 text-red-500">
                   {advance.contacts.map(c => (
                     <div key={c.id} className="flex py-1.5 border-b border-gray-100 last:border-0">
@@ -227,7 +227,7 @@ export function DaySheetView() {
 
             {/* Notes */}
             {(advance?.wifi || advance?.guestListCap || advance?.generalNotes) && (
-              <div className="bg-white rounded-2xl px-6 py-5 mb-4 shadow-sm">
+              <div className="bg-canvas rounded-2xl px-6 py-5 mb-4 shadow-sm">
                 <Block title="Notes" accent="border-gray-300 text-gray-400">
                   {advance?.wifi && (
                     <Row label="WiFi" value={`${advance.wifi}${advance.wifiPassword ? ` / ${advance.wifiPassword}` : ''}`} />
@@ -245,7 +245,7 @@ export function DaySheetView() {
 
             {/* No advance data */}
             {!advance && (
-              <div className="bg-white rounded-2xl px-6 py-10 text-center text-gray-400 shadow-sm">
+              <div className="bg-canvas rounded-2xl px-6 py-10 text-center text-gray-400 shadow-sm">
                 <div className="text-sm mb-2">No advance data for this show yet.</div>
                 <button onClick={() => setTourSub('advance')} className="text-sm text-blue-500 hover:underline">
                   Create advance →

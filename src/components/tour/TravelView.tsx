@@ -380,7 +380,7 @@ function AddFlightForm({
           <input
             value={from} onChange={e => setFrom(e.target.value)}
             placeholder="JFK"
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-400 bg-white uppercase"
+            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-400 bg-canvas uppercase"
           />
         </div>
         <div>
@@ -388,14 +388,14 @@ function AddFlightForm({
           <input
             value={to} onChange={e => setTo(e.target.value)}
             placeholder="LHR"
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-400 bg-white uppercase"
+            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-400 bg-canvas uppercase"
           />
         </div>
         <div>
           <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Date</label>
           <input
             type="date" value={departure} onChange={e => setDeparture(e.target.value)}
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-400 bg-white"
+            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-400 bg-canvas"
           />
         </div>
       </div>
@@ -417,7 +417,7 @@ function AddFlightForm({
             <button
               key={i}
               onClick={() => pickResult(r)}
-              className="w-full text-left border border-gray-200 rounded-lg p-3 bg-white hover:border-blue-400 hover:bg-blue-50/30 transition-colors"
+              className="w-full text-left border border-gray-200 rounded-lg p-3 bg-canvas hover:border-blue-400 hover:bg-blue-50/30 transition-colors"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -476,18 +476,18 @@ function AddHotelForm({
           <input
             value={city} onChange={e => setCity(e.target.value)}
             placeholder="London, UK"
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-purple-400 bg-white"
+            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-purple-400 bg-canvas"
           />
         </div>
         <div>
           <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Check-In</label>
           <input type="date" value={checkIn} onChange={e => setCheckIn(e.target.value)}
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-purple-400 bg-white" />
+            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-purple-400 bg-canvas" />
         </div>
         <div>
           <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Check-Out</label>
           <input type="date" value={checkOut} onChange={e => setCheckOut(e.target.value)}
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-purple-400 bg-white" />
+            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-purple-400 bg-canvas" />
         </div>
       </div>
       <div className="flex gap-2 mb-3">
@@ -507,7 +507,7 @@ function AddHotelForm({
             <button
               key={i}
               onClick={() => pickResult(r)}
-              className="w-full text-left border border-gray-200 rounded-lg p-3 bg-white hover:border-purple-400 hover:bg-purple-50/30 transition-colors"
+              className="w-full text-left border border-gray-200 rounded-lg p-3 bg-canvas hover:border-purple-400 hover:bg-purple-50/30 transition-colors"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -562,17 +562,17 @@ function AddGroundForm({
         <div>
           <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">From</label>
           <input value={from} onChange={e => setFrom(e.target.value)} placeholder="Airport / Hotel"
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-400 bg-white" />
+            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-400 bg-canvas" />
         </div>
         <div>
           <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">To</label>
           <input value={to} onChange={e => setTo(e.target.value)} placeholder="Venue / Hotel"
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-400 bg-white" />
+            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-400 bg-canvas" />
         </div>
         <div>
           <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Pickup Time</label>
           <input type="datetime-local" value={pickupTime} onChange={e => setPickupTime(e.target.value)}
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-400 bg-white" />
+            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-400 bg-canvas" />
         </div>
       </div>
       <div className="flex gap-2 mb-3">
@@ -592,7 +592,7 @@ function AddGroundForm({
             <button
               key={i}
               onClick={() => pickResult(r)}
-              className="w-full text-left border border-gray-200 rounded-lg p-3 bg-white hover:border-green-400 hover:bg-green-50/30 transition-colors"
+              className="w-full text-left border border-gray-200 rounded-lg p-3 bg-canvas hover:border-green-400 hover:bg-green-50/30 transition-colors"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -820,7 +820,7 @@ export function TravelView() {
                 <div className="text-xs font-semibold text-gray-700">Push to Advance</div>
                 <div className="text-xs text-gray-400">Sync hotel + flight details into the show's advance → logistics</div>
               </div>
-              <button className="px-3 py-1.5 text-xs font-semibold bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors">
+              <button className="px-3 py-1.5 text-xs font-semibold bg-gray-900 text-canvas rounded-lg hover:bg-gray-700 transition-colors">
                 Sync to Advance →
               </button>
             </div>

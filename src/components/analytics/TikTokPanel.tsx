@@ -17,7 +17,7 @@ export function TikTokPanel({ analytics: a }: { analytics: AnalyticsData }) {
       </div>
 
       {/* Trend chart */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5">
+      <div className="bg-canvas border border-gray-100 rounded-2xl p-5">
         <TrendChart
           data={t.weeklyTrend}
           color="#010101"
@@ -30,7 +30,7 @@ export function TikTokPanel({ analytics: a }: { analytics: AnalyticsData }) {
       </div>
 
       {/* Top creators */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5">
+      <div className="bg-canvas border border-gray-100 rounded-2xl p-5">
         <SectionHeader>Top Creators Using This Sound</SectionHeader>
         <div className="flex flex-col gap-2">
           {t.topCreators.map((c, i) => (
@@ -50,7 +50,7 @@ export function TikTokPanel({ analytics: a }: { analytics: AnalyticsData }) {
       </div>
 
       {/* Geographic spread */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5">
+      <div className="bg-canvas border border-gray-100 rounded-2xl p-5">
         <SectionHeader>Geographic Spread</SectionHeader>
         <div className="flex flex-col gap-2.5">
           {t.geoSpread.map(g => (

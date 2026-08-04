@@ -16,7 +16,7 @@ export function OverviewPanel({ analytics: a, color, name }: Props) {
       {/* Score row */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {/* Chartmetric Score */}
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-col items-center justify-center text-center">
+        <div className="bg-canvas border border-gray-100 rounded-2xl p-4 flex flex-col items-center justify-center text-center">
           <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">CM Score</div>
           <div
             className="text-4xl font-serif font-bold"
@@ -30,7 +30,7 @@ export function OverviewPanel({ analytics: a, color, name }: Props) {
         </div>
 
         {/* Momentum */}
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-col items-center justify-center text-center">
+        <div className="bg-canvas border border-gray-100 rounded-2xl p-4 flex flex-col items-center justify-center text-center">
           <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Momentum</div>
           <div className="text-4xl font-serif font-bold" style={{ color: mc }}>{a.momentumScore}</div>
           <div className="text-xs text-gray-400 mt-1">out of 100</div>
@@ -66,7 +66,7 @@ export function OverviewPanel({ analytics: a, color, name }: Props) {
             ['Facebook',  '👤', a.followers.facebook,  a.followersDelta.facebook ],
             ['X',         '𝕏',  a.followers.twitter,   a.followersDelta.twitter  ],
           ] as const).map(([platform, icon, count, delta]) => (
-            <div key={platform} className="bg-white border border-gray-100 rounded-xl p-3 flex items-center gap-3">
+            <div key={platform} className="bg-canvas border border-gray-100 rounded-xl p-3 flex items-center gap-3">
               <span className="text-lg">{icon}</span>
               <div className="min-w-0 flex-1">
                 <div className="text-[10px] text-gray-400 font-medium">{platform}</div>
@@ -81,7 +81,7 @@ export function OverviewPanel({ analytics: a, color, name }: Props) {
       </div>
 
       {/* Streaming trend */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-4">
+      <div className="bg-canvas border border-gray-100 rounded-2xl p-4">
         <TrendChart
           data={a.streaming.dailyStreams}
           color={color}

@@ -3,6 +3,24 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { Modal, FormField, inputClass } from '@/components/ui/Modal'
 import { calendarDays, toDateStr, today, MONTH_NAMES, DOW_SHORT } from '@/lib/utils'
+import type { Post, PostType } from '@/types'
+
+const PLATFORM_LABEL: Record<PostType, string> = {
+  post: 'IG Post', reel: 'IG Reel', story: 'IG Story', video: 'Video',
+  tiktok: 'TikTok', shorts: 'YT Shorts', 'spotify-clip': 'Spotify Clip',
+  tweet: 'X / Twitter', laylo: 'Laylo Blast',
+}
+const PLATFORM_STYLE: Record<PostType, string> = {
+  post:            'bg-blue-50 border-blue-400 text-blue-700',
+  reel:            'bg-purple-50 border-purple-400 text-purple-700',
+  story:           'bg-pink-50 border-pink-400 text-pink-700',
+  video:           'bg-blue-50 border-blue-400 text-blue-700',
+  tiktok:          'bg-gray-100 border-gray-500 text-gray-700',
+  shorts:          'bg-red-50 border-red-400 text-red-600',
+  'spotify-clip':  'bg-green-50 border-green-400 text-green-700',
+  tweet:           'bg-sky-50 border-sky-400 text-sky-700',
+  laylo:           'bg-amber-50 border-amber-400 text-amber-700',
+}
 
 export function ManageView() {
   const client = useStore(s => s.getClient())
@@ -10,7 +28,7 @@ export function ManageView() {
   const [addOpen, setAddOpen] = useState(false)
   const [clickedDate, setClickedDate] = useState('')
   const [f, setF] = useState({ title: '', date: '', time: '10:00' })
-  const [viewPost, setViewPost] = useState<null | { id: string; title: string; date: string; time: string }>(null)
+  const [viewPost, setViewPost] = useState<Post | null>(null)
 
   if (!client) return null
   const days = calendarDays(calYear, calMonth)
@@ -56,7 +74,7 @@ export function ManageView() {
               <div
                 key={i}
                 className={`relative min-h-[88px] p-1.5 group ${
-                  !current ? 'bg-gray-50' : isToday ? 'bg-blue-50' : 'bg-white'
+                  !current ? 'bg-gray-50' : isToday ? 'bg-blue-50' : 'bg-canvas'
                 }`}
               >
                 <div className={`text-xs font-semibold mb-1 ${isToday ? 'text-blue-600' : 'text-gray-400'}`}>{date.getDate()}</div>
@@ -64,7 +82,8 @@ export function ManageView() {
                   <div
                     key={p.id}
                     onClick={() => setViewPost(p)}
-                    className="bg-blue-50 border-l-2 border-blue-400 px-1.5 py-0.5 rounded-r text-[10px] font-semibold text-blue-700 mb-0.5 cursor-pointer hover:bg-blue-100 transition-colors truncate"
+                    className={`border-l-2 px-1.5 py-0.5 rounded-r text-[10px] font-semibold mb-0.5 cursor-pointer hover:brightness-95 transition-all truncate ${PLATFORM_STYLE[p.type]}`}
+                    title={PLATFORM_LABEL[p.type]}
                   >
                     {p.title} {p.time}
                   </div>
@@ -108,7 +127,10 @@ export function ManageView() {
             <button onClick={() => setViewPost(null)} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Close</button>
           </>
         }>
-          <p className="text-sm text-gray-500">{viewPost.date} · {viewPost.time}</p>
+          <p className="text-sm text-gray-500">
+            {viewPost.date} · {viewPost.time} · {PLATFORM_LABEL[viewPost.type]}
+            {viewPost.auto && <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500">AUTO</span>}
+          </p>
         </Modal>
       )}
     </div>

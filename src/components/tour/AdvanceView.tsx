@@ -234,7 +234,7 @@ export function AdvanceView() {
                     key={s}
                     onClick={() => markStatus(s)}
                     className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
-                      advance.status === s ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                      advance.status === s ? 'bg-gray-900 text-canvas shadow-sm' : 'text-gray-400 hover:text-gray-600'
                     }`}
                   >
                     {STATUS[s].label}
@@ -243,7 +243,7 @@ export function AdvanceView() {
               </div>
               <button
                 onClick={() => setSendOpen(true)}
-                className="px-3 py-1.5 text-xs font-semibold bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                className="px-3 py-1.5 text-xs font-semibold bg-gray-900 text-canvas rounded-lg hover:bg-gray-700 transition-colors"
               >
                 Send to Venue ↗
               </button>
@@ -435,7 +435,7 @@ export function AdvanceView() {
             </div>
             <button
               onClick={saveAdvance}
-              className="px-4 py-1.5 text-sm font-semibold bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              className="px-4 py-1.5 text-sm font-semibold bg-gray-900 text-canvas rounded-lg hover:bg-gray-700 transition-colors"
             >
               Save Advance
             </button>
@@ -446,7 +446,7 @@ export function AdvanceView() {
       {/* ── Send Modal ── */}
       {sendOpen && advance && selectedShow && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSendOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-canvas rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-gray-900">Send Advance to Venue</h2>
               <button onClick={() => setSendOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
@@ -479,7 +479,7 @@ export function AdvanceView() {
               <button onClick={() => setSendOpen(false)} className="flex-1 py-2 text-sm font-medium border border-gray-200 rounded-xl hover:bg-gray-50">Cancel</button>
               <button
                 onClick={() => { markStatus('sent'); setSendOpen(false) }}
-                className="flex-1 py-2 text-sm font-semibold bg-gray-900 text-white rounded-xl hover:bg-gray-700 transition-colors"
+                className="flex-1 py-2 text-sm font-semibold bg-gray-900 text-canvas rounded-xl hover:bg-gray-700 transition-colors"
               >
                 Mark as Sent
               </button>

@@ -97,7 +97,7 @@ export function LawyerView() {
               key={t}
               onClick={() => setTab(t)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                tab === t ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+                tab === t ? 'bg-gray-900 text-canvas' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
               }`}
             >
               {label}
@@ -178,7 +178,7 @@ function PipelineTab({ contracts }: { contracts: Contract[] }) {
 function ContractCard({ contract: c }: { contract: Contract }) {
   const cfg = STATUS_CONFIG[c.status]
   return (
-    <div className={`border rounded-xl p-3 ${c.flagged ? 'border-red-200 bg-red-50/50' : 'border-gray-100 bg-white'} hover:shadow-sm transition-shadow`}>
+    <div className={`border rounded-xl p-3 ${c.flagged ? 'border-red-200 bg-red-50/50' : 'border-gray-100 bg-canvas'} hover:shadow-sm transition-shadow`}>
       <div className="flex items-start gap-1.5 mb-1">
         <span className="text-base">{TYPE_ICONS[c.type]}</span>
         <div className="flex-1 min-w-0">
@@ -301,7 +301,7 @@ function RegisterTab({ contracts, types, filterType, setFilterType, filtered }: 
       <div className="flex flex-wrap gap-1 mb-4">
         <button
           onClick={() => setFilterType('all')}
-          className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${filterType === 'all' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+          className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${filterType === 'all' ? 'bg-gray-900 text-canvas' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
         >
           All ({contracts.length})
         </button>
@@ -309,7 +309,7 @@ function RegisterTab({ contracts, types, filterType, setFilterType, filtered }: 
           <button
             key={t}
             onClick={() => setFilterType(t)}
-            className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${filterType === t ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${filterType === t ? 'bg-gray-900 text-canvas' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
           >
             {TYPE_ICONS[t]} {TYPE_LABELS[t]} ({contracts.filter(c => c.type === t).length})
           </button>

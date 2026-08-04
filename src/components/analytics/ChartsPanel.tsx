@@ -13,23 +13,23 @@ export function ChartsPanel({ analytics: a }: { analytics: AnalyticsData }) {
     <div className="p-6 space-y-5">
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 text-center">
+        <div className="bg-canvas border border-gray-100 rounded-2xl p-4 text-center">
           <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Chart Entries</div>
           <div className="font-serif text-2xl font-semibold">{a.charts.length}</div>
         </div>
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 text-center">
+        <div className="bg-canvas border border-gray-100 rounded-2xl p-4 text-center">
           <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Best Position</div>
           <div className="font-serif text-2xl font-semibold">
             #{Math.min(...a.charts.map(c => c.peak))}
           </div>
         </div>
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 text-center">
+        <div className="bg-canvas border border-gray-100 rounded-2xl p-4 text-center">
           <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">New This Week</div>
           <div className="font-serif text-2xl font-semibold">
             {a.charts.filter(c => c.movement === 'new').length}
           </div>
         </div>
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 text-center">
+        <div className="bg-canvas border border-gray-100 rounded-2xl p-4 text-center">
           <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Moving Up</div>
           <div className="font-serif text-2xl font-semibold text-green-600">
             {a.charts.filter(c => c.movement === 'up').length}
@@ -44,7 +44,7 @@ export function ChartsPanel({ analytics: a }: { analytics: AnalyticsData }) {
             key={p}
             onClick={() => setPlatform(p)}
             className={`px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 ${
-              platform === p ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              platform === p ? 'bg-gray-900 text-canvas' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
             }`}
           >
             {p !== 'all' && (
@@ -56,7 +56,7 @@ export function ChartsPanel({ analytics: a }: { analytics: AnalyticsData }) {
       </div>
 
       {/* Charts table */}
-      <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
+      <div className="bg-canvas border border-gray-100 rounded-2xl overflow-hidden">
         <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-x-4 px-4 py-2 border-b border-gray-50 text-[10px] font-bold uppercase tracking-widest text-gray-300">
           <span>Pos</span>
           <span>Chart</span>
@@ -90,7 +90,7 @@ export function ChartsPanel({ analytics: a }: { analytics: AnalyticsData }) {
       </div>
 
       {/* Shazam section */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5">
+      <div className="bg-canvas border border-gray-100 rounded-2xl p-5">
         <div className="flex items-center justify-between mb-3">
           <SectionHeader>Shazam — Daily Volume</SectionHeader>
           <div className="text-sm font-semibold">{fmtNum(a.shazamTotal)} total</div>
