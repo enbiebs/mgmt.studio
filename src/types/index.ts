@@ -1,0 +1,643 @@
+// ──────────────────────────────────────────────────────────
+//  Studio · Types
+//  Every piece of data in the app is described here.
+//  When you add Supabase later, these types map to your tables.
+// ──────────────────────────────────────────────────────────
+
+export type Stage = 'track' | 'mix' | 'master' | 'done'
+export type ShowStatus = 'confirmed' | 'hold' | 'cancelled'
+export type Currency = 'USD' | 'GBP' | 'EUR'
+export type RegStatus = 'ok' | 'warn' | 'no' | 'q'
+export type PostType = 'reel' | 'story' | 'post' | 'video'
+
+export interface Track {
+  id: string
+  num: number
+  title: string
+  stage: Stage
+  version: number
+  touched: string        // human-readable e.g. "3d", "now"
+  notes?: string
+  labelCopy?: TrackLabelCopy
+}
+
+export interface Album {
+  id: string
+  title: string
+  releaseDate?: string
+  tracks: Track[]
+  labelCopy?: ReleaseLabelCopy
+  checklist?: ChecklistItem[]
+}
+
+// ── Label copy — release metadata required before delivery to DSPs/label ──
+export interface TrackLabelCopy {
+  isrc?: string
+  writers?: string        // songwriter credits
+  producers?: string
+  publisher?: string
+  pro?: string             // performance rights org, e.g. "ASCAP"
+  explicit?: boolean
+  duration?: string        // "3:24"
+  language?: string
+}
+
+export interface ReleaseLabelCopy {
+  upc?: string
+  label?: string           // record label / imprint
+  primaryArtist?: string
+  genre?: string
+  copyrightP?: string      // ℗ line
+  copyrightC?: string      // © line
+}
+
+// ── Release checklist — per-release delivery milestones ──
+export type ChecklistItemKey =
+  | 'masters' | 'artwork' | 'isrc' | 'upc' | 'splits'
+  | 'labelcopy' | 'metadata' | 'releasedate' | 'presave' | 'copyright'
+
+export interface ChecklistItem {
+  key: ChecklistItemKey
+  label: string
+  done: boolean
+  note?: string
+}
+
+export interface Show {
+  id: string
+  date: string           // ISO: "2026-08-14"
+  city: string
+  venue: string
+  time: string           // "20:00"
+  status: ShowStatus
+  notes?: string
+}
+
+export interface Post {
+  id: string
+  date: string           // ISO: "2026-08-14"
+  title: string
+  time: string           // "10:00am"
+  type: PostType
+}
+
+export interface RoyaltyStream {
+  id: string
+  name: string           // "BMI", "Defected Records", etc.
+  type: string           // "Performance", "Master", etc.
+  amount: number
+  currency: Currency
+  period: string         // "Dec 2025 statement"
+}
+
+export interface Deposit {
+  id: string
+  name: string
+  date: string
+  amount: number
+  currency: Currency
+  mgmt: number           // percentage as decimal, e.g. 0.10 = 10%
+  lawyer: number
+  taxes: number
+  done: boolean
+}
+
+export interface CatalogWork {
+  id: string
+  title: string
+  ipi?: string
+  writers: string
+  amount: number
+  currency: Currency
+  bmi: RegStatus
+  mlc: RegStatus
+  sx: RegStatus
+  ppl: RegStatus
+}
+
+export interface Client {
+  id: string
+  name: string
+  genre: string
+  color: string          // hex color for avatar
+  songs: {
+    albums: Album[]
+  }
+  tour: TourData
+  content: {
+    posts: Post[]
+  }
+  business: {
+    royalties: { streams: RoyaltyStream[] }
+    banking:   { deposits: Deposit[] }
+    catalog:   { works: CatalogWork[] }
+  }
+  projects:    Project[]
+  artistTodos: ArtistTodo[]
+  analytics:   AnalyticsData
+  fandom:      FanEngagement
+  agentData:   AgentData
+  legal:       LegalData
+  finance:     ClientFinance
+}
+
+export interface AppData {
+  clients: Client[]
+}
+
+// ── Role system ─────────────────────────────────────────────
+// 'manager' = full management workspace
+// 'artist'  = clean artist portal (no internal ops details)
+// 'agent'   = booking agent — offers, routing, settlements
+// 'lawyer'  = attorney — contracts, rights, deadlines
+export type UserRole = 'manager' | 'artist' | 'agent' | 'lawyer'
+
+// ── Projects (management-side tracking) ─────────────────────
+export type ProjectStatus = 'submitted' | 'in-progress' | 'review' | 'done'
+export type ProjectType   = 'release' | 'show' | 'content' | 'brand-deal' | 'merch' | 'other'
+export type Stakeholder   = 'GC' | 'EB' | 'PH' | 'MS'
+
+export interface Project {
+  id: string
+  title: string
+  type: ProjectType
+  status: ProjectStatus
+  assignee?: Stakeholder
+  dueDate?: string
+  notes?: string
+  createdAt: string
+  fromArtist: boolean    // true = artist submitted this request
+}
+
+// ── Artist Todos ────────────────────────────────────────────
+export interface ArtistTodo {
+  id: string
+  title: string
+  done: boolean
+  dueDate?: string
+  createdAt: string
+}
+
+// ── Fandom / Fan Loyalty Platform ───────────────────────────
+// Based on the Fandom deck — 5 tiers, points engine, affiliate tree
+export type FanTier = 'listener' | 'follower' | 'supporter' | 'devotee' | 'founder'
+
+export interface Fan {
+  id:               string
+  name:             string
+  handle?:          string
+  location:         string
+  tier:             FanTier
+  points:           number
+  fanSince:         string       // ISO date
+  referredBy?:      string       // fan id who referred them
+  referralCount:    number       // direct referrals they made
+  totalDescendants: number       // total network they've grown
+  streamsTotal:     number
+  ticketsPurchased: number
+  merchPurchased:   number
+  lastActive:       string
+  passNumber:       number       // unique fan pass number
+}
+
+export interface FanActivity {
+  id:     string
+  fanId:  string
+  fan:    string
+  type:   'stream' | 'ticket' | 'merch' | 'referral' | 'share'
+  detail: string
+  pts:    number
+  date:   string
+}
+
+export interface FanMessage {
+  id:        string
+  subject:   string
+  body:      string
+  segment:   string     // "all" | tier name | custom
+  sentAt:    string
+  openRate:  number
+  clickRate: number
+  recipients: number
+}
+
+export interface FanEngagement {
+  totalFans:       number
+  pointsIssued:    number
+  avgEngagement:   number    // 0–100
+  referralPct:     number    // % who joined via referral
+  liveAttendeeMultiplier: number  // LTV multiple for show-goers
+  tierBreakdown: { tier: FanTier; count: number; pct: number; label: string }[]
+  topFans:         Fan[]
+  recentActivity:  FanActivity[]
+  messages:        FanMessage[]
+}
+
+// ── Analytics ───────────────────────────────────────────────
+export interface DataPoint { date: string; value: number }
+
+export interface PlatformFollowers {
+  spotify:   number
+  instagram: number
+  tiktok:    number
+  youtube:   number
+  facebook:  number
+  twitter:   number
+}
+
+export interface StreamingMetrics {
+  monthlyListeners:      number
+  monthlyListenersDelta: number   // absolute change vs last month
+  monthlyListenersPct:   number   // % change
+  dailyStreams:          DataPoint[]
+  dspBreakdown: { name: string; streams: number; pct: number }[]
+  totalStreams:          number
+  saveEstimate:          number
+  playlistCount:         number
+  playlistCountDelta:    number
+}
+
+export interface PlaylistEntry {
+  id:        string
+  trackTitle: string
+  name:      string
+  platform:  string
+  followers: number
+  position:  number
+  dateAdded: string
+  type:      'editorial' | 'algorithmic' | 'user'
+  curator:   string
+  movement:  'up' | 'down' | 'new' | 'same'
+  movementAmt: number
+}
+
+export interface SocialPlatform {
+  platform:       string
+  icon:           string
+  followers:      number
+  followersDelta: number
+  engagementRate: number
+  weeklyGrowth:   DataPoint[]
+  topPost?:       string
+}
+
+export interface TikTokData {
+  sounds:       number
+  ugcVideos:    number
+  totalViews:   number
+  weeklyTrend:  DataPoint[]
+  topCreators: { handle: string; videos: number; views: number }[]
+  geoSpread:   { country: string; pct: number }[]
+  chartPeak:   number
+}
+
+export interface AudienceData {
+  topCountries: { name: string; code: string; pct: number }[]
+  topCities:    { name: string; country: string; pct: number }[]
+  age: { range: string; pct: number }[]
+  gender: { label: string; pct: number }[]
+}
+
+export interface ChartEntry {
+  id:         string
+  platform:   string
+  chartName:  string
+  country:    string
+  position:   number
+  peak:       number
+  entered:    string
+  movement:   'up' | 'down' | 'new' | 'same'
+  movementAmt: number
+}
+
+export interface AnalyticsData {
+  chartmetricScore:    number
+  chartmetricScoreDelta: number
+  momentumScore:       number
+  followers:           PlatformFollowers
+  followersDelta:      PlatformFollowers
+  streaming:           StreamingMetrics
+  playlists:           PlaylistEntry[]
+  social:              SocialPlatform[]
+  tiktok:              TikTokData
+  audience:            AudienceData
+  charts:              ChartEntry[]
+  shazamDaily:         DataPoint[]
+  shazamTotal:         number
+}
+
+// ── Section / view routing ──────────────────────────────────
+export type MainSection  = 'songs' | 'tour' | 'content' | 'business' | 'projects' | 'analytics' | 'fandom'
+export type SongsSub     = 'tracks' | 'labelcopy' | 'checklist'
+export type ContentSub   = 'manage' | 'studio' | 'lab'
+export type BizSub       = 'royalties' | 'banking' | 'catalog' | 'pl' | 'invoices' | 'payments'
+export type TourSub      = 'tour' | 'stage-plot' | 'advance' | 'daysheet' | 'crew' | 'guests' | 'travel'
+export type AnalyticsSub = 'overview' | 'streaming' | 'playlists' | 'social' | 'tiktok' | 'audience' | 'charts'
+
+// ── Tour Management — Advance System ────────────────────────
+export type AdvanceStatus = 'draft' | 'sent' | 'in-progress' | 'complete'
+
+export interface AdvanceContact {
+  id:     string
+  role:   string   // "Production Manager", "Hospitality", "Security", etc.
+  name:   string
+  phone?: string
+  email?: string
+  notes?: string
+}
+
+export interface AdvanceSchedule {
+  busCall?:       string   // e.g. "08:00"
+  lobbyCall?:     string
+  loadIn?:        string
+  lineCheck?:     string
+  soundcheck?:    string
+  artistSoundcheck?: string
+  doorsOpen?:     string
+  supportOn?:     string
+  supportOff?:    string
+  headlineOn?:    string
+  curfew?:        string
+  loadOut?:       string
+  departureTime?: string
+  notes?:         string
+}
+
+export interface AdvanceProduction {
+  stageWidth?:    string   // "40ft"
+  stageDepth?:    string
+  roofHeight?:    string
+  fohPosition?:   string
+  monPosition?:   string
+  powerSupply?:   string
+  localCrewCount?: string
+  backlineNotes?: string
+  riserCount?:    string
+  merchandiseLocation?: string
+  notes?:         string
+}
+
+export interface AdvanceHospitality {
+  hotel?:               string
+  hotelAddress?:        string
+  hotelPhone?:          string
+  hotelConfirmation?:   string
+  checkIn?:             string
+  checkOut?:            string
+  roomCount?:           string
+  roomNotes?:           string   // room assignments
+  dressingRooms?:       string
+  dressingRoomNotes?:   string
+  cateringCompany?:     string
+  mealTimes?:           string
+  dietaryNotes?:        string
+  runnerName?:          string
+  runnerPhone?:         string
+  notes?:               string
+}
+
+export interface AdvanceLogistics {
+  parkingInstructions?: string
+  busParking?:          string
+  loadingDockAddress?:  string
+  loadingDockNotes?:    string
+  nearestAirport?:      string
+  distanceToAirport?:   string
+  groundTransport?:     string
+  flights?:             string
+  notes?:               string
+}
+
+export interface ShowAdvance {
+  id:          string
+  showId:      string    // links to existing Show.id
+  status:      AdvanceStatus
+  sentAt?:     string
+  completedAt?: string
+  // Core sections
+  schedule:    AdvanceSchedule
+  production:  AdvanceProduction
+  hospitality: AdvanceHospitality
+  logistics:   AdvanceLogistics
+  contacts:    AdvanceContact[]
+  // Extras
+  wifi?:          string
+  wifiPassword?:  string
+  weatherNotes?:  string
+  guestListCap?:  string
+  guestListNotes?: string
+  generalNotes?:  string
+}
+
+// ── Crew Management ─────────────────────────────────────────
+export type CrewRole = 'tour-manager' | 'production-manager' | 'foh' | 'monitors' | 'lighting' | 'video' | 'backline' | 'merch' | 'security' | 'driver' | 'artist' | 'other'
+
+export interface CrewMember {
+  id:              string
+  name:            string
+  role:            CrewRole
+  phone?:          string
+  email?:          string
+  passport?:       string   // passport expiry only (no full number)
+  emergencyName?:  string
+  emergencyPhone?: string
+  notes?:          string
+}
+
+// ── Guest List ───────────────────────────────────────────────
+export type GuestListCategory = 'artist' | 'vip' | 'label' | 'management' | 'media' | 'family' | 'promo' | 'sponsor'
+
+export interface GuestListEntry {
+  id:         string
+  showId:     string
+  name:       string
+  qty:        number
+  category:   GuestListCategory
+  checkedIn:  boolean
+  credential?: string
+  notes?:     string
+}
+
+// ── Travel Booking ───────────────────────────────────────────
+export type TravelStatus = 'needed' | 'pending' | 'booked' | 'cancelled'
+
+export interface TravelFlight {
+  id:                string
+  showId:            string
+  kind:              'flight'
+  status:            TravelStatus
+  traveler:          string         // "Full Party" | individual name
+  airline?:          string
+  flightNumber?:     string
+  from?:             string         // "JFK"
+  fromCity?:         string         // "New York"
+  to?:               string         // "LHR"
+  toCity?:           string         // "London"
+  departure?:        string         // "2026-08-22T07:30"
+  arrival?:          string         // "2026-08-23T07:15"
+  duration?:         string         // "7h 15m"
+  cabin?:            string         // "Economy" | "Business" | "First"
+  seats?:            string         // seat numbers or count
+  confirmationCode?: string
+  cost?:             number
+  currency?:         Currency
+  notes?:            string
+}
+
+export interface TravelHotel {
+  id:                string
+  showId:            string
+  kind:              'hotel'
+  status:            TravelStatus
+  name?:             string
+  address?:          string
+  phone?:            string
+  checkIn?:          string         // ISO date "2026-08-22"
+  checkOut?:         string
+  roomCount?:        number
+  roomType?:         string         // "King" | "Double" | "Suite"
+  confirmationCode?: string
+  cost?:             number
+  currency?:         Currency
+  notes?:            string
+}
+
+export interface TravelGround {
+  id:                string
+  showId:            string
+  kind:              'ground'
+  status:            TravelStatus
+  type:              'rental-car' | 'transfer' | 'train' | 'bus'
+  provider?:         string
+  from?:             string
+  to?:               string
+  pickupTime?:       string         // "2026-08-22T16:45"
+  confirmationCode?: string
+  vehicleType?:      string         // "Sprinter Van" | "Sedan" | "SUV"
+  cost?:             number
+  currency?:         Currency
+  notes?:            string
+}
+
+export type TravelItem = TravelFlight | TravelHotel | TravelGround
+
+// ── Tour Data (extended) ─────────────────────────────────────
+export interface TourData {
+  shows:      Show[]
+  advances:   ShowAdvance[]
+  crew:       CrewMember[]
+  guestList:  GuestListEntry[]
+  travel:     TravelItem[]
+}
+
+// ── Agent / Booking ─────────────────────────────────────────
+export type OfferStatus = 'inquiry' | 'hold' | 'confirmed' | 'cancelled' | 'settled'
+
+export interface TourOffer {
+  id:         string
+  venue:      string
+  city:       string
+  country:    string
+  date:       string        // ISO "2026-10-15"
+  promoter:   string
+  guarantee:  number        // in USD
+  door?:      number        // door split %
+  buyout?:    number        // hospitality/production buyout
+  status:     OfferStatus
+  notes?:     string
+  settledAt?: string
+  netPayout?: number        // after splits
+}
+
+// ── Legal / Contracts ───────────────────────────────────────
+export type ContractStatus = 'draft' | 'review' | 'negotiation' | 'signed' | 'expired' | 'terminated'
+export type ContractType   = 'recording' | 'publishing' | 'sync' | 'brand' | 'touring' | 'nda' | 'merch' | 'other'
+
+export interface Contract {
+  id:           string
+  title:        string
+  type:         ContractType
+  status:       ContractStatus
+  counterparty: string
+  value?:       number
+  currency?:    Currency
+  signedDate?:  string
+  expiryDate?:  string
+  notes?:       string
+  createdAt:    string
+  flagged?:     boolean    // attorney has flagged for review
+}
+
+// ── Finance / Business Manager Replacement ──────────────────
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'void'
+export type ExpenseCategory = 'travel' | 'recording' | 'marketing' | 'legal' | 'management' | 'equipment' | 'meals' | 'other'
+export type RevenueStream   = 'touring' | 'streaming' | 'sync' | 'brand' | 'merch' | 'other'
+
+export interface InvoiceLineItem {
+  description: string
+  quantity:    number
+  rate:        number
+}
+
+export interface Invoice {
+  id:         string
+  number:     string        // "INV-2026-001"
+  to:         string        // payee name
+  toEmail?:   string
+  category:   RevenueStream
+  status:     InvoiceStatus
+  issuedDate: string
+  dueDate:    string
+  paidDate?:  string
+  items:      InvoiceLineItem[]
+  currency:   Currency
+  notes?:     string
+}
+
+export interface Expense {
+  id:          string
+  description: string
+  vendor:      string
+  amount:      number
+  currency:    Currency
+  category:    ExpenseCategory
+  date:        string
+  paid:        boolean
+  receipt?:    string       // URL or filename
+}
+
+export interface PLMonth {
+  month:    string          // "2026-01"
+  revenue: {
+    touring:   number
+    streaming: number
+    sync:      number
+    brand:     number
+    merch:     number
+    other:     number
+  }
+  expenses: {
+    travel:     number
+    recording:  number
+    marketing:  number
+    legal:      number
+    management: number
+    equipment:  number
+    meals:      number
+    other:      number
+  }
+}
+
+export interface ClientFinance {
+  invoices:  Invoice[]
+  expenses:  Expense[]
+  plMonths:  PLMonth[]
+}
+
+export interface AgentData {
+  offers: TourOffer[]
+}
+
+export interface LegalData {
+  contracts: Contract[]
+}
