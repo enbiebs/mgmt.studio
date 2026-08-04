@@ -12,6 +12,9 @@ import type {
   AppData, Client, Track, Show, Post, Album,
   Project, ArtistTodo, TourOffer, Contract,
   Invoice, Expense, PLMonth, ChecklistItem, ReleaseStakeholder, UserRole,
+  ShowAdvance, AdvanceContact, AdvanceSchedule, AdvanceProduction,
+  AdvanceHospitality, AdvanceLogistics,
+  CrewMember, GuestListEntry, TravelItem, Currency,
 } from '@/types'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
 import { EMPTY_FANDOM }    from '@/lib/fandom-demo'
@@ -43,6 +46,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     tourOffers, contracts,
     invoices, lineItems, expenses, plMonths,
     checklistItems, stakeholders,
+    crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems,
   ] = await Promise.all([
     supabase.from('albums').select('*').in('client_id', clientIds),
     supabase.from('tracks').select('*'),
@@ -61,6 +65,11 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     supabase.from('pl_months').select('*').in('client_id', clientIds),
     supabase.from('checklist_items').select('*'),
     supabase.from('release_stakeholders').select('*'),
+    supabase.from('crew_members').select('*').in('client_id', clientIds),
+    supabase.from('show_advances').select('*'),
+    supabase.from('advance_contacts').select('*'),
+    supabase.from('guest_list_entries').select('*'),
+    supabase.from('travel_items').select('*'),
   ])
 
   const albumRows     = albums.data       ?? []
@@ -68,6 +77,69 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
   const albumIds      = albumRows.map(a => a.id)
   const checklistRows = (checklistItems.data ?? []).filter((i: { album_id: string }) => albumIds.includes(i.album_id))
   const stakeholderRows = (stakeholders.data ?? []).filter((s: { album_id: string }) => albumIds.includes(s.album_id))
+
+  // Tour: advances, crew, guest list and travel are show-scoped, so narrow
+  // them to shows in this workspace the same way tracks are narrowed to albums.
+  const showIdsAll     = (shows.data ?? []).map((s: { id: string }) => s.id)
+  const crewRows       = crewMembers.data ?? []
+  const advanceRows    = (showAdvances.data ?? []).filter((a: { show_id: string }) => showIdsAll.includes(a.show_id))
+  const advanceIds     = advanceRows.map((a: { id: string }) => a.id)
+  const contactRows    = (advanceContacts.data ?? []).filter((ct: { advance_id: string }) => advanceIds.includes(ct.advance_id))
+  const guestRows      = (guestListEntries.data ?? []).filter((g: { show_id: string }) => showIdsAll.includes(g.show_id))
+  const travelRows     = (travelItems.data ?? []).filter((t: { show_id: string }) => showIdsAll.includes(t.show_id))
+
+  // travel_items is a single table with a `kind` discriminator, so every
+  // per-variant column is nullable and gets narrowed back out below.
+  type TravelRow = {
+    id: string; show_id: string; kind: string; status: string
+    confirmation_code?: string; cost?: number; currency?: string; notes?: string
+    traveler?: string; airline?: string; flight_number?: string
+    from_loc?: string; from_city?: string; to_loc?: string; to_city?: string
+    departure?: string; arrival?: string; duration?: string; cabin?: string; seats?: string
+    hotel_name?: string; address?: string; phone?: string
+    check_in?: string; check_out?: string; room_count?: number; room_type?: string
+    ground_type?: string; provider?: string; pickup_time?: string; vehicle_type?: string
+  }
+
+  const toTravelItem = (t: TravelRow): TravelItem => {
+    const base = {
+      id: t.id, showId: t.show_id,
+      status: t.status as TravelItem['status'],
+      confirmationCode: t.confirmation_code ?? undefined,
+      cost: t.cost ?? undefined,
+      currency: (t.currency ?? undefined) as Currency | undefined,
+      notes: t.notes ?? undefined,
+    }
+    if (t.kind === 'hotel') {
+      return {
+        ...base, kind: 'hotel',
+        name: t.hotel_name ?? undefined, address: t.address ?? undefined,
+        phone: t.phone ?? undefined,
+        checkIn: t.check_in ?? undefined, checkOut: t.check_out ?? undefined,
+        roomCount: t.room_count ?? undefined, roomType: t.room_type ?? undefined,
+      }
+    }
+    if (t.kind === 'ground') {
+      return {
+        ...base, kind: 'ground',
+        type: t.ground_type as Extract<TravelItem, { kind: 'ground' }>['type'],
+        provider: t.provider ?? undefined,
+        from: t.from_loc ?? undefined, to: t.to_loc ?? undefined,
+        pickupTime: t.pickup_time ?? undefined,
+        vehicleType: t.vehicle_type ?? undefined,
+      }
+    }
+    return {
+      ...base, kind: 'flight',
+      traveler: t.traveler ?? '',
+      airline: t.airline ?? undefined, flightNumber: t.flight_number ?? undefined,
+      from: t.from_loc ?? undefined, fromCity: t.from_city ?? undefined,
+      to: t.to_loc ?? undefined, toCity: t.to_city ?? undefined,
+      departure: t.departure ?? undefined, arrival: t.arrival ?? undefined,
+      duration: t.duration ?? undefined, cabin: t.cabin ?? undefined,
+      seats: t.seats ?? undefined,
+    }
+  }
 
   // Build album→tracks lookup (only tracks for albums in this workspace)
   const tracksByAlbum = trackRows
@@ -144,6 +216,69 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
         venue: s.venue, time: s.time,
         status: s.status as Show['status'], notes: s.notes,
       }))
+
+    const cShowIds = cShows.map((s: { id: string }) => s.id)
+
+    const cAdvances: ShowAdvance[] = advanceRows
+      .filter((a: { show_id: string }) => cShowIds.includes(a.show_id))
+      .map((a: {
+        id: string; show_id: string; status: string; sent_at?: string; completed_at?: string
+        schedule: AdvanceSchedule; production: AdvanceProduction
+        hospitality: AdvanceHospitality; logistics: AdvanceLogistics
+        wifi?: string; wifi_password?: string; weather_notes?: string
+        guest_list_cap?: string; guest_list_notes?: string; general_notes?: string
+      }) => ({
+        id: a.id, showId: a.show_id,
+        status: a.status as ShowAdvance['status'],
+        sentAt: a.sent_at ?? undefined, completedAt: a.completed_at ?? undefined,
+        // The four sections are jsonb bags of optional strings — see migration 003
+        schedule:    a.schedule    ?? {},
+        production:  a.production  ?? {},
+        hospitality: a.hospitality ?? {},
+        logistics:   a.logistics   ?? {},
+        contacts: contactRows
+          .filter((ct: { advance_id: string }) => ct.advance_id === a.id)
+          .map((ct: { id: string; role: string; name: string; phone?: string; email?: string; notes?: string }) => ({
+            id: ct.id, role: ct.role, name: ct.name,
+            phone: ct.phone ?? undefined, email: ct.email ?? undefined,
+            notes: ct.notes ?? undefined,
+          })),
+        wifi: a.wifi ?? undefined, wifiPassword: a.wifi_password ?? undefined,
+        weatherNotes: a.weather_notes ?? undefined,
+        guestListCap: a.guest_list_cap ?? undefined,
+        guestListNotes: a.guest_list_notes ?? undefined,
+        generalNotes: a.general_notes ?? undefined,
+      }))
+
+    const cCrew: CrewMember[] = crewRows
+      .filter((cm: { client_id: string }) => cm.client_id === c.id)
+      .map((cm: {
+        id: string; name: string; role: string; phone?: string; email?: string
+        passport?: string; emergency_name?: string; emergency_phone?: string; notes?: string
+      }) => ({
+        id: cm.id, name: cm.name, role: cm.role as CrewMember['role'],
+        phone: cm.phone ?? undefined, email: cm.email ?? undefined,
+        passport: cm.passport ?? undefined,
+        emergencyName: cm.emergency_name ?? undefined,
+        emergencyPhone: cm.emergency_phone ?? undefined,
+        notes: cm.notes ?? undefined,
+      }))
+
+    const cGuestList: GuestListEntry[] = guestRows
+      .filter((g: { show_id: string }) => cShowIds.includes(g.show_id))
+      .map((g: {
+        id: string; show_id: string; name: string; qty: number; category: string
+        checked_in: boolean; credential?: string; notes?: string
+      }) => ({
+        id: g.id, showId: g.show_id, name: g.name, qty: g.qty,
+        category: g.category as GuestListEntry['category'],
+        checkedIn: g.checked_in,
+        credential: g.credential ?? undefined, notes: g.notes ?? undefined,
+      }))
+
+    const cTravel: TravelItem[] = travelRows
+      .filter((t: { show_id: string }) => cShowIds.includes(t.show_id))
+      .map(toTravelItem)
 
     const cPosts = (posts.data ?? [])
       .filter((p: { client_id: string }) => p.client_id === c.id)
@@ -263,7 +398,13 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       genre: c.genre,
       color: c.color,
       songs:    { albums: cAlbums.length ? cAlbums : [{ id: 'alb-default', title: c.name, tracks: [] }] },
-      tour:     { shows: cShows },
+      tour:     {
+        shows:     cShows,
+        advances:  cAdvances,
+        crew:      cCrew,
+        guestList: cGuestList,
+        travel:    cTravel,
+      },
       content:  { posts: cPosts },
       business: {
         royalties: { streams: cRoyalties },
@@ -523,4 +664,150 @@ export async function upsertInvoice(invoice: Invoice, clientId: string) {
       }))
     )
   }
+}
+
+// ── Crew ───────────────────────────────────────────────────
+export async function upsertCrewMember(member: CrewMember, clientId: string) {
+  const supabase = createClient()
+  await supabase.from('crew_members').upsert({
+    id: member.id, client_id: clientId,
+    name: member.name, role: member.role,
+    phone: member.phone ?? null, email: member.email ?? null,
+    passport: member.passport ?? null,
+    emergency_name: member.emergencyName ?? null,
+    emergency_phone: member.emergencyPhone ?? null,
+    notes: member.notes ?? null,
+  })
+}
+
+export async function deleteCrewMember(memberId: string) {
+  const supabase = createClient()
+  await supabase.from('crew_members').delete().eq('id', memberId)
+}
+
+// ── Show Advance ───────────────────────────────────────────
+export async function upsertAdvance(advance: ShowAdvance) {
+  const supabase = createClient()
+  await supabase.from('show_advances').upsert({
+    id: advance.id, show_id: advance.showId,
+    status: advance.status,
+    sent_at: advance.sentAt ?? null,
+    completed_at: advance.completedAt ?? null,
+    schedule:    advance.schedule    ?? {},
+    production:  advance.production  ?? {},
+    hospitality: advance.hospitality ?? {},
+    logistics:   advance.logistics   ?? {},
+    wifi: advance.wifi ?? null,
+    wifi_password: advance.wifiPassword ?? null,
+    weather_notes: advance.weatherNotes ?? null,
+    guest_list_cap: advance.guestListCap ?? null,
+    guest_list_notes: advance.guestListNotes ?? null,
+    general_notes: advance.generalNotes ?? null,
+  })
+  // Contacts are replaced wholesale, same as invoice line items
+  await supabase.from('advance_contacts').delete().eq('advance_id', advance.id)
+  const contacts: AdvanceContact[] = advance.contacts ?? []
+  if (contacts.length > 0) {
+    await supabase.from('advance_contacts').insert(
+      contacts.map(ct => ({
+        id: ct.id, advance_id: advance.id,
+        role: ct.role, name: ct.name,
+        phone: ct.phone ?? null, email: ct.email ?? null,
+        notes: ct.notes ?? null,
+      }))
+    )
+  }
+}
+
+export async function deleteAdvance(advanceId: string) {
+  const supabase = createClient()
+  await supabase.from('show_advances').delete().eq('id', advanceId)
+}
+
+// ── Guest List ─────────────────────────────────────────────
+export async function upsertGuestListEntry(entry: GuestListEntry) {
+  const supabase = createClient()
+  await supabase.from('guest_list_entries').upsert({
+    id: entry.id, show_id: entry.showId,
+    name: entry.name, qty: entry.qty,
+    category: entry.category, checked_in: entry.checkedIn,
+    credential: entry.credential ?? null, notes: entry.notes ?? null,
+  })
+}
+
+export async function deleteGuestListEntry(entryId: string) {
+  const supabase = createClient()
+  await supabase.from('guest_list_entries').delete().eq('id', entryId)
+}
+
+// ── Travel ─────────────────────────────────────────────────
+/**
+ * Flattens the TravelItem union onto the single travel_items row shape.
+ * Columns belonging to the other two variants are explicitly nulled so
+ * changing an item's `kind` doesn't leave stale values behind.
+ */
+function travelItemToRow(item: TravelItem) {
+  const base = {
+    id: item.id, show_id: item.showId,
+    kind: item.kind, status: item.status,
+    confirmation_code: item.confirmationCode ?? null,
+    cost: item.cost ?? null,
+    currency: item.currency ?? null,
+    notes: item.notes ?? null,
+    // per-variant columns, cleared by default
+    traveler: null as string | null, airline: null as string | null,
+    flight_number: null as string | null,
+    from_loc: null as string | null, from_city: null as string | null,
+    to_loc: null as string | null, to_city: null as string | null,
+    departure: null as string | null, arrival: null as string | null,
+    duration: null as string | null, cabin: null as string | null,
+    seats: null as string | null,
+    hotel_name: null as string | null, address: null as string | null,
+    phone: null as string | null,
+    check_in: null as string | null, check_out: null as string | null,
+    room_count: null as number | null, room_type: null as string | null,
+    ground_type: null as string | null, provider: null as string | null,
+    pickup_time: null as string | null, vehicle_type: null as string | null,
+  }
+
+  if (item.kind === 'flight') {
+    return {
+      ...base,
+      traveler: item.traveler,           // NOT NULL for flights (migration 003)
+      airline: item.airline ?? null,
+      flight_number: item.flightNumber ?? null,
+      from_loc: item.from ?? null, from_city: item.fromCity ?? null,
+      to_loc: item.to ?? null, to_city: item.toCity ?? null,
+      departure: item.departure ?? null, arrival: item.arrival ?? null,
+      duration: item.duration ?? null, cabin: item.cabin ?? null,
+      seats: item.seats ?? null,
+    }
+  }
+  if (item.kind === 'hotel') {
+    return {
+      ...base,
+      hotel_name: item.name ?? null, address: item.address ?? null,
+      phone: item.phone ?? null,
+      check_in: item.checkIn ?? null, check_out: item.checkOut ?? null,
+      room_count: item.roomCount ?? null, room_type: item.roomType ?? null,
+    }
+  }
+  return {
+    ...base,
+    ground_type: item.type,              // NOT NULL for ground (migration 003)
+    provider: item.provider ?? null,
+    from_loc: item.from ?? null, to_loc: item.to ?? null,
+    pickup_time: item.pickupTime ?? null,
+    vehicle_type: item.vehicleType ?? null,
+  }
+}
+
+export async function upsertTravelItem(item: TravelItem) {
+  const supabase = createClient()
+  await supabase.from('travel_items').upsert(travelItemToRow(item))
+}
+
+export async function deleteTravelItem(itemId: string) {
+  const supabase = createClient()
+  await supabase.from('travel_items').delete().eq('id', itemId)
 }

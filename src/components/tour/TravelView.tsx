@@ -627,7 +627,8 @@ function CostSummary({ items }: { items: TravelItem[] }) {
 // ── Main view ────────────────────────────────────────────────
 export function TravelView() {
   const client = useStore(s => s.getClient())
-  const { data, clientId } = useStore()
+  const saveTravel   = useStore(s => s.saveTravelItem)
+  const deleteTravel = useStore(s => s.deleteTravelItem)
   const [selectedShowId, setSelectedShowId] = useState<string | null>(null)
   const [addMode, setAddMode] = useState<AddMode>(null)
 
@@ -646,23 +647,12 @@ export function TravelView() {
   const ground  = showTravel.filter((t): t is TravelGround => t.kind === 'ground')
 
   function saveTravelItem(item: TravelItem) {
-    if (!clientId) return
-    // Optimistic update to store (mutate client.tour.travel in-place)
-    const clients = data.clients.map(c => {
-      if (c.id !== clientId) return c
-      return { ...c, tour: { ...c.tour, travel: [...(c.tour.travel ?? []), item] } }
-    })
-    useStore.setState({ data: { ...data, clients } })
+    saveTravel(item)
     setAddMode(null)
   }
 
   function removeTravelItem(itemId: string) {
-    if (!clientId) return
-    const clients = data.clients.map(c => {
-      if (c.id !== clientId) return c
-      return { ...c, tour: { ...c.tour, travel: (c.tour.travel ?? []).filter(t => t.id !== itemId) } }
-    })
-    useStore.setState({ data: { ...data, clients } })
+    deleteTravel(itemId)
   }
 
   const showDate = show ? new Date(show.date) : null

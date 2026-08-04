@@ -79,7 +79,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 // ── Main component ──────────────────────────────────────────
 export function AdvanceView() {
   const client = useStore(s => s.getClient())
-  const { setBizSub, setTourSub } = useStore()
+  const { setTourSub, saveAdvance: persistAdvance } = useStore()
   const [selectedShowId, setSelectedShowId] = useState<string | null>(null)
   const [advance, setAdvance] = useState<ShowAdvance | null>(null)
   const [tab, setTab] = useState<Tab>('schedule')
@@ -154,7 +154,8 @@ export function AdvanceView() {
 
   function saveAdvance() {
     if (!advance) return
-    // In a real app this would persist to Supabase
+    // Writes through the store: optimistic state + localStorage + Supabase
+    persistAdvance(advance)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }

@@ -19,6 +19,7 @@ import type {
   UserRole, ProjectStatus, ProjectType, Stakeholder, Project, ArtistTodo,
   TrackLabelCopy, ReleaseLabelCopy, ChecklistItemKey, ChecklistItem, TrackPriority,
   GuestListEntry, GuestListCategory, ReleaseStakeholder, StakeholderRole,
+  CrewMember, ShowAdvance, TravelItem,
 } from '@/types'
 import { DEMO_DATA } from '@/lib/demo-data'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
@@ -39,6 +40,10 @@ import {
   upsertDeposit, deleteDeposit as dbDeleteDeposit,
   upsertProject, deleteProject as dbDeleteProject,
   upsertArtistTodo, deleteArtistTodo as dbDeleteArtistTodo,
+  upsertCrewMember, deleteCrewMember as dbDeleteCrewMember,
+  upsertAdvance, deleteAdvance as dbDeleteAdvance,
+  upsertGuestListEntry, deleteGuestListEntry as dbDeleteGuestListEntry,
+  upsertTravelItem, deleteTravelItem as dbDeleteTravelItem,
 } from '@/lib/db'
 
 // ── Persistence helpers ─────────────────────────────────────
@@ -150,6 +155,21 @@ interface StudioState {
   addGuest: (showId: string, name: string, qty: number, category: GuestListCategory, credential?: string, notes?: string) => void
   toggleGuestCheckedIn: (guestId: string) => void
   deleteGuest: (guestId: string) => void
+
+  // ── Crew ──
+  /** Inserts when the id is new, replaces when it already exists. */
+  saveCrewMember: (member: CrewMember) => void
+  deleteCrewMember: (memberId: string) => void
+
+  // ── Show advances ──
+  /** Inserts when the id is new, replaces when it already exists. */
+  saveAdvance: (advance: ShowAdvance) => void
+  deleteAdvance: (advanceId: string) => void
+
+  // ── Travel ──
+  /** Inserts when the id is new, replaces when it already exists. */
+  saveTravelItem: (item: TravelItem) => void
+  deleteTravelItem: (itemId: string) => void
 
   // ── Show actions ──
   addShow: (date: string, city: string, venue: string, time: string) => void
@@ -591,7 +611,7 @@ export const useStore = create<StudioState>((set, get) => ({
 
   // ── Guest list ──
   addGuest: (showId, name, qty, category, credential, notes) => {
-    const { data, clientId } = get()
+    const { data, clientId, workspaceId } = get()
     const newGuest: GuestListEntry = { id: 'gl-' + uid(), showId, name, qty, category, checkedIn: false, credential, notes }
     const updated = {
       clients: data.clients.map(c => {
@@ -601,10 +621,12 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
+    if (workspaceId) upsertGuestListEntry(newGuest).catch(console.error)
   },
 
   toggleGuestCheckedIn: (guestId) => {
-    const { data, clientId } = get()
+    const { data, clientId, workspaceId } = get()
+    let toggled: GuestListEntry | undefined
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId) return c
@@ -612,17 +634,22 @@ export const useStore = create<StudioState>((set, get) => ({
           ...c,
           tour: {
             ...c.tour,
-            guestList: (c.tour.guestList ?? []).map(g => g.id === guestId ? { ...g, checkedIn: !g.checkedIn } : g),
+            guestList: (c.tour.guestList ?? []).map(g => {
+              if (g.id !== guestId) return g
+              toggled = { ...g, checkedIn: !g.checkedIn }
+              return toggled
+            }),
           },
         }
       }),
     }
     set({ data: updated })
     saveData(updated)
+    if (workspaceId && toggled) upsertGuestListEntry(toggled).catch(console.error)
   },
 
   deleteGuest: (guestId) => {
-    const { data, clientId } = get()
+    const { data, clientId, workspaceId } = get()
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId) return c
@@ -631,6 +658,112 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
+    if (workspaceId) dbDeleteGuestListEntry(guestId).catch(console.error)
+  },
+
+  // ── Crew ──
+  saveCrewMember: (member) => {
+    const { data, clientId, workspaceId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        const crew = c.tour.crew ?? []
+        const exists = crew.some(m => m.id === member.id)
+        return {
+          ...c,
+          tour: {
+            ...c.tour,
+            crew: exists ? crew.map(m => m.id === member.id ? member : m) : [...crew, member],
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId) upsertCrewMember(member, clientId).catch(console.error)
+  },
+
+  deleteCrewMember: (memberId) => {
+    const { data, clientId, workspaceId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return { ...c, tour: { ...c.tour, crew: (c.tour.crew ?? []).filter(m => m.id !== memberId) } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId) dbDeleteCrewMember(memberId).catch(console.error)
+  },
+
+  // ── Show advances ──
+  saveAdvance: (advance) => {
+    const { data, clientId, workspaceId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        const advances = c.tour.advances ?? []
+        const exists = advances.some(a => a.id === advance.id)
+        return {
+          ...c,
+          tour: {
+            ...c.tour,
+            advances: exists ? advances.map(a => a.id === advance.id ? advance : a) : [...advances, advance],
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId) upsertAdvance(advance).catch(console.error)
+  },
+
+  deleteAdvance: (advanceId) => {
+    const { data, clientId, workspaceId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return { ...c, tour: { ...c.tour, advances: (c.tour.advances ?? []).filter(a => a.id !== advanceId) } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId) dbDeleteAdvance(advanceId).catch(console.error)
+  },
+
+  // ── Travel ──
+  saveTravelItem: (item) => {
+    const { data, clientId, workspaceId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        const travel = c.tour.travel ?? []
+        const exists = travel.some(t => t.id === item.id)
+        return {
+          ...c,
+          tour: {
+            ...c.tour,
+            travel: exists ? travel.map(t => t.id === item.id ? item : t) : [...travel, item],
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId) upsertTravelItem(item).catch(console.error)
+  },
+
+  deleteTravelItem: (itemId) => {
+    const { data, clientId, workspaceId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return { ...c, tour: { ...c.tour, travel: (c.tour.travel ?? []).filter(t => t.id !== itemId) } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId) dbDeleteTravelItem(itemId).catch(console.error)
   },
 
   // ── Release stakeholders ──
