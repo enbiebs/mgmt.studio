@@ -6,7 +6,8 @@
 
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
-import type { Invoice, InvoiceStatus } from '@/types'
+import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
+import type { Invoice, InvoiceStatus, Currency, RevenueStream, BankTransaction } from '@/types'
 
 const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string; bg: string }> = {
   draft:   { label: 'Draft',   color: 'text-gray-500',  bg: 'bg-gray-100'  },
@@ -42,6 +43,7 @@ export function InvoicesView() {
   const client = useStore(s => s.getClient())
   const [filter, setFilter] = useState<InvFilter>('all')
   const [selected, setSelected] = useState<Invoice | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
 
   if (!client) return null
   const invoices = (client.finance?.invoices ?? []).map(inv =>
@@ -56,9 +58,20 @@ export function InvoicesView() {
 
   const filtered = filter === 'all' ? invoices : invoices.filter(i => i.status === filter)
   const sorted   = [...filtered].sort((a, b) => b.issuedDate.localeCompare(a.issuedDate))
+  // Keep the drawer's copy of the selected invoice in sync once a bank payment gets linked to it.
+  const selectedLive = selected ? invoices.find(i => i.id === selected.id) ?? null : null
 
   return (
     <div className="flex-1 overflow-auto p-6">
+      <div className="flex items-center justify-end mb-4">
+        <button
+          onClick={() => setAddOpen(true)}
+          className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+        >
+          + New invoice
+        </button>
+      </div>
+
       {/* Summary cards */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         <SCard label="Total Paid (YTD)" value={fmt(totalPaid)} color="text-green-700" count={invoices.filter(i => i.status === 'paid').length} />
@@ -140,10 +153,83 @@ export function InvoicesView() {
       </div>
 
       {/* Invoice detail drawer */}
-      {selected && (
-        <InvoiceDetail invoice={selected} onClose={() => setSelected(null)} />
+      {selectedLive && (
+        <InvoiceDetail invoice={selectedLive} onClose={() => setSelected(null)} />
       )}
+
+      {addOpen && <AddInvoiceModal onClose={() => setAddOpen(false)} />}
     </div>
+  )
+}
+
+function AddInvoiceModal({ onClose }: { onClose: () => void }) {
+  const { addInvoice } = useStore()
+  const [to, setTo] = useState('')
+  const [toEmail, setToEmail] = useState('')
+  const [category, setCategory] = useState<RevenueStream>('other')
+  const [amount, setAmount] = useState('')
+  const [description, setDescription] = useState('')
+  const [currency, setCurrency] = useState<Currency>('USD')
+  const [dueDate, setDueDate] = useState('')
+
+  function handleSave() {
+    const rate = Number(amount)
+    if (!to.trim() || !dueDate || !rate) return
+    addInvoice({
+      number: 'INV-' + Date.now().toString().slice(-6),
+      to: to.trim(),
+      toEmail: toEmail.trim() || undefined,
+      category,
+      currency,
+      issuedDate: new Date().toISOString().slice(0, 10),
+      dueDate,
+      items: [{ description: description.trim() || 'Services', quantity: 1, rate }],
+    })
+    onClose()
+  }
+
+  return (
+    <Modal title="New invoice" onClose={onClose} footer={
+      <>
+        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+        <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Create draft</button>
+      </>
+    }>
+      <FormField label="Bill to">
+        <input className={inputClass} placeholder="Payee name" value={to} onChange={e => setTo(e.target.value)} autoFocus />
+      </FormField>
+      <FormField label="Email (optional)">
+        <input className={inputClass} type="email" value={toEmail} onChange={e => setToEmail(e.target.value)} />
+      </FormField>
+      <FormField label="Description">
+        <input className={inputClass} placeholder="What's this for?" value={description} onChange={e => setDescription(e.target.value)} />
+      </FormField>
+      <div className="grid grid-cols-3 gap-3">
+        <FormField label="Category">
+          <select className={selectClass} value={category} onChange={e => setCategory(e.target.value as RevenueStream)}>
+            <option value="touring">Touring</option>
+            <option value="streaming">Streaming</option>
+            <option value="sync">Sync</option>
+            <option value="brand">Brand</option>
+            <option value="merch">Merch</option>
+            <option value="other">Other</option>
+          </select>
+        </FormField>
+        <FormField label="Amount">
+          <input className={inputClass} type="number" min="0" value={amount} onChange={e => setAmount(e.target.value)} />
+        </FormField>
+        <FormField label="Currency">
+          <select className={selectClass} value={currency} onChange={e => setCurrency(e.target.value as Currency)}>
+            <option value="USD">USD</option>
+            <option value="GBP">GBP</option>
+            <option value="EUR">EUR</option>
+          </select>
+        </FormField>
+      </div>
+      <FormField label="Due date">
+        <input className={inputClass} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+      </FormField>
+    </Modal>
   )
 }
 
@@ -229,8 +315,58 @@ function InvoiceDetail({ invoice: inv, onClose }: { invoice: Invoice; onClose: (
             </table>
           </div>
           {inv.notes && <div className="text-xs text-gray-400 italic">{inv.notes}</div>}
+
+          {inv.status !== 'void' && inv.status !== 'draft' && <InvoicePaymentLinker invoice={inv} />}
         </div>
       </div>
+    </div>
+  )
+}
+
+function InvoicePaymentLinker({ invoice: inv }: { invoice: Invoice }) {
+  const client = useStore(s => s.getClient())
+  const { linkTransactionToInvoice } = useStore()
+  const [pickerOpen, setPickerOpen] = useState(false)
+  if (!client) return null
+
+  const all = client.business.banking.transactions ?? []
+  const linked: BankTransaction | undefined = all.find(t => t.invoiceId === inv.id)
+  const available = all.filter(t => t.amount < 0 && !t.pending && !t.invoiceId)
+
+  return (
+    <div className="pt-3 mt-1 border-t border-gray-100">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Bank payment</div>
+      {linked ? (
+        <div className="flex items-center justify-between text-xs bg-green-50 text-green-700 rounded-lg px-3 py-2">
+          <span>Confirmed — {linked.merchantName ?? linked.name} · {linked.date} · {fmt(Math.abs(linked.amount), linked.currency)}</span>
+          <button onClick={() => linkTransactionToInvoice(linked.id, null)} className="text-green-500 hover:text-red-500 font-medium">Unlink</button>
+        </div>
+      ) : (
+        <div className="relative">
+          <button
+            onClick={() => setPickerOpen(v => !v)}
+            className="w-full text-left text-xs border border-dashed border-gray-200 rounded-lg px-3 py-2 text-gray-400 hover:border-blue-300 hover:text-blue-500 transition-colors"
+          >
+            + Link a payment from your connected bank
+          </button>
+          {pickerOpen && (
+            <div className="absolute left-0 right-0 top-full mt-1 bg-canvas border border-gray-100 rounded-lg shadow-lg max-h-48 overflow-auto z-50">
+              {available.length === 0 ? (
+                <div className="px-3 py-2 text-[11px] text-gray-300">No unlinked incoming bank transactions</div>
+              ) : available.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => { linkTransactionToInvoice(t.id, inv.id); setPickerOpen(false) }}
+                  className="flex items-center justify-between gap-3 w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors"
+                >
+                  <span className="truncate">{t.merchantName ?? t.name} · {t.date}</span>
+                  <span className="text-gray-400 flex-shrink-0">{fmt(Math.abs(t.amount), t.currency ?? 'USD')}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

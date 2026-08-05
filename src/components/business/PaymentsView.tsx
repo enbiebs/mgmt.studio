@@ -7,7 +7,8 @@
 
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
-import type { Expense, ExpenseCategory } from '@/types'
+import { expensesFromTransactions } from '@/lib/bank-rollup'
+import type { ExpenseCategory } from '@/types'
 
 const CAT_LABELS: Record<ExpenseCategory, string> = {
   travel:     'Travel',
@@ -45,7 +46,8 @@ export function PaymentsView() {
   const [showUnpaid, setShowUnpaid] = useState(false)
 
   if (!client) return null
-  const expenses = client.finance?.expenses ?? []
+  const bankExpenses = expensesFromTransactions(client.business.banking.transactions ?? [])
+  const expenses = [...(client.finance?.expenses ?? []), ...bankExpenses]
 
   if (expenses.length === 0) {
     return <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">No expenses recorded</div>
@@ -72,6 +74,11 @@ export function PaymentsView() {
 
   return (
     <div className="flex-1 overflow-auto p-6">
+      {bankExpenses.length > 0 && (
+        <div className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-4">
+          Includes {bankExpenses.length} outgoing transactions pulled automatically from your connected bank account.
+        </div>
+      )}
       {/* Summary */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <SCard label="Total Expenses" value={fmt(total)} color="text-gray-800" sub={`${expenses.length} line items`} />

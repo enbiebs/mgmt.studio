@@ -20,6 +20,7 @@ import type {
   TrackLabelCopy, ReleaseLabelCopy, ChecklistItemKey, ChecklistItem, TrackPriority,
   GuestListEntry, GuestListCategory, ReleaseStakeholder, StakeholderRole,
   CrewMember, ShowAdvance, TravelItem, Person, PersonActivity, Currency,
+  CatalogWork, RegStatus, Invoice, InvoiceLineItem, RevenueStream,
 } from '@/types'
 import { DEMO_DATA } from '@/lib/demo-data'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
@@ -45,6 +46,9 @@ import {
   upsertAdvance, deleteAdvance as dbDeleteAdvance,
   upsertGuestListEntry, deleteGuestListEntry as dbDeleteGuestListEntry,
   upsertTravelItem, deleteTravelItem as dbDeleteTravelItem,
+  upsertCatalogWork, deleteCatalogWork as dbDeleteCatalogWork,
+  linkBankTransaction,
+  upsertInvoice,
 } from '@/lib/db'
 
 // ── Persistence helpers ─────────────────────────────────────
@@ -156,6 +160,17 @@ interface StudioState {
   // ── Bank accounts (Plaid) ──
   /** Re-reads bank_accounts/bank_transactions for one client from Supabase — call after connecting or syncing a bank. */
   loadBankData: (clientId: string) => Promise<void>
+  /** Manually confirms a bank transaction as income for a song, or unlinks it (pass null). */
+  linkTransactionToCatalogWork: (transactionId: string, catalogWorkId: string | null) => void
+  /** Manually confirms a bank transaction as the payment for an invoice — marks it paid using the transaction's real date. */
+  linkTransactionToInvoice: (transactionId: string, invoiceId: string | null) => void
+
+  // ── Catalog ──
+  addCatalogWork: (patch: { title: string; ipi?: string; writers: string; currency: Currency; bmi?: RegStatus; mlc?: RegStatus; sx?: RegStatus; ppl?: RegStatus }) => void
+  deleteCatalogWork: (workId: string) => void
+
+  // ── Invoices ──
+  addInvoice: (patch: { number: string; to: string; toEmail?: string; category: RevenueStream; currency: Currency; issuedDate: string; dueDate: string; items: InvoiceLineItem[]; notes?: string }) => void
 
   // ── Release stakeholders ──
   addStakeholder: (albumId: string, patch: { personId: string; role: StakeholderRole; notes?: string }) => void
@@ -854,6 +869,7 @@ export const useStore = create<StudioState>((set, get) => ({
       merchantName: t.merchant_name ?? undefined, amount: t.amount,
       currency: (t.currency ?? undefined) as Currency | undefined,
       category: t.category ?? undefined, pending: t.pending,
+      catalogWorkId: t.catalog_work_id ?? undefined, invoiceId: t.invoice_id ?? undefined,
     }))
     set(state => ({
       data: {
@@ -863,6 +879,136 @@ export const useStore = create<StudioState>((set, get) => ({
         }),
       },
     }))
+  },
+
+  linkTransactionToCatalogWork: (transactionId, catalogWorkId) => {
+    const { data, clientId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          business: {
+            ...c.business,
+            banking: {
+              ...c.business.banking,
+              transactions: c.business.banking.transactions.map(t =>
+                t.id === transactionId ? { ...t, catalogWorkId: catalogWorkId ?? undefined } : t
+              ),
+            },
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    linkBankTransaction(transactionId, { catalogWorkId }).catch(console.error)
+  },
+
+  linkTransactionToInvoice: (transactionId, invoiceId) => {
+    const { data, clientId } = get()
+    const client = data.clients.find(c => c.id === clientId)
+    const transaction = client?.business.banking.transactions.find(t => t.id === transactionId)
+    // Unlinking removes the proof this invoice was paid, so its status reverts too —
+    // a "paid" invoice with no linked transaction behind it would be misleading.
+    const affectedInvoiceId = invoiceId ?? transaction?.invoiceId
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          business: {
+            ...c.business,
+            banking: {
+              ...c.business.banking,
+              transactions: c.business.banking.transactions.map(t =>
+                t.id === transactionId ? { ...t, invoiceId: invoiceId ?? undefined } : t
+              ),
+            },
+          },
+          finance: !affectedInvoiceId || !c.finance ? c.finance : {
+            ...c.finance,
+            invoices: c.finance.invoices.map(inv =>
+              inv.id !== affectedInvoiceId ? inv
+              : invoiceId
+                ? { ...inv, status: 'paid' as const, paidDate: transaction?.date ?? inv.paidDate }
+                : { ...inv, status: 'sent' as const, paidDate: undefined }
+            ),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    linkBankTransaction(transactionId, { invoiceId }).catch(console.error)
+    if (affectedInvoiceId) {
+      const invoice = updated.clients.find(c => c.id === clientId)?.finance?.invoices.find(i => i.id === affectedInvoiceId)
+      if (invoice) upsertInvoice(invoice, clientId!).catch(console.error)
+    }
+  },
+
+  addCatalogWork: (patch) => {
+    const { data, clientId, workspaceId } = get()
+    const work: CatalogWork = {
+      id: 'work-' + uid(),
+      title: patch.title, ipi: patch.ipi, writers: patch.writers,
+      amount: 0, currency: patch.currency,
+      bmi: patch.bmi ?? 'q', mlc: patch.mlc ?? 'q', sx: patch.sx ?? 'q', ppl: patch.ppl ?? 'q',
+    }
+    const updated = {
+      clients: data.clients.map(c => c.id !== clientId ? c : {
+        ...c,
+        business: { ...c.business, catalog: { works: [...c.business.catalog.works, work] } },
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId) upsertCatalogWork(work, clientId).catch(console.error)
+  },
+
+  deleteCatalogWork: (workId) => {
+    const { data, clientId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          business: {
+            ...c.business,
+            catalog: { works: c.business.catalog.works.filter(w => w.id !== workId) },
+            banking: {
+              ...c.business.banking,
+              transactions: c.business.banking.transactions.map(t =>
+                t.catalogWorkId === workId ? { ...t, catalogWorkId: undefined } : t
+              ),
+            },
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    dbDeleteCatalogWork(workId).catch(console.error)
+  },
+
+  addInvoice: (patch) => {
+    const { data, clientId, workspaceId } = get()
+    const invoice: Invoice = {
+      id: 'inv-' + uid(),
+      number: patch.number, to: patch.to, toEmail: patch.toEmail,
+      category: patch.category, status: 'draft',
+      issuedDate: patch.issuedDate, dueDate: patch.dueDate,
+      items: patch.items, currency: patch.currency, notes: patch.notes,
+    }
+    const updated = {
+      clients: data.clients.map(c => c.id !== clientId ? c : {
+        ...c,
+        finance: { ...c.finance, invoices: [...(c.finance?.invoices ?? []), invoice] },
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId) upsertInvoice(invoice, clientId).catch(console.error)
   },
 
   // ── Release stakeholders ──

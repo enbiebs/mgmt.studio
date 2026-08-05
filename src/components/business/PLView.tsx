@@ -8,6 +8,7 @@
 
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
+import { plMonthsFromTransactions, mergePLMonths } from '@/lib/bank-rollup'
 import type { PLMonth } from '@/types'
 
 function fmt(n: number) {
@@ -81,7 +82,9 @@ export function PLView() {
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
 
   if (!client) return null
-  const months = client.finance?.plMonths ?? []
+  const bankTransactions = client.business.banking.transactions ?? []
+  const bankMonths = plMonthsFromTransactions(bankTransactions)
+  const months = mergePLMonths(client.finance?.plMonths ?? [], bankMonths)
   if (months.length === 0) {
     return <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">No P&L data yet</div>
   }
@@ -104,6 +107,11 @@ export function PLView() {
 
   return (
     <div className="flex-1 overflow-auto p-6">
+      {bankMonths.length > 0 && (
+        <div className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-4">
+          Includes {bankTransactions.filter(t => !t.pending).length} settled transactions from your connected bank account, counted as revenue (unattributed — see Catalog to link specific income) or expenses.
+        </div>
+      )}
       {/* YTD Summary */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         <SummaryCard label="YTD Revenue" value={fmt(ytdRev)} color="text-green-700" sub={`${sorted.length} months`} />

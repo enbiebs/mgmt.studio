@@ -31,6 +31,8 @@ export interface BankTransaction {
   currency?: Currency
   category?: string
   pending: boolean
+  catalogWorkId?: string   // → CatalogWork — manually confirmed as income for this song
+  invoiceId?: string       // → Invoice — manually confirmed as payment for this invoice
 }
 export type RegStatus = 'ok' | 'warn' | 'no' | 'q'
 export type PostType = 'reel' | 'story' | 'post' | 'video' | 'tiktok' | 'shorts' | 'spotify-clip' | 'tweet' | 'laylo'

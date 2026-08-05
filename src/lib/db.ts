@@ -14,7 +14,7 @@ import type {
   Invoice, Expense, PLMonth, ChecklistItem, ReleaseStakeholder, UserRole,
   ShowAdvance, AdvanceContact, AdvanceSchedule, AdvanceProduction,
   AdvanceHospitality, AdvanceLogistics,
-  CrewMember, GuestListEntry, TravelItem, Currency, Person, PersonActivity,
+  CrewMember, GuestListEntry, TravelItem, Currency, Person, PersonActivity, CatalogWork,
 } from '@/types'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
 import { EMPTY_FANDOM }    from '@/lib/fandom-demo'
@@ -327,11 +327,12 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
 
     const cBankTransactions = (bankTransactions.data ?? [])
       .filter((t: { client_id: string }) => t.client_id === c.id)
-      .map((t: { id: string; account_id: string; date: string; name: string; merchant_name?: string; amount: number; currency?: string; category?: string; pending: boolean }) => ({
+      .map((t: { id: string; account_id: string; date: string; name: string; merchant_name?: string; amount: number; currency?: string; category?: string; pending: boolean; catalog_work_id?: string; invoice_id?: string }) => ({
         id: t.id, accountId: t.account_id, date: t.date, name: t.name,
         merchantName: t.merchant_name ?? undefined, amount: t.amount,
         currency: (t.currency ?? undefined) as Currency | undefined,
         category: t.category ?? undefined, pending: t.pending,
+        catalogWorkId: t.catalog_work_id ?? undefined, invoiceId: t.invoice_id ?? undefined,
       }))
 
     const cCatalog = (catalogWorks.data ?? [])
@@ -652,6 +653,32 @@ export async function upsertDeposit(
 export async function deleteDeposit(depositId: string) {
   const supabase = createClient()
   await supabase.from('deposits').delete().eq('id', depositId)
+}
+
+// ── Catalog work ───────────────────────────────────────────
+export async function upsertCatalogWork(work: CatalogWork, clientId: string) {
+  const supabase = createClient()
+  await supabase.from('catalog_works').upsert({
+    id: work.id, client_id: clientId,
+    title: work.title, ipi: work.ipi ?? null, writers: work.writers,
+    amount: work.amount, currency: work.currency,
+    bmi: work.bmi, mlc: work.mlc, sx: work.sx, ppl: work.ppl,
+  })
+}
+
+export async function deleteCatalogWork(workId: string) {
+  const supabase = createClient()
+  await supabase.from('catalog_works').delete().eq('id', workId)
+}
+
+// ── Bank transaction linking ────────────────────────────────
+/** Manually confirms a bank transaction as income for a song, or as payment for an invoice. Pass null to unlink. */
+export async function linkBankTransaction(transactionId: string, patch: { catalogWorkId?: string | null; invoiceId?: string | null }) {
+  const supabase = createClient()
+  const update: Record<string, string | null> = {}
+  if ('catalogWorkId' in patch) update.catalog_work_id = patch.catalogWorkId ?? null
+  if ('invoiceId' in patch) update.invoice_id = patch.invoiceId ?? null
+  await supabase.from('bank_transactions').update(update).eq('id', transactionId)
 }
 
 // ── Project ────────────────────────────────────────────────
