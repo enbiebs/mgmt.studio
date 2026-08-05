@@ -37,6 +37,32 @@ export interface Album {
   stakeholders?: ReleaseStakeholder[]
 }
 
+// ── People — the one shared directory every part of the app links to ──
+// A person exists once per client, no matter how many hats they wear —
+// the same "Dana Wells" record is what both a Crew entry and a Release
+// Stakeholder entry point to, instead of each typing her name and email
+// separately (and drifting out of sync, e.g. two different email
+// addresses for the same person in two different places). Update her
+// info once, here, and it's correct everywhere she's linked.
+export interface Person {
+  id: string
+  name: string
+  email?: string
+  phone?: string
+  org?: string
+  notes?: string
+  activity?: PersonActivity[]   // running comms log — what's been said/sent to this person
+}
+
+// A lightweight in-app comms log entry — not a real email/SMS send, just a
+// timestamped record so anyone on the team can see what this person's
+// already been told without re-asking.
+export interface PersonActivity {
+  id: string
+  date: string     // ISO date "2026-08-14"
+  text: string
+}
+
 // ── Release stakeholders — the real cast around a release beyond the roster ──
 // Roles reflect who actually shows up on a release thread: your own team,
 // the label's day-to-day contact vs. its legal/business-affairs desk (who
@@ -48,11 +74,8 @@ export type StakeholderRole =
 
 export interface ReleaseStakeholder {
   id: string
-  name: string
+  personId: string        // → Person
   role: StakeholderRole
-  org?: string
-  email?: string
-  phone?: string
   notes?: string
 }
 
@@ -158,6 +181,7 @@ export interface Client {
   name: string
   genre: string
   color: string          // hex color for avatar
+  people: Person[]        // shared directory — everyone linked from Crew, Stakeholders, etc.
   songs: {
     albums: Album[]
   }
@@ -365,7 +389,7 @@ export interface AnalyticsData {
 }
 
 // ── Section / view routing ──────────────────────────────────
-export type MainSection  = 'songs' | 'tour' | 'content' | 'business' | 'projects' | 'analytics' | 'fandom'
+export type MainSection  = 'songs' | 'tour' | 'content' | 'business' | 'projects' | 'analytics' | 'fandom' | 'team'
 export type SongsSub     = 'tracks' | 'labelcopy' | 'checklist' | 'status'
 export type ContentSub   = 'manage' | 'studio' | 'lab'
 export type BizSub       = 'royalties' | 'banking' | 'catalog' | 'pl' | 'invoices' | 'payments'
@@ -472,10 +496,8 @@ export type CrewRole = 'tour-manager' | 'production-manager' | 'foh' | 'monitors
 
 export interface CrewMember {
   id:              string
-  name:            string
+  personId:        string   // → Person
   role:            CrewRole
-  phone?:          string
-  email?:          string
   passport?:       string   // passport expiry only (no full number)
   emergencyName?:  string
   emergencyPhone?: string
@@ -505,6 +527,7 @@ export interface TravelFlight {
   kind:              'flight'
   status:            TravelStatus
   traveler:          string         // "Full Party" | individual name
+  personIds?:        string[]       // → Person — who from Team this booking actually covers
   airline?:          string
   flightNumber?:     string
   from?:             string         // "JFK"
@@ -527,6 +550,7 @@ export interface TravelHotel {
   showId:            string
   kind:              'hotel'
   status:            TravelStatus
+  personIds?:        string[]       // → Person — who from Team this booking actually covers
   name?:             string
   address?:          string
   phone?:            string
@@ -545,6 +569,7 @@ export interface TravelGround {
   showId:            string
   kind:              'ground'
   status:            TravelStatus
+  personIds?:        string[]       // → Person — who from Team this booking actually covers
   type:              'rental-car' | 'transfer' | 'train' | 'bus'
   provider?:         string
   from?:             string

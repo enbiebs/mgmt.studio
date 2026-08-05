@@ -4,7 +4,7 @@
 //  When you add Supabase, this becomes seed data for new accounts.
 // ──────────────────────────────────────────────────────────
 
-import type { AppData } from '@/types'
+import type { AppData, Person } from '@/types'
 import { MASCOLO_ANALYTICS, NIMINO_ANALYTICS, SIERRA_ANALYTICS } from '@/lib/analytics-demo'
 import { MASCOLO_FANDOM, NIMINO_FANDOM, SIERRA_FANDOM } from '@/lib/fandom-demo'
 import { MASCOLO_AGENT, NIMINO_AGENT, SIERRA_AGENT } from '@/lib/agent-demo'
@@ -13,6 +13,38 @@ import { MASCOLO_FINANCE, NIMINO_FINANCE, SIERRA_FINANCE } from '@/lib/finance-d
 import { MASCOLO_TOUR, NIMINO_TOUR, SIERRA_TOUR } from '@/lib/advance-demo'
 import { defaultChecklist } from '@/lib/utils'
 
+// ── People — one record per person, referenced from Crew, Stakeholders,
+// and anywhere else they show up, instead of each place re-typing their
+// name/email/phone (and drifting out of sync). Dana Wells below is a
+// concrete example: she's both Mascolo's tour manager (Crew) and their
+// management stakeholder (Status) — one record, two roles.
+const MASCOLO_PEOPLE: Person[] = [
+  { id: 'person-dana',    name: 'Dana Wells',     email: 'dana@notedmanagement.com', phone: '+1 646-555-0201', org: 'Noted Management' },
+  { id: 'person-ben',     name: 'Ben Okafor',     email: 'ben@mascolo.mgmt',         phone: '+1 646-555-0202' },
+  { id: 'person-riley',   name: 'Riley Park',     phone: '+1 917-555-0203' },
+  { id: 'person-jordanm', name: 'Jordan Mills',   phone: '+1 917-555-0204' },
+  { id: 'person-chris',   name: 'Chris Nakamura', phone: '+1 917-555-0205' },
+  { id: 'person-taylor',  name: 'Taylor Brooks',  phone: '+1 646-555-0206' },
+  { id: 'person-priya',   name: 'Priya Sharma',   email: 'priya@modularrecords.com',  org: 'Modular Records', notes: 'day-to-day release contact' },
+  { id: 'person-jordane', name: 'Jordan Ellis',   email: 'jordan@modularrecords.com', org: 'Modular Records', notes: 'handles sample clearances' },
+]
+
+const NIMINO_PEOPLE: Person[] = [
+  { id: 'person-jess', name: 'Jessica Hart', email: 'jess@nimino.com', phone: '+1 312-555-0300' },
+  { id: 'person-sam',  name: 'Sam Torres',   phone: '+1 773-555-0301' },
+]
+
+const SIERRA_PEOPLE: Person[] = [
+  { id: 'person-marcus', name: 'Marcus Powell', email: 'marcus@sierrabloom.com', phone: '+1 615-555-0400' },
+  { id: 'person-andrea', name: 'Andrea Lennox', phone: '+1 615-555-0401' },
+  { id: 'person-tom',    name: 'Tom Walsh',     phone: '+1 615-555-0402' },
+  { id: 'person-lisa',   name: 'Lisa Park',     phone: '+1 615-555-0403' },
+  { id: 'person-james',  name: 'James Carter',  phone: '+1 615-555-0404' },
+  { id: 'person-nina',   name: 'Nina Osei',     phone: '+1 615-555-0405' },
+  { id: 'person-ryan',   name: 'Ryan Kowalski', phone: '+1 615-555-0406' },
+  { id: 'person-chloe',  name: 'Chloe Watson',  phone: '+1 615-555-0407' },
+]
+
 export const DEMO_DATA: AppData = {
   clients: [
     {
@@ -20,6 +52,7 @@ export const DEMO_DATA: AppData = {
       name: 'Mascolo',
       genre: 'Electronic / House',
       color: '#4c8df6',
+      people: MASCOLO_PEOPLE,
       songs: {
         albums: [{
           id: 'a1',
@@ -39,9 +72,9 @@ export const DEMO_DATA: AppData = {
           labelCopy: { label: 'Independent', primaryArtist: 'Mascolo', genre: 'Electronic / House', copyrightP: '℗ 2026 Mascolo Music LLC', copyrightC: '© 2026 Mascolo Music LLC' },
           checklist: defaultChecklist(),
           stakeholders: [
-            { id: 'sh-m1', name: 'Dana Wells',    role: 'management', org: 'Noted Management', email: 'dana@notedmanagement.com' },
-            { id: 'sh-m2', name: 'Priya Sharma',  role: 'label-am',    org: 'Modular Records',  email: 'priya@modularrecords.com', notes: 'day-to-day release contact' },
-            { id: 'sh-m3', name: 'Jordan Ellis',  role: 'label-legal', org: 'Modular Records',  email: 'jordan@modularrecords.com', notes: 'handles sample clearances' },
+            { id: 'sh-m1', personId: 'person-dana',   role: 'management' },
+            { id: 'sh-m2', personId: 'person-priya',  role: 'label-am',    notes: 'day-to-day release contact' },
+            { id: 'sh-m3', personId: 'person-jordane', role: 'label-legal', notes: 'handles sample clearances' },
           ],
         }],
       },
@@ -106,6 +139,7 @@ export const DEMO_DATA: AppData = {
       name: 'nimino',
       genre: 'Indie / Electronic',
       color: '#8b5cf6',
+      people: NIMINO_PEOPLE,
       songs: {
         albums: [{
           id: 'a2',
@@ -175,6 +209,7 @@ export const DEMO_DATA: AppData = {
       name: 'Sierra Bloom',
       genre: 'Singer-Songwriter',
       color: '#ec4899',
+      people: SIERRA_PEOPLE,
       songs: {
         albums: [{
           id: 'a3',

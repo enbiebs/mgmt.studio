@@ -142,12 +142,12 @@ const MASCOLO_ADVANCES: ShowAdvance[] = [
 ]
 
 const MASCOLO_CREW: CrewMember[] = [
-  { id: 'crew-m1', name: 'Dana Wells',     role: 'tour-manager',      phone: '+1 646-555-0201', email: 'dana@mascolo.mgmt' },
-  { id: 'crew-m2', name: 'Ben Okafor',     role: 'production-manager', phone: '+1 646-555-0202', email: 'ben@mascolo.mgmt' },
-  { id: 'crew-m3', name: 'Riley Park',     role: 'foh',               phone: '+1 917-555-0203' },
-  { id: 'crew-m4', name: 'Jordan Mills',   role: 'backline',          phone: '+1 917-555-0204' },
-  { id: 'crew-m5', name: 'Chris Nakamura', role: 'lighting',          phone: '+1 917-555-0205' },
-  { id: 'crew-m6', name: 'Taylor Brooks',  role: 'merch',             phone: '+1 646-555-0206' },
+  { id: 'crew-m1', personId: 'person-dana',   role: 'tour-manager' },
+  { id: 'crew-m2', personId: 'person-ben',    role: 'production-manager' },
+  { id: 'crew-m3', personId: 'person-riley',  role: 'foh' },
+  { id: 'crew-m4', personId: 'person-jordanm', role: 'backline' },
+  { id: 'crew-m5', personId: 'person-chris',  role: 'lighting' },
+  { id: 'crew-m6', personId: 'person-taylor', role: 'merch' },
 ]
 
 const MASCOLO_GUESTS: GuestListEntry[] = [
@@ -301,8 +301,8 @@ export const NIMINO_TOUR: TourData = {
     },
   ],
   crew: [
-    { id: 'crew-n1', name: 'Jessica Hart', role: 'tour-manager', phone: '+1 312-555-0300', email: 'jess@nimino.com' },
-    { id: 'crew-n2', name: 'Sam Torres',   role: 'foh',          phone: '+1 773-555-0301' },
+    { id: 'crew-n1', personId: 'person-jess', role: 'tour-manager' },
+    { id: 'crew-n2', personId: 'person-sam',  role: 'foh' },
   ],
   guestList: [],
   travel: [
@@ -388,14 +388,14 @@ export const SIERRA_TOUR: TourData = {
     },
   ],
   crew: [
-    { id: 'crew-s1', name: 'Marcus Powell',   role: 'tour-manager',      phone: '+1 615-555-0400', email: 'marcus@sierrabloom.com' },
-    { id: 'crew-s2', name: 'Andrea Lennox',   role: 'production-manager', phone: '+1 615-555-0401' },
-    { id: 'crew-s3', name: 'Tom Walsh',        role: 'foh',               phone: '+1 615-555-0402' },
-    { id: 'crew-s4', name: 'Lisa Park',        role: 'monitors',          phone: '+1 615-555-0403' },
-    { id: 'crew-s5', name: 'James Carter',     role: 'lighting',          phone: '+1 615-555-0404' },
-    { id: 'crew-s6', name: 'Nina Osei',        role: 'video',             phone: '+1 615-555-0405' },
-    { id: 'crew-s7', name: 'Ryan Kowalski',    role: 'backline',          phone: '+1 615-555-0406' },
-    { id: 'crew-s8', name: 'Chloe Watson',     role: 'merch',             phone: '+1 615-555-0407' },
+    { id: 'crew-s1', personId: 'person-marcus', role: 'tour-manager' },
+    { id: 'crew-s2', personId: 'person-andrea', role: 'production-manager' },
+    { id: 'crew-s3', personId: 'person-tom',    role: 'foh' },
+    { id: 'crew-s4', personId: 'person-lisa',   role: 'monitors' },
+    { id: 'crew-s5', personId: 'person-james',  role: 'lighting' },
+    { id: 'crew-s6', personId: 'person-nina',   role: 'video' },
+    { id: 'crew-s7', personId: 'person-ryan',   role: 'backline' },
+    { id: 'crew-s8', personId: 'person-chloe',  role: 'merch' },
   ],
   guestList: [
     { id: 'gl-s1', showId: 'show-sie-001', name: 'Mama + Papa Bloom',  qty: 2, category: 'family',  checkedIn: true,  credential: 'All Access' },

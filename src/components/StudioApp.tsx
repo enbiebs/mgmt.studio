@@ -21,6 +21,7 @@ import { SongsView }    from '@/components/songs/SongsView'
 import { LabelCopyView } from '@/components/songs/LabelCopyView'
 import { ChecklistView } from '@/components/songs/ChecklistView'
 import { StatusView }    from '@/components/songs/StatusView'
+import { TeamView }      from '@/components/team/TeamView'
 import { TourView }     from '@/components/tour/TourView'
 import { ManageView }   from '@/components/content/ManageView'
 import { StudioView }   from '@/components/content/StudioView'
@@ -42,6 +43,7 @@ import { AdvanceView }  from '@/components/tour/AdvanceView'
 import { DaySheetView } from '@/components/tour/DaySheetView'
 import { TravelView }   from '@/components/tour/TravelView'
 import { GuestListView } from '@/components/tour/GuestListView'
+import { CrewView }      from '@/components/tour/CrewView'
 
 export function StudioApp() {
   const { view, section, songsSub, contentSub, bizSub, tourSub, data, role, openModal, isLoading } = useStore()
@@ -108,7 +110,7 @@ export function StudioApp() {
               tourSub === 'advance'  ? <AdvanceView />          :
               tourSub === 'daysheet' ? <DaySheetView />         :
               tourSub === 'travel'   ? <TravelView />           :
-              tourSub === 'crew'     ? <CrewPlaceholder />      :
+              tourSub === 'crew'     ? <CrewView />             :
               tourSub === 'guests'   ? <GuestListView />        :
               <TourView />
             )}
@@ -128,6 +130,7 @@ export function StudioApp() {
             {section === 'projects'   && <ProjectsView />}
             {section === 'analytics'  && <AnalyticsView />}
             {section === 'fandom'     && <FandomView />}
+            {section === 'team'       && <TeamView />}
           </div>
         </>
       )}
@@ -136,16 +139,6 @@ export function StudioApp() {
       <div className="flex-shrink-0 text-center py-1.5 text-[10px] uppercase tracking-widest text-gray-300 border-t border-gray-100">
         Mgmt Studio · Music Management · v0.1
       </div>
-    </div>
-  )
-}
-
-// Placeholder views for sections not yet built out
-function CrewPlaceholder() {
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-300">
-      <span className="text-5xl">👥</span>
-      <span className="text-sm">Crew management — coming soon</span>
     </div>
   )
 }

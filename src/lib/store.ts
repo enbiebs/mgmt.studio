@@ -19,7 +19,7 @@ import type {
   UserRole, ProjectStatus, ProjectType, Stakeholder, Project, ArtistTodo,
   TrackLabelCopy, ReleaseLabelCopy, ChecklistItemKey, ChecklistItem, TrackPriority,
   GuestListEntry, GuestListCategory, ReleaseStakeholder, StakeholderRole,
-  CrewMember, ShowAdvance, TravelItem,
+  CrewMember, ShowAdvance, TravelItem, Person, PersonActivity,
 } from '@/types'
 import { DEMO_DATA } from '@/lib/demo-data'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
@@ -34,6 +34,7 @@ import {
   upsertClient, deleteClient as dbDeleteClient,
   upsertTrack, deleteTrack as dbDeleteTrack,
   upsertAlbum, upsertChecklist,
+  upsertPerson, deletePerson as dbDeletePerson,
   upsertStakeholder, deleteStakeholder as dbDeleteStakeholder,
   upsertShow, deleteShow as dbDeleteShow,
   upsertPost, deletePost as dbDeletePost, replaceAutoPosts,
@@ -147,8 +148,13 @@ interface StudioState {
   toggleChecklistItem: (albumId: string, key: ChecklistItemKey) => void
   updateChecklistNote: (albumId: string, key: ChecklistItemKey, note: string) => void
 
+  // ── People (shared directory) ──
+  addPerson: (patch: { name: string; email?: string; phone?: string; org?: string; notes?: string }) => string
+  updatePerson: (personId: string, patch: { name?: string; email?: string; phone?: string; org?: string; notes?: string; activity?: PersonActivity[] }) => void
+  deletePerson: (personId: string) => void
+
   // ── Release stakeholders ──
-  addStakeholder: (albumId: string, patch: { name: string; role: StakeholderRole; org?: string; email?: string; phone?: string; notes?: string }) => void
+  addStakeholder: (albumId: string, patch: { personId: string; role: StakeholderRole; notes?: string }) => void
   deleteStakeholder: (stakeholderId: string) => void
 
   // ── Guest list ──
@@ -306,6 +312,7 @@ export const useStore = create<StudioState>((set, get) => ({
     const id = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + uid()
     const newClient: Client = {
       id, name, genre, color,
+      people:      [],
       songs:       { albums: [{ id: 'alb-' + uid(), title: name + ' (untitled)', tracks: [], checklist: defaultChecklist() }] },
       tour:        { ...EMPTY_TOUR },
       content:     { posts: [] },
@@ -764,6 +771,65 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     if (workspaceId) dbDeleteTravelItem(itemId).catch(console.error)
+  },
+
+  // ── Release stakeholders ──
+  // ── People (shared directory) ──
+  addPerson: (patch) => {
+    const { data, clientId, workspaceId } = get()
+    const newPerson: Person = { id: 'person-' + uid(), ...patch }
+    const updated = {
+      clients: data.clients.map(c => c.id !== clientId ? c : { ...c, people: [...(c.people ?? []), newPerson] }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId) upsertPerson(newPerson, clientId).catch(console.error)
+    return newPerson.id
+  },
+
+  updatePerson: (personId, patch) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedPerson: Person | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          people: (c.people ?? []).map(p => {
+            if (p.id !== personId) return p
+            const next = { ...p, ...patch }
+            updatedPerson = next
+            return next
+          }),
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId && updatedPerson) upsertPerson(updatedPerson, clientId).catch(console.error)
+  },
+
+  deletePerson: (personId) => {
+    const { data, clientId, workspaceId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          people: (c.people ?? []).filter(p => p.id !== personId),
+          tour: { ...c.tour, crew: c.tour.crew.filter(cm => cm.personId !== personId) },
+          songs: {
+            albums: c.songs.albums.map(a => ({
+              ...a,
+              stakeholders: (a.stakeholders ?? []).filter(s => s.personId !== personId),
+            })),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId) dbDeletePerson(personId).catch(console.error)
   },
 
   // ── Release stakeholders ──

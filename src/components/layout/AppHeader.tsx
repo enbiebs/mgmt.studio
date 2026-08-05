@@ -44,7 +44,7 @@ export function AppHeader() {
         <nav className="flex gap-0.5 flex-1 overflow-x-auto">
           {([
             ['Music', 'songs'], ['Tour', 'tour'], ['Content', 'content'],
-            ['Business', 'business'], ['Projects', 'projects'], ['Analytics', 'analytics'], ['Fandom', 'fandom'],
+            ['Business', 'business'], ['Team', 'team'], ['Projects', 'projects'], ['Analytics', 'analytics'], ['Fandom', 'fandom'],
           ] as [string, typeof section][]).map(([label, key]) => (
             <button
               key={key}

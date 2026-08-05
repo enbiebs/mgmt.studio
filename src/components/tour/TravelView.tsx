@@ -11,8 +11,57 @@ import { useStore } from '@/lib/store'
 import { uid } from '@/lib/utils'
 import type {
   Show, TravelItem, TravelFlight, TravelHotel, TravelGround,
-  TravelStatus, Currency,
+  TravelStatus, Currency, Person,
 } from '@/types'
+
+// ── Travelers editor — links a booking to Team members ────────
+function TravelersEditor({ item, onChange }: { item: TravelItem; onChange: (personIds: string[]) => void }) {
+  const client = useStore(s => s.getClient())
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const people = client?.people ?? []
+  const linkedIds = item.personIds ?? []
+  const linked = people.filter(p => linkedIds.includes(p.id))
+  const available = people.filter(p => !linkedIds.includes(p.id))
+
+  return (
+    <div className="mt-2 pt-2 border-t border-gray-50">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-[10px] text-gray-400 uppercase tracking-wide mr-0.5">Team</span>
+        {linked.map((p: Person) => (
+          <span key={p.id} className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700">
+            {p.name}
+            <button
+              onClick={() => onChange(linkedIds.filter(id => id !== p.id))}
+              className="text-blue-400 hover:text-red-400"
+            >✕</button>
+          </span>
+        ))}
+        {linked.length === 0 && <span className="text-[11px] text-gray-300">Not linked to anyone yet</span>}
+        <div className="relative">
+          <button
+            onClick={() => setPickerOpen(v => !v)}
+            className="text-[10px] text-gray-400 hover:text-blue-500 font-medium px-1"
+          >+ Link</button>
+          {pickerOpen && (
+            <div className="absolute left-0 top-full mt-1 bg-canvas border border-gray-100 rounded-lg shadow-lg min-w-[140px] max-h-40 overflow-auto z-50">
+              {available.length === 0 ? (
+                <div className="px-3 py-2 text-[11px] text-gray-300">Everyone&apos;s linked</div>
+              ) : available.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => { onChange([...linkedIds, p.id]); setPickerOpen(false) }}
+                  className="block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors"
+                >
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ── Status badge ────────────────────────────────────────────
 const STATUS_STYLES: Record<TravelStatus, string> = {
@@ -66,7 +115,7 @@ function fmtCost(cost: number | undefined, currency: Currency | undefined) {
 }
 
 // ── Flight card ──────────────────────────────────────────────
-function FlightCard({ item, onRemove }: { item: TravelFlight; onRemove: () => void }) {
+function FlightCard({ item, onRemove, onLink }: { item: TravelFlight; onRemove: () => void; onLink: (personIds: string[]) => void }) {
   return (
     <div className="border border-gray-100 rounded-xl p-4 hover:border-gray-200 transition-colors">
       <div className="flex items-start justify-between mb-2">
@@ -138,12 +187,13 @@ function FlightCard({ item, onRemove }: { item: TravelFlight; onRemove: () => vo
       {item.notes && (
         <div className="mt-2 pt-2 border-t border-gray-50 text-xs text-gray-400 italic">{item.notes}</div>
       )}
+      <TravelersEditor item={item} onChange={onLink} />
     </div>
   )
 }
 
 // ── Hotel card ───────────────────────────────────────────────
-function HotelCard({ item, onRemove }: { item: TravelHotel; onRemove: () => void }) {
+function HotelCard({ item, onRemove, onLink }: { item: TravelHotel; onRemove: () => void; onLink: (personIds: string[]) => void }) {
   return (
     <div className="border border-gray-100 rounded-xl p-4 hover:border-gray-200 transition-colors">
       <div className="flex items-start justify-between mb-2">
@@ -204,6 +254,7 @@ function HotelCard({ item, onRemove }: { item: TravelHotel; onRemove: () => void
       {item.notes && (
         <div className="mt-2 pt-2 border-t border-gray-50 text-xs text-gray-400 italic">{item.notes}</div>
       )}
+      <TravelersEditor item={item} onChange={onLink} />
     </div>
   )
 }
@@ -216,7 +267,7 @@ const GROUND_EMOJI: Record<string, string> = {
   'bus':        '🚌',
 }
 
-function GroundCard({ item, onRemove }: { item: TravelGround; onRemove: () => void }) {
+function GroundCard({ item, onRemove, onLink }: { item: TravelGround; onRemove: () => void; onLink: (personIds: string[]) => void }) {
   const emoji = GROUND_EMOJI[item.type] ?? '🚗'
   const typeLabel = item.type === 'rental-car' ? 'Rental Car' :
                     item.type === 'transfer' ? 'Transfer' :
@@ -275,6 +326,7 @@ function GroundCard({ item, onRemove }: { item: TravelGround; onRemove: () => vo
       {item.notes && (
         <div className="mt-2 pt-2 border-t border-gray-50 text-xs text-gray-400 italic">{item.notes}</div>
       )}
+      <TravelersEditor item={item} onChange={onLink} />
     </div>
   )
 }
@@ -655,6 +707,10 @@ export function TravelView() {
     deleteTravel(itemId)
   }
 
+  function linkTravelers(item: TravelItem, personIds: string[]) {
+    saveTravel({ ...item, personIds })
+  }
+
   const showDate = show ? new Date(show.date) : null
   const dateStr = showDate?.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 
@@ -741,7 +797,7 @@ export function TravelView() {
               />
               <div className="space-y-2">
                 {flights.map(f => (
-                  <FlightCard key={f.id} item={f} onRemove={() => removeTravelItem(f.id)} />
+                  <FlightCard key={f.id} item={f} onRemove={() => removeTravelItem(f.id)} onLink={ids => linkTravelers(f, ids)} />
                 ))}
                 {flights.length === 0 && addMode !== 'flight' && (
                   <EmptySlot kind="flight" onAdd={() => setAddMode('flight')} />
@@ -764,7 +820,7 @@ export function TravelView() {
               />
               <div className="space-y-2">
                 {hotels.map(h => (
-                  <HotelCard key={h.id} item={h} onRemove={() => removeTravelItem(h.id)} />
+                  <HotelCard key={h.id} item={h} onRemove={() => removeTravelItem(h.id)} onLink={ids => linkTravelers(h, ids)} />
                 ))}
                 {hotels.length === 0 && addMode !== 'hotel' && (
                   <EmptySlot kind="hotel" onAdd={() => setAddMode('hotel')} />
@@ -787,7 +843,7 @@ export function TravelView() {
               />
               <div className="space-y-2">
                 {ground.map(g => (
-                  <GroundCard key={g.id} item={g} onRemove={() => removeTravelItem(g.id)} />
+                  <GroundCard key={g.id} item={g} onRemove={() => removeTravelItem(g.id)} onLink={ids => linkTravelers(g, ids)} />
                 ))}
                 {ground.length === 0 && addMode !== 'ground' && (
                   <EmptySlot kind="ground transport" onAdd={() => setAddMode('ground')} />

@@ -14,7 +14,7 @@ import type {
   Invoice, Expense, PLMonth, ChecklistItem, ReleaseStakeholder, UserRole,
   ShowAdvance, AdvanceContact, AdvanceSchedule, AdvanceProduction,
   AdvanceHospitality, AdvanceLogistics,
-  CrewMember, GuestListEntry, TravelItem, Currency,
+  CrewMember, GuestListEntry, TravelItem, Currency, Person, PersonActivity,
 } from '@/types'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
 import { EMPTY_FANDOM }    from '@/lib/fandom-demo'
@@ -47,6 +47,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     invoices, lineItems, expenses, plMonths,
     checklistItems, stakeholders,
     crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems,
+    people,
   ] = await Promise.all([
     supabase.from('albums').select('*').in('client_id', clientIds),
     supabase.from('tracks').select('*'),
@@ -70,6 +71,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     supabase.from('advance_contacts').select('*'),
     supabase.from('guest_list_entries').select('*'),
     supabase.from('travel_items').select('*'),
+    supabase.from('people').select('*').in('client_id', clientIds),
   ])
 
   const albumRows     = albums.data       ?? []
@@ -82,6 +84,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
   // them to shows in this workspace the same way tracks are narrowed to albums.
   const showIdsAll     = (shows.data ?? []).map((s: { id: string }) => s.id)
   const crewRows       = crewMembers.data ?? []
+  const peopleRows     = people.data ?? []
   const advanceRows    = (showAdvances.data ?? []).filter((a: { show_id: string }) => showIdsAll.includes(a.show_id))
   const advanceIds     = advanceRows.map((a: { id: string }) => a.id)
   const contactRows    = (advanceContacts.data ?? []).filter((ct: { advance_id: string }) => advanceIds.includes(ct.advance_id))
@@ -93,6 +96,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
   type TravelRow = {
     id: string; show_id: string; kind: string; status: string
     confirmation_code?: string; cost?: number; currency?: string; notes?: string
+    person_ids?: string[]
     traveler?: string; airline?: string; flight_number?: string
     from_loc?: string; from_city?: string; to_loc?: string; to_city?: string
     departure?: string; arrival?: string; duration?: string; cabin?: string; seats?: string
@@ -109,6 +113,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       cost: t.cost ?? undefined,
       currency: (t.currency ?? undefined) as Currency | undefined,
       notes: t.notes ?? undefined,
+      personIds: t.person_ids ?? undefined,
     }
     if (t.kind === 'hotel') {
       return {
@@ -163,6 +168,14 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
 
   // Assemble clients
   const clients: Client[] = clientRows.map(c => {
+    const cPeople: Person[] = peopleRows
+      .filter((p: { client_id: string }) => p.client_id === c.id)
+      .map((p: { id: string; name: string; email?: string; phone?: string; org?: string; notes?: string; activity?: PersonActivity[] }) => ({
+        id: p.id, name: p.name, email: p.email ?? undefined,
+        phone: p.phone ?? undefined, org: p.org ?? undefined, notes: p.notes ?? undefined,
+        activity: p.activity ?? [],
+      }))
+
     const cAlbums = albumRows
       .filter(a => a.client_id === c.id)
       .map(a => ({
@@ -203,9 +216,8 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
           })),
         stakeholders: stakeholderRows
           .filter((s: { album_id: string }) => s.album_id === a.id)
-          .map((s: { id: string; name: string; role: string; org?: string; email?: string; phone?: string; notes?: string }) => ({
-            id: s.id, name: s.name, role: s.role as ReleaseStakeholder['role'],
-            org: s.org, email: s.email, phone: s.phone, notes: s.notes,
+          .map((s: { id: string; person_id: string; role: string; notes?: string }) => ({
+            id: s.id, personId: s.person_id, role: s.role as ReleaseStakeholder['role'], notes: s.notes,
           })),
       }))
 
@@ -253,11 +265,10 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     const cCrew: CrewMember[] = crewRows
       .filter((cm: { client_id: string }) => cm.client_id === c.id)
       .map((cm: {
-        id: string; name: string; role: string; phone?: string; email?: string
+        id: string; person_id: string; role: string
         passport?: string; emergency_name?: string; emergency_phone?: string; notes?: string
       }) => ({
-        id: cm.id, name: cm.name, role: cm.role as CrewMember['role'],
-        phone: cm.phone ?? undefined, email: cm.email ?? undefined,
+        id: cm.id, personId: cm.person_id, role: cm.role as CrewMember['role'],
         passport: cm.passport ?? undefined,
         emergencyName: cm.emergency_name ?? undefined,
         emergencyPhone: cm.emergency_phone ?? undefined,
@@ -397,6 +408,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       name: c.name,
       genre: c.genre,
       color: c.color,
+      people: cPeople,
       songs:    { albums: cAlbums.length ? cAlbums : [{ id: 'alb-default', title: c.name, tracks: [] }] },
       tour:     {
         shows:     cShows,
@@ -531,15 +543,30 @@ export async function upsertStakeholder(stakeholder: ReleaseStakeholder, albumId
   const supabase = createClient()
   await supabase.from('release_stakeholders').upsert({
     id: stakeholder.id, album_id: albumId,
-    name: stakeholder.name, role: stakeholder.role,
-    org: stakeholder.org ?? null, email: stakeholder.email ?? null,
-    phone: stakeholder.phone ?? null, notes: stakeholder.notes ?? null,
+    person_id: stakeholder.personId, role: stakeholder.role,
+    notes: stakeholder.notes ?? null,
   })
 }
 
 export async function deleteStakeholder(stakeholderId: string) {
   const supabase = createClient()
   await supabase.from('release_stakeholders').delete().eq('id', stakeholderId)
+}
+
+// ── People ─────────────────────────────────────────────────
+export async function upsertPerson(person: Person, clientId: string) {
+  const supabase = createClient()
+  await supabase.from('people').upsert({
+    id: person.id, client_id: clientId,
+    name: person.name, email: person.email ?? null,
+    phone: person.phone ?? null, org: person.org ?? null, notes: person.notes ?? null,
+    activity: person.activity ?? [],
+  })
+}
+
+export async function deletePerson(personId: string) {
+  const supabase = createClient()
+  await supabase.from('people').delete().eq('id', personId)
 }
 
 // ── Show ───────────────────────────────────────────────────
@@ -671,8 +698,7 @@ export async function upsertCrewMember(member: CrewMember, clientId: string) {
   const supabase = createClient()
   await supabase.from('crew_members').upsert({
     id: member.id, client_id: clientId,
-    name: member.name, role: member.role,
-    phone: member.phone ?? null, email: member.email ?? null,
+    person_id: member.personId, role: member.role,
     passport: member.passport ?? null,
     emergency_name: member.emergencyName ?? null,
     emergency_phone: member.emergencyPhone ?? null,
@@ -754,6 +780,7 @@ function travelItemToRow(item: TravelItem) {
     cost: item.cost ?? null,
     currency: item.currency ?? null,
     notes: item.notes ?? null,
+    person_ids: item.personIds ?? [],
     // per-variant columns, cleared by default
     traveler: null as string | null, airline: null as string | null,
     flight_number: null as string | null,

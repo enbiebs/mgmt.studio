@@ -2,14 +2,15 @@
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { defaultChecklist, isStale, stageLabel } from '@/lib/utils'
-import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
-import type { Album, Client, StakeholderRole } from '@/types'
+import { Modal, FormField, inputClass } from '@/components/ui/Modal'
+import { PersonPicker } from '@/components/people/PersonPicker'
+import type { Album, Client, Person, StakeholderRole } from '@/types'
 
-const ROLE_ORDER: StakeholderRole[] = [
+export const ROLE_ORDER: StakeholderRole[] = [
   'management', 'label-am', 'label-legal', 'label-marketing',
   'featured-artist-rep', 'featured-artist-label', 'publisher', 'video', 'distributor', 'other',
 ]
-const ROLE_LABEL: Record<StakeholderRole, string> = {
+export const ROLE_LABEL: Record<StakeholderRole, string> = {
   management:             'Management',
   'label-am':              'Label — A&R / Product',
   'label-legal':           'Label — Legal / Business Affairs',
@@ -20,6 +21,10 @@ const ROLE_LABEL: Record<StakeholderRole, string> = {
   video:                   'Video / Treatment',
   distributor:             'Distributor',
   other:                   'Other',
+}
+
+function findPerson(client: Client, personId: string): Person | undefined {
+  return (client.people ?? []).find(p => p.id === personId)
 }
 
 function buildSummary(client: Client, album: Album): string {
@@ -77,9 +82,10 @@ function buildSummary(client: Client, album: Album): string {
   if (stakeholders.length > 0) {
     lines.push('STAKEHOLDERS')
     ROLE_ORDER.forEach(role => {
-      const people = stakeholders.filter(s => s.role === role)
-      people.forEach(p => {
-        lines.push(`  ${ROLE_LABEL[role]}: ${p.name}${p.org ? ` (${p.org})` : ''}${p.email ? ` — ${p.email}` : ''}`)
+      stakeholders.filter(s => s.role === role).forEach(s => {
+        const person = findPerson(client, s.personId)
+        if (!person) return
+        lines.push(`  ${ROLE_LABEL[role]}: ${person.name}${person.org ? ` (${person.org})` : ''}${person.email ? ` — ${person.email}` : ''}`)
       })
     })
   }
@@ -144,30 +150,34 @@ export function StatusView() {
       )}
 
       {ROLE_ORDER.map(role => {
-        const people = stakeholders.filter(s => s.role === role)
-        if (people.length === 0) return null
+        const roleStakeholders = stakeholders.filter(s => s.role === role)
+        if (roleStakeholders.length === 0) return null
         return (
           <div key={role} className="mb-4">
             <div className="text-[11px] font-semibold text-gray-400 mb-1.5">{ROLE_LABEL[role]}</div>
             <div className="flex flex-col gap-1.5">
-              {people.map(p => (
-                <div key={p.id} className="group border border-gray-100 rounded-xl px-3 py-2 flex items-center gap-3 hover:bg-gray-50 transition-colors">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium">{p.name}{p.org && <span className="text-gray-400 font-normal"> · {p.org}</span>}</div>
-                    {(p.email || p.phone || p.notes) && (
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        {[p.email, p.phone, p.notes].filter(Boolean).join(' · ')}
-                      </div>
-                    )}
+              {roleStakeholders.map(s => {
+                const person = findPerson(client, s.personId)
+                if (!person) return null
+                return (
+                  <div key={s.id} className="group border border-gray-100 rounded-xl px-3 py-2 flex items-center gap-3 hover:bg-gray-50 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium">{person.name}{person.org && <span className="text-gray-400 font-normal"> · {person.org}</span>}</div>
+                      {(person.email || person.phone || s.notes) && (
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {[person.email, person.phone, s.notes].filter(Boolean).join(' · ')}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => { if (confirm(`Remove ${person.name} as a stakeholder?`)) deleteStakeholder(s.id) }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
+                    >
+                      ✕
+                    </button>
                   </div>
-                  <button
-                    onClick={() => { if (confirm(`Remove ${p.name}?`)) deleteStakeholder(p.id) }}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )
@@ -180,22 +190,13 @@ export function StatusView() {
 
 function AddStakeholderModal({ albumId, onClose }: { albumId: string; onClose: () => void }) {
   const { addStakeholder } = useStore()
-  const [name, setName] = useState('')
+  const [personId, setPersonId] = useState('')
   const [role, setRole] = useState<StakeholderRole>('label-am')
-  const [org, setOrg] = useState('')
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
   const [notes, setNotes] = useState('')
 
   function handleAdd() {
-    if (!name.trim()) return
-    addStakeholder(albumId, {
-      name: name.trim(), role,
-      org: org.trim() || undefined,
-      email: email.trim() || undefined,
-      phone: phone.trim() || undefined,
-      notes: notes.trim() || undefined,
-    })
+    if (!personId) return
+    addStakeholder(albumId, { personId, role, notes: notes.trim() || undefined })
     onClose()
   }
 
@@ -203,27 +204,14 @@ function AddStakeholderModal({ albumId, onClose }: { albumId: string; onClose: (
     <Modal title="Add a stakeholder" onClose={onClose} footer={
       <>
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={handleAdd} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Add</button>
+        <button onClick={handleAdd} disabled={!personId} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:opacity-40">Add</button>
       </>
     }>
-      <FormField label="Name">
-        <input className={inputClass} placeholder="Full name" value={name} onChange={e => setName(e.target.value)} autoFocus />
-      </FormField>
-      <FormField label="Role">
-        <select className={selectClass} value={role} onChange={e => setRole(e.target.value as StakeholderRole)}>
+      <PersonPicker value={personId} onChange={setPersonId} />
+      <FormField label="Role on this release">
+        <select className={inputClass} value={role} onChange={e => setRole(e.target.value as StakeholderRole)}>
           {ROLE_ORDER.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
         </select>
-      </FormField>
-      <div className="grid grid-cols-2 gap-3">
-        <FormField label="Org">
-          <input className={inputClass} placeholder="e.g. label / agency name" value={org} onChange={e => setOrg(e.target.value)} />
-        </FormField>
-        <FormField label="Phone">
-          <input className={inputClass} value={phone} onChange={e => setPhone(e.target.value)} />
-        </FormField>
-      </div>
-      <FormField label="Email">
-        <input className={inputClass} type="email" value={email} onChange={e => setEmail(e.target.value)} />
       </FormField>
       <FormField label="Notes">
         <input className={inputClass} placeholder="e.g. handles label waiver / legal sign-off" value={notes} onChange={e => setNotes(e.target.value)} />
