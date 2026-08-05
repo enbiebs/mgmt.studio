@@ -47,7 +47,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     invoices, lineItems, expenses, plMonths,
     checklistItems, stakeholders,
     crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems,
-    people,
+    people, bankAccounts, bankTransactions,
   ] = await Promise.all([
     supabase.from('albums').select('*').in('client_id', clientIds),
     supabase.from('tracks').select('*'),
@@ -72,6 +72,8 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     supabase.from('guest_list_entries').select('*'),
     supabase.from('travel_items').select('*'),
     supabase.from('people').select('*').in('client_id', clientIds),
+    supabase.from('bank_accounts').select('*').in('client_id', clientIds),
+    supabase.from('bank_transactions').select('*').in('client_id', clientIds).order('date', { ascending: false }),
   ])
 
   const albumRows     = albums.data       ?? []
@@ -314,6 +316,24 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
         mgmt: d.mgmt, lawyer: d.lawyer, taxes: d.taxes, done: d.done,
       }))
 
+    const cBankAccounts = (bankAccounts.data ?? [])
+      .filter((a: { client_id: string }) => a.client_id === c.id)
+      .map((a: { id: string; name: string; official_name?: string; mask?: string; type?: string; subtype?: string; currency?: string; current_balance?: number; available_balance?: number }) => ({
+        id: a.id, name: a.name, officialName: a.official_name ?? undefined,
+        mask: a.mask ?? undefined, type: a.type ?? undefined, subtype: a.subtype ?? undefined,
+        currency: (a.currency ?? undefined) as Currency | undefined,
+        currentBalance: a.current_balance ?? undefined, availableBalance: a.available_balance ?? undefined,
+      }))
+
+    const cBankTransactions = (bankTransactions.data ?? [])
+      .filter((t: { client_id: string }) => t.client_id === c.id)
+      .map((t: { id: string; account_id: string; date: string; name: string; merchant_name?: string; amount: number; currency?: string; category?: string; pending: boolean }) => ({
+        id: t.id, accountId: t.account_id, date: t.date, name: t.name,
+        merchantName: t.merchant_name ?? undefined, amount: t.amount,
+        currency: (t.currency ?? undefined) as Currency | undefined,
+        category: t.category ?? undefined, pending: t.pending,
+      }))
+
     const cCatalog = (catalogWorks.data ?? [])
       .filter((w: { client_id: string }) => w.client_id === c.id)
       .map((w: { id: string; title: string; ipi?: string; writers: string; amount: number; currency: string; bmi: string; mlc: string; sx: string; ppl: string }) => ({
@@ -420,7 +440,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       content:  { posts: cPosts },
       business: {
         royalties: { streams: cRoyalties },
-        banking:   { deposits: cDeposits },
+        banking:   { deposits: cDeposits, accounts: cBankAccounts, transactions: cBankTransactions },
         catalog:   { works: cCatalog },
       },
       projects:    cProjects,

@@ -103,6 +103,8 @@ export const DEMO_DATA: AppData = {
             { id: 'd4', name: 'Atlantic Recording',  date: '2026-06-01', amount: 7000,   currency: 'USD', mgmt: 0.20, lawyer: 0.040, taxes: 0.15, done: true  },
             { id: 'd5', name: 'BMI ROYALTY DIST',    date: '2026-05-21', amount: 20000,  currency: 'USD', mgmt: 0.20, lawyer: 0.050, taxes: 0.30, done: true  },
           ],
+          accounts: [],
+          transactions: [],
         },
         catalog: {
           works: [
@@ -177,6 +179,8 @@ export const DEMO_DATA: AppData = {
             { id: 'nd1', name: 'Defected Advance', date: '2026-07-01', amount: 60000, currency: 'GBP', mgmt: 0.15, lawyer: 0.05, taxes: 0.30, done: false },
             { id: 'nd2', name: 'Sync · Netflix',   date: '2026-05-15', amount: 12000, currency: 'USD', mgmt: 0.20, lawyer: 0.05, taxes: 0.30, done: true  },
           ],
+          accounts: [],
+          transactions: [],
         },
         catalog: {
           works: [
@@ -241,6 +245,8 @@ export const DEMO_DATA: AppData = {
           deposits: [
             { id: 'sd1', name: 'Sync · Spotify', date: '2026-07-10', amount: 5000, currency: 'USD', mgmt: 0.15, lawyer: 0.04, taxes: 0.25, done: false },
           ],
+          accounts: [],
+          transactions: [],
         },
         catalog: {
           works: [

@@ -19,7 +19,7 @@ import type {
   UserRole, ProjectStatus, ProjectType, Stakeholder, Project, ArtistTodo,
   TrackLabelCopy, ReleaseLabelCopy, ChecklistItemKey, ChecklistItem, TrackPriority,
   GuestListEntry, GuestListCategory, ReleaseStakeholder, StakeholderRole,
-  CrewMember, ShowAdvance, TravelItem, Person, PersonActivity,
+  CrewMember, ShowAdvance, TravelItem, Person, PersonActivity, Currency,
 } from '@/types'
 import { DEMO_DATA } from '@/lib/demo-data'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
@@ -152,6 +152,10 @@ interface StudioState {
   addPerson: (patch: { name: string; email?: string; phone?: string; org?: string; notes?: string }) => string
   updatePerson: (personId: string, patch: { name?: string; email?: string; phone?: string; org?: string; notes?: string; activity?: PersonActivity[] }) => void
   deletePerson: (personId: string) => void
+
+  // ── Bank accounts (Plaid) ──
+  /** Re-reads bank_accounts/bank_transactions for one client from Supabase — call after connecting or syncing a bank. */
+  loadBankData: (clientId: string) => Promise<void>
 
   // ── Release stakeholders ──
   addStakeholder: (albumId: string, patch: { personId: string; role: StakeholderRole; notes?: string }) => void
@@ -318,7 +322,7 @@ export const useStore = create<StudioState>((set, get) => ({
       content:     { posts: [] },
       business: {
         royalties: { streams: [] },
-        banking:   { deposits: [] },
+        banking:   { deposits: [], accounts: [], transactions: [] },
         catalog:   { works: [] },
       },
       projects:    [],
@@ -832,6 +836,35 @@ export const useStore = create<StudioState>((set, get) => ({
     if (workspaceId) dbDeletePerson(personId).catch(console.error)
   },
 
+  loadBankData: async (clientId) => {
+    const { createClient } = await import('@/lib/supabase/client')
+    const supabase = createClient()
+    const [accountsRes, txRes] = await Promise.all([
+      supabase.from('bank_accounts').select('*').eq('client_id', clientId),
+      supabase.from('bank_transactions').select('*').eq('client_id', clientId).order('date', { ascending: false }),
+    ])
+    const accounts = (accountsRes.data ?? []).map(a => ({
+      id: a.id, name: a.name, officialName: a.official_name ?? undefined,
+      mask: a.mask ?? undefined, type: a.type ?? undefined, subtype: a.subtype ?? undefined,
+      currency: (a.currency ?? undefined) as Currency | undefined,
+      currentBalance: a.current_balance ?? undefined, availableBalance: a.available_balance ?? undefined,
+    }))
+    const transactions = (txRes.data ?? []).map(t => ({
+      id: t.id, accountId: t.account_id, date: t.date, name: t.name,
+      merchantName: t.merchant_name ?? undefined, amount: t.amount,
+      currency: (t.currency ?? undefined) as Currency | undefined,
+      category: t.category ?? undefined, pending: t.pending,
+    }))
+    set(state => ({
+      data: {
+        clients: state.data.clients.map(c => c.id !== clientId ? c : {
+          ...c,
+          business: { ...c.business, banking: { ...c.business.banking, accounts, transactions } },
+        }),
+      },
+    }))
+  },
+
   // ── Release stakeholders ──
   addStakeholder: (albumId, patch) => {
     const { data, clientId, workspaceId } = get()
@@ -944,6 +977,7 @@ export const useStore = create<StudioState>((set, get) => ({
           business: {
             ...c.business,
             banking: {
+              ...c.business.banking,
               deposits: c.business.banking.deposits.map(d => {
                 if (d.id !== depositId) return d
                 updatedDeposit = { ...d, done: true }
@@ -969,6 +1003,7 @@ export const useStore = create<StudioState>((set, get) => ({
           business: {
             ...c.business,
             banking: {
+              ...c.business.banking,
               deposits: c.business.banking.deposits.filter(d => d.id !== depositId),
             },
           },

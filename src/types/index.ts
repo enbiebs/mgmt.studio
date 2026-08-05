@@ -7,6 +7,31 @@
 export type Stage = 'track' | 'mix' | 'master' | 'done'
 export type ShowStatus = 'confirmed' | 'hold' | 'cancelled'
 export type Currency = 'USD' | 'GBP' | 'EUR'
+
+export interface BankAccount {
+  id: string
+  name: string
+  officialName?: string
+  mask?: string
+  type?: string
+  subtype?: string
+  currency?: Currency
+  currentBalance?: number
+  availableBalance?: number
+  institutionName?: string
+}
+
+export interface BankTransaction {
+  id: string
+  accountId: string
+  date: string
+  name: string
+  merchantName?: string
+  amount: number
+  currency?: Currency
+  category?: string
+  pending: boolean
+}
 export type RegStatus = 'ok' | 'warn' | 'no' | 'q'
 export type PostType = 'reel' | 'story' | 'post' | 'video' | 'tiktok' | 'shorts' | 'spotify-clip' | 'tweet' | 'laylo'
 
@@ -191,7 +216,7 @@ export interface Client {
   }
   business: {
     royalties: { streams: RoyaltyStream[] }
-    banking:   { deposits: Deposit[] }
+    banking:   { deposits: Deposit[]; accounts: BankAccount[]; transactions: BankTransaction[] }
     catalog:   { works: CatalogWork[] }
   }
   projects:    Project[]
