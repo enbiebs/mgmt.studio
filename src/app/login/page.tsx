@@ -18,11 +18,14 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(null)
 
-  const supabase = createClient()
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
+    // Created here, not at render time — Next.js statically prerenders this
+    // page at build time, when Supabase env vars may not be present (e.g.
+    // a demo-mode deployment). Calling createClient() during render throws
+    // in that case and crashes the build.
+    const supabase = createClient()
     setMessage(null)
 
     try {
