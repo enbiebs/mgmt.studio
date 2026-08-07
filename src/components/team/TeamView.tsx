@@ -5,6 +5,7 @@ import { uid } from '@/lib/utils'
 import { Modal, FormField, inputClass } from '@/components/ui/Modal'
 import { CREW_ROLE_LABEL } from '@/components/tour/CrewView'
 import { ROLE_LABEL as STAKEHOLDER_ROLE_LABEL } from '@/components/songs/StatusView'
+import { AccessPanel } from '@/components/team/AccessPanel'
 import type { Person, TravelItem } from '@/types'
 
 function travelLabel(item: TravelItem): string {
@@ -189,6 +190,8 @@ function PersonModal({ person, links, onClose }: { person?: Person; links?: stri
               ))}
             </div>
           </div>
+
+          <AccessPanel person={person} />
         </>
       )}
     </Modal>

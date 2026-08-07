@@ -466,20 +466,70 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
 // The role a signed-in user actually holds — not the client-side
 // "preview as" toggle. Only a real 'manager' should be able to
 // switch that toggle to look at other roles' views.
-export async function getMyMembership(): Promise<{ workspaceId: string; role: UserRole } | null> {
+export async function getMyMembership(): Promise<{
+  memberId: string; workspaceId: string; role: UserRole; personId: string | null; clientId: string | null
+} | null> {
   const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  // Workspaces can have many members now (manager + invited agent/lawyer/
+  // team/artist logins), and RLS lets any member see every row in their
+  // workspace — so this MUST filter to the caller's own row, not just
+  // grab whichever one Postgres returns first.
   const { data } = await supabase
     .from('workspace_members')
-    .select('workspace_id, role')
+    .select('id, workspace_id, role, person_id, client_id')
+    .eq('user_id', user.id)
     .limit(1)
     .single()
   if (!data) return null
-  return { workspaceId: data.workspace_id, role: data.role as UserRole }
+  return {
+    memberId: data.id, workspaceId: data.workspace_id, role: data.role as UserRole,
+    personId: data.person_id, clientId: data.client_id,
+  }
 }
 
 export async function getMyWorkspaceId(): Promise<string | null> {
   const membership = await getMyMembership()
   return membership?.workspaceId ?? null
+}
+
+// ── Access grants ────────────────────────────────────────────
+export type AccessGrant = { section: string; clientId: string | null; canEdit: boolean }
+
+export async function getGrantsForMember(workspaceMemberId: string): Promise<AccessGrant[]> {
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('access_grants')
+    .select('section, client_id, can_edit')
+    .eq('workspace_member_id', workspaceMemberId)
+  return (data ?? []).map(g => ({ section: g.section, clientId: g.client_id, canEdit: g.can_edit }))
+}
+
+// Non-manager members of the workspace, for the manager's "preview as"
+// picker — each one labeled by their linked person (team/agent/lawyer)
+// or client (artist).
+export type PreviewMember = {
+  id: string; role: UserRole
+  personName: string | null
+  clientId: string | null; clientName: string | null
+}
+
+export async function getPreviewableMembers(workspaceId: string): Promise<PreviewMember[]> {
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('workspace_members')
+    .select('id, role, client_id, people(name), clients(name)')
+    .eq('workspace_id', workspaceId)
+    .neq('role', 'manager')
+  return (data ?? []).map((m) => {
+    const row = m as unknown as { id: string; role: string; client_id: string | null; people: { name: string } | null; clients: { name: string } | null }
+    return {
+      id: row.id, role: row.role as UserRole,
+      personName: row.people?.name ?? null,
+      clientId: row.client_id, clientName: row.clients?.name ?? null,
+    }
+  })
 }
 
 // ── Client upsert ──────────────────────────────────────────

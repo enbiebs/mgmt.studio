@@ -1,8 +1,7 @@
 'use client'
 // ──────────────────────────────────────────────────────────
-//  AgentView — Booking agent portal
-//  Shows: offer pipeline, routing calendar, settlements
-//  Hides: internal management ops, financials, fan data
+//  OffersView — Tour subtab: booking offer pipeline, routing
+//  calendar, and settlements (pre-Shows negotiation stage).
 // ──────────────────────────────────────────────────────────
 
 import { useState } from 'react'
@@ -29,7 +28,7 @@ function fmtDate(iso: string) {
 
 type AgentTab = 'pipeline' | 'settled' | 'routing'
 
-export function AgentView() {
+export function OffersView() {
   const client = useStore(s => s.getClient())
   const [tab, setTab] = useState<AgentTab>('pipeline')
 

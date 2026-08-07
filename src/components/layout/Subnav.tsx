@@ -4,7 +4,7 @@ import { initials } from '@/lib/utils'
 
 const SUBNAV: Record<string, [string, string][]> = {
   songs:    [['Tracks', 'tracks'], ['Label Copy', 'labelcopy'], ['Checklist', 'checklist'], ['Status', 'status']],
-  tour:     [['Shows', 'tour'], ['Advance', 'advance'], ['Day Sheet', 'daysheet'], ['Travel', 'travel'], ['Crew', 'crew'], ['Guests', 'guests']],
+  tour:     [['Shows', 'tour'], ['Offers', 'offers'], ['Advance', 'advance'], ['Day Sheet', 'daysheet'], ['Travel', 'travel'], ['Crew', 'crew'], ['Guests', 'guests']],
   content:  [['Manage', 'manage'], ['Studio', 'studio'], ['Lab', 'lab']],
   business: [['Royalties', 'royalties'], ['Banking', 'banking'], ['Catalog', 'catalog'], ['P&L', 'pl'], ['Invoices', 'invoices'], ['Payments', 'payments']],
 }

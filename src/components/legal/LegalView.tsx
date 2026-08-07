@@ -1,8 +1,8 @@
 'use client'
 // ──────────────────────────────────────────────────────────
-//  LawyerView — Entertainment attorney portal
-//  Shows: contract pipeline, deadline alerts, rights register
-//  Hides: financials, fan data, internal ops
+//  LegalView — Contract pipeline, deadline alerts, rights register
+//  Read-only for now — contracts.data is real (RLS-scoped to the
+//  'legal' section) but there's no add/edit UI yet.
 // ──────────────────────────────────────────────────────────
 
 import { useState } from 'react'
@@ -58,7 +58,7 @@ type LawyerTab = 'pipeline' | 'alerts' | 'register'
 
 const ACTIVE_STATUSES: ContractStatus[] = ['draft', 'review', 'negotiation', 'signed']
 
-export function LawyerView() {
+export function LegalView() {
   const client = useStore(s => s.getClient())
   const [tab, setTab] = useState<LawyerTab>('pipeline')
   const [filterType, setFilterType] = useState<ContractType | 'all'>('all')

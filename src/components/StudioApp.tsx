@@ -3,9 +3,11 @@
 //  StudioApp — the root component
 //  This wires together all the views based on the global state.
 //
-//  Two roles:
-//   • manager — full workspace with all sections + Projects tab
-//   • artist  — clean portal: releases, shows, content, todos
+//  Manager sees everything. Artist gets their own fixed-client
+//  dashboard portal (no roster). Everyone else (agent/lawyer/team)
+//  gets the exact same Subnav + section views as Manager, just
+//  filtered down to whatever access_grants gave them — no more
+//  separate hand-built portals per role.
 // ──────────────────────────────────────────────────────────
 
 import { useStore } from '@/lib/store'
@@ -34,19 +36,21 @@ import { PaymentsView }  from '@/components/business/PaymentsView'
 import { ProjectsView }  from '@/components/manager/ProjectsView'
 import { AnalyticsView } from '@/components/analytics/AnalyticsView'
 import { FandomView }    from '@/components/fandom/FandomView'
+import { LegalView }     from '@/components/legal/LegalView'
 
-// Specialist views
+// Artist portal
 import { ArtistView }   from '@/components/artist/ArtistView'
-import { AgentView }    from '@/components/agent/AgentView'
-import { LawyerView }   from '@/components/lawyer/LawyerView'
+
+// Tour subviews
 import { AdvanceView }  from '@/components/tour/AdvanceView'
 import { DaySheetView } from '@/components/tour/DaySheetView'
 import { TravelView }   from '@/components/tour/TravelView'
 import { GuestListView } from '@/components/tour/GuestListView'
 import { CrewView }      from '@/components/tour/CrewView'
+import { OffersView }    from '@/components/tour/OffersView'
 
 export function StudioApp() {
-  const { view, section, songsSub, contentSub, bizSub, tourSub, data, role, openModal, isLoading } = useStore()
+  const { view, section, songsSub, contentSub, bizSub, tourSub, data, role, hasAccess, accessibleClientIds, openModal, isLoading } = useStore()
 
   // Show loading spinner while Supabase data is hydrating
   if (isLoading) {
@@ -64,75 +68,91 @@ export function StudioApp() {
     <div className="flex flex-col h-screen overflow-hidden bg-canvas text-gray-900">
       <AppHeader />
 
-      {/* ── Dashboard ── */}
-      {view === 'dashboard' && (
-        <main className="flex-1 overflow-auto p-8">
-          <div className="flex items-end justify-between mb-7">
-            <div>
-              <h1 className="font-serif text-[26px] font-medium leading-tight">Your Roster</h1>
-              <p className="text-sm text-gray-400 mt-0.5">{data.clients.length} client{data.clients.length !== 1 ? 's' : ''}</p>
+      {/* ── Dashboard (roster) — hidden entirely for artists, who land straight in their own client ── */}
+      {view === 'dashboard' && role !== 'artist' && (() => {
+        const visibleIds = accessibleClientIds()
+        const roster = visibleIds === 'all' ? data.clients : data.clients.filter(c => visibleIds.includes(c.id))
+        return (
+          <main className="flex-1 overflow-auto p-8">
+            <div className="flex items-end justify-between mb-7">
+              <div>
+                <h1 className="font-serif text-[26px] font-medium leading-tight">Your Roster</h1>
+                <p className="text-sm text-gray-400 mt-0.5">{roster.length} client{roster.length !== 1 ? 's' : ''}</p>
+              </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(310px,1fr))] gap-4">
-            {data.clients.map(c => <ClientCard key={c.id} client={c} />)}
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(310px,1fr))] gap-4">
+              {roster.map(c => <ClientCard key={c.id} client={c} />)}
 
-            <button
-              onClick={() => openModal('add-client')}
-              className="border-2 border-dashed border-gray-200 rounded-2xl p-5 min-h-[220px] flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-blue-400 hover:text-blue-400 transition-colors"
-            >
-              <span className="text-3xl">+</span>
-              <span className="text-sm font-medium">Add a client</span>
-            </button>
-          </div>
+              {role === 'manager' && (
+                <button
+                  onClick={() => openModal('add-client')}
+                  className="border-2 border-dashed border-gray-200 rounded-2xl p-5 min-h-[220px] flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-blue-400 hover:text-blue-400 transition-colors"
+                >
+                  <span className="text-3xl">+</span>
+                  <span className="text-sm font-medium">Add a client</span>
+                </button>
+              )}
+            </div>
 
-          <DashboardModals />
-        </main>
-      )}
+            {roster.length === 0 && (
+              <div className="text-center text-gray-300 py-16 text-sm">No clients you have access to yet</div>
+            )}
 
-      {/* ── Studio: Specialist views ── */}
+            <DashboardModals />
+          </main>
+        )
+      })()}
+
+      {/* ── Studio: Artist portal ── */}
       {view === 'studio' && role === 'artist' && <ArtistView />}
-      {view === 'studio' && role === 'agent'  && <AgentView />}
-      {view === 'studio' && role === 'lawyer' && <LawyerView />}
 
-      {/* ── Studio: Manager view ── */}
-      {view === 'studio' && role === 'manager' && (
-        <>
-          <Subnav />
-          <div className="flex-1 min-h-0 flex overflow-hidden">
-            {section === 'songs'    && (
-              songsSub === 'labelcopy' ? <LabelCopyView /> :
-              songsSub === 'checklist' ? <ChecklistView /> :
-              songsSub === 'status'    ? <StatusView />    :
-              <SongsView />
-            )}
-            {section === 'tour'     && (
-              tourSub === 'advance'  ? <AdvanceView />          :
-              tourSub === 'daysheet' ? <DaySheetView />         :
-              tourSub === 'travel'   ? <TravelView />           :
-              tourSub === 'crew'     ? <CrewView />             :
-              tourSub === 'guests'   ? <GuestListView />        :
-              <TourView />
-            )}
-            {section === 'content'  && (
-              contentSub === 'studio' ? <StudioView />    :
-              contentSub === 'lab'    ? <LabPlaceholder /> :
-              <ManageView />
-            )}
-            {section === 'business' && (
-              bizSub === 'banking'  ? <BankingView />   :
-              bizSub === 'catalog'  ? <CatalogView />   :
-              bizSub === 'pl'       ? <PLView />        :
-              bizSub === 'invoices' ? <InvoicesView />  :
-              bizSub === 'payments' ? <PaymentsView />  :
-              <RoyaltiesView />
-            )}
-            {section === 'projects'   && <ProjectsView />}
-            {section === 'analytics'  && <AnalyticsView />}
-            {section === 'fandom'     && <FandomView />}
-            {section === 'team'       && <TeamView />}
+      {/* ── Studio: everyone else shares the real Manager views, gated by hasAccess() ── */}
+      {view === 'studio' && role !== 'artist' && (
+        hasAccess(section) ? (
+          <>
+            <Subnav />
+            <div className="flex-1 min-h-0 flex overflow-hidden">
+              {section === 'songs'    && (
+                songsSub === 'labelcopy' ? <LabelCopyView /> :
+                songsSub === 'checklist' ? <ChecklistView /> :
+                songsSub === 'status'    ? <StatusView />    :
+                <SongsView />
+              )}
+              {section === 'tour'     && (
+                tourSub === 'offers'   ? <OffersView />           :
+                tourSub === 'advance'  ? <AdvanceView />          :
+                tourSub === 'daysheet' ? <DaySheetView />         :
+                tourSub === 'travel'   ? <TravelView />           :
+                tourSub === 'crew'     ? <CrewView />             :
+                tourSub === 'guests'   ? <GuestListView />        :
+                <TourView />
+              )}
+              {section === 'content'  && (
+                contentSub === 'studio' ? <StudioView />    :
+                contentSub === 'lab'    ? <LabPlaceholder /> :
+                <ManageView />
+              )}
+              {section === 'business' && (
+                bizSub === 'banking'  ? <BankingView />   :
+                bizSub === 'catalog'  ? <CatalogView />   :
+                bizSub === 'pl'       ? <PLView />        :
+                bizSub === 'invoices' ? <InvoicesView />  :
+                bizSub === 'payments' ? <PaymentsView />  :
+                <RoyaltiesView />
+              )}
+              {section === 'projects'   && <ProjectsView />}
+              {section === 'analytics'  && <AnalyticsView />}
+              {section === 'fandom'     && <FandomView />}
+              {section === 'team'       && <TeamView />}
+              {section === 'legal'      && <LegalView />}
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
+            You don&apos;t have access to this section for this client.
           </div>
-        </>
+        )
       )}
 
       {/* Footer */}

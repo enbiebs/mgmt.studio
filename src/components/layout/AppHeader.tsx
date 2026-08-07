@@ -2,19 +2,39 @@
 import { useStore } from '@/lib/store'
 import { initials } from '@/lib/utils'
 import { useState, useRef, useEffect } from 'react'
+import type { MainSection } from '@/types'
+
+const ROLE_LABEL: Record<string, string> = { manager: 'Manager', artist: 'Artist', agent: 'Agent', lawyer: 'Lawyer', team: 'Team' }
 
 export function AppHeader() {
-  const { view, section, clientId, data, role, authRole, setRole, goToDashboard, openClient, setSection, signOut } = useStore()
+  const {
+    view, section, clientId, data, role, authRole, previewMemberId, previewMembers, previewAs,
+    hasAccess, accessibleClientIds, goToDashboard, openClient, setSection, signOut,
+  } = useStore()
   const canSwitchRole = authRole === null || authRole === 'manager'
   const client = useStore(s => s.getClient())
   const [switchOpen, setSwitchOpen] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [userOpen, setUserOpen] = useState(false)
   const switchRef = useRef<HTMLDivElement>(null)
+  const previewRef = useRef<HTMLDivElement>(null)
   const userRef = useRef<HTMLDivElement>(null)
+
+  const visibleClientIds = accessibleClientIds()
+  const rosterClients = visibleClientIds === 'all' ? data.clients : data.clients.filter(c => visibleClientIds.includes(c.id))
+  const previewLabel = previewMemberId === null
+    ? 'Manager (you)'
+    : (() => {
+        const m = previewMembers.find(pm => pm.id === previewMemberId)
+        if (!m) return 'Manager (you)'
+        const who = m.role === 'artist' ? m.clientName : m.personName
+        return `${ROLE_LABEL[m.role] ?? m.role} — ${who ?? 'Unnamed'}`
+      })()
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (switchRef.current && !switchRef.current.contains(e.target as Node)) setSwitchOpen(false)
+      if (previewRef.current && !previewRef.current.contains(e.target as Node)) setPreviewOpen(false)
       if (userRef.current && !userRef.current.contains(e.target as Node)) setUserOpen(false)
     }
     document.addEventListener('mousedown', handler)
@@ -23,8 +43,8 @@ export function AppHeader() {
 
   return (
     <header className="flex-shrink-0 flex items-center h-[50px] px-4 gap-3 border-b border-gray-100">
-      {/* Back button (studio mode only) */}
-      {view === 'studio' && (
+      {/* Back button (studio mode only — artists have no roster to go back to) */}
+      {view === 'studio' && role !== 'artist' && (
         <>
           <button
             onClick={goToDashboard}
@@ -39,13 +59,15 @@ export function AppHeader() {
       {/* Logo */}
       <div className="font-serif font-semibold text-base tracking-tight flex-shrink-0">Mgmt Studio</div>
 
-      {/* Main nav (studio mode, manager role only — agent/lawyer/artist have their own full views) */}
-      {view === 'studio' && role === 'manager' && (
+      {/* Main nav (studio mode, everyone except artist — artists get their own dashboard-style view) */}
+      {view === 'studio' && role !== 'artist' && (
         <nav className="flex gap-0.5 flex-1 overflow-x-auto">
           {([
             ['Music', 'songs'], ['Tour', 'tour'], ['Content', 'content'],
-            ['Business', 'business'], ['Team', 'team'], ['Projects', 'projects'], ['Analytics', 'analytics'], ['Fandom', 'fandom'],
-          ] as [string, typeof section][]).map(([label, key]) => (
+            ['Business', 'business'], ['Team', 'team'], ['Projects', 'projects'], ['Analytics', 'analytics'], ['Fandom', 'fandom'], ['Legal', 'legal'],
+          ] as [string, MainSection][])
+            .filter(([, key]) => hasAccess(key, clientId ?? undefined))
+            .map(([label, key]) => (
             <button
               key={key}
               onClick={() => setSection(key)}
@@ -61,43 +83,55 @@ export function AppHeader() {
         </nav>
       )}
 
-      {/* Spacer when non-manager view (no main nav) */}
-      {view === 'studio' && role !== 'manager' && <div className="flex-1" />}
+      {/* Spacer when artist (no main nav) */}
+      {view === 'studio' && role === 'artist' && <div className="flex-1" />}
 
       <div className="flex items-center gap-2 ml-auto">
-        {/* Role toggle — only a real manager may preview other roles' views.
-            Everyone else is locked to the role assigned in workspace_members. */}
-        {view === 'studio' && client && canSwitchRole && (
-          <div className="flex items-center bg-gray-100 rounded-full p-0.5 text-xs font-semibold gap-0.5">
-            {([
-              ['manager', 'Manager', 'Full management workspace'],
-              ['artist',  'Artist',  'What the artist sees'],
-              ['agent',   'Agent',   'Booking agent portal'],
-              ['lawyer',  'Lawyer',  'Attorney / contracts view'],
-            ] as const).map(([r, label, title]) => (
-              <button
-                key={r}
-                onClick={() => setRole(r)}
-                className={`px-3 py-1 rounded-full transition-colors ${
-                  role === r
-                    ? 'bg-gray-900 text-canvas shadow-sm'
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-                title={title}
-              >
-                {label}
-              </button>
-            ))}
+        {/* Preview — a real manager can simulate any other real workspace
+            member's actual role + access_grants. Everyone else is locked
+            to the role assigned in workspace_members. */}
+        {canSwitchRole && previewMembers.length > 0 && (
+          <div ref={previewRef} className="relative">
+            <button
+              onClick={() => setPreviewOpen(v => !v)}
+              className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                previewMemberId ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title="Preview as another workspace member"
+            >
+              {previewMemberId ? `Previewing: ${previewLabel}` : 'Preview as…'}
+            </button>
+            {previewOpen && (
+              <div className="absolute right-0 top-full mt-1 bg-canvas border border-gray-100 rounded-xl shadow-lg min-w-[220px] overflow-hidden z-50 py-1">
+                <button
+                  onClick={() => { previewAs(null); setPreviewOpen(false) }}
+                  className={`flex items-center w-full px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors ${previewMemberId === null ? 'font-semibold' : ''}`}
+                >
+                  Manager (you)
+                </button>
+                <div className="h-px bg-gray-100 my-1" />
+                {previewMembers.map(m => (
+                  <button
+                    key={m.id}
+                    onClick={() => { previewAs(m.id); setPreviewOpen(false) }}
+                    className={`flex items-center justify-between w-full px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors ${previewMemberId === m.id ? 'font-semibold' : ''}`}
+                  >
+                    <span>{m.role === 'artist' ? m.clientName : m.personName ?? 'Unnamed'}</span>
+                    <span className="text-[10px] text-gray-400 uppercase ml-2">{ROLE_LABEL[m.role] ?? m.role}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
-        {view === 'studio' && client && !canSwitchRole && (
+        {!canSwitchRole && (
           <span className="px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-500" title="Your assigned role">
-            {role[0].toUpperCase() + role.slice(1)}
+            {ROLE_LABEL[role] ?? role}
           </span>
         )}
 
-        {/* Client switcher */}
-        {view === 'studio' && client ? (
+        {/* Client switcher — hidden for artists, who only ever see their own client */}
+        {view === 'studio' && client && role !== 'artist' ? (
           <div ref={switchRef} className="relative">
             <button
               onClick={() => setSwitchOpen(v => !v)}
@@ -114,7 +148,7 @@ export function AppHeader() {
 
             {switchOpen && (
               <div className="absolute right-0 top-full mt-1 bg-canvas border border-gray-100 rounded-xl shadow-lg min-w-[160px] overflow-hidden z-50">
-                {data.clients.map(c => (
+                {rosterClients.map(c => (
                   <button
                     key={c.id}
                     onClick={() => { openClient(c.id); setSwitchOpen(false) }}
@@ -127,7 +161,7 @@ export function AppHeader() {
               </div>
             )}
           </div>
-        ) : view === 'dashboard' ? (
+        ) : view === 'dashboard' && role === 'manager' ? (
           <button
             onClick={() => useStore.getState().openModal('add-client')}
             className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors"

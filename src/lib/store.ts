@@ -31,7 +31,8 @@ import { EMPTY_FINANCE } from '@/lib/finance-demo'
 import { EMPTY_TOUR } from '@/lib/advance-demo'
 import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE } from '@/lib/utils'
 import {
-  loadWorkspaceData, getMyMembership,
+  loadWorkspaceData, getMyMembership, getGrantsForMember, getPreviewableMembers,
+  type AccessGrant, type PreviewMember,
   upsertClient, deleteClient as dbDeleteClient,
   upsertTrack, deleteTrack as dbDeleteTrack,
   upsertAlbum, upsertChecklist,
@@ -68,6 +69,14 @@ function saveData(data: AppData) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
 }
 
+// access_grants.section uses 'music' where the app's MainSection uses 'songs' —
+// everything else lines up 1:1.
+const SECTION_TO_GRANT_KEY: Record<MainSection, string> = {
+  songs: 'music', tour: 'tour', content: 'content', business: 'business',
+  team: 'team', projects: 'projects', analytics: 'analytics', fandom: 'fandom', legal: 'legal',
+}
+const ALL_SECTIONS: MainSection[] = ['songs', 'tour', 'content', 'business', 'team', 'projects', 'analytics', 'fandom', 'legal']
+
 // ── State shape ─────────────────────────────────────────────
 interface StudioState {
   // Data
@@ -84,6 +93,16 @@ interface StudioState {
   // null in demo mode. Only a real 'manager' may use the role switcher to
   // preview other roles' views; everyone else is locked to authRole.
   authRole: UserRole | null
+  // Fixed client for an artist membership (real or previewed) — artists
+  // never see a roster, only their own client.
+  authClientId: string | null
+  // Resolved access_grants rows for the active agent/lawyer/team identity
+  // (real or previewed). Empty and unused for manager/artist roles.
+  grants: AccessGrant[]
+  // Other workspace members a manager can preview as — loaded once for
+  // real managers only.
+  previewMembers: PreviewMember[]
+  previewMemberId: string | null
 
   // Navigation
   view: 'dashboard' | 'studio'
@@ -108,13 +127,23 @@ interface StudioState {
 
   // ── Selectors ──
   getClient: (id?: string) => Client | undefined
+  // Whether the active identity (real or previewed) can see — or edit — a
+  // section for a client. Manager: always true. Artist: only their own
+  // client, edit limited to 'projects' (the todo/request list). Agent/
+  // lawyer/team: driven by resolved access_grants.
+  hasAccess: (section: MainSection, clientId?: string, requireEdit?: boolean) => boolean
+  // Client ids the active identity may see in a roster — 'all' for manager,
+  // otherwise the specific set implied by grants/authClientId.
+  accessibleClientIds: () => 'all' | string[]
 
   // ── Auth / Supabase init ──
   initFromSupabase: (userId: string) => Promise<void>
   signOut: () => Promise<void>
 
   // ── Role ──
-  setRole: (role: UserRole) => void
+  // Manager-only: preview the app as another real workspace member, using
+  // their actual role + access_grants. Pass null to return to Manager.
+  previewAs: (memberId: string | null) => Promise<void>
 
   // ── Navigation actions ──
   goToDashboard: () => void
@@ -232,6 +261,10 @@ export const useStore = create<StudioState>((set, get) => ({
 
   role:          'manager',
   authRole:      null,
+  authClientId:  null,
+  grants:        [],
+  previewMembers: [],
+  previewMemberId: null,
 
   view:          'dashboard',
   clientId:      null,
@@ -257,6 +290,33 @@ export const useStore = create<StudioState>((set, get) => ({
     return data.clients.find(c => c.id === (id ?? clientId))
   },
 
+  hasAccess: (section, clientId, requireEdit = false) => {
+    const s = get()
+    const cid = clientId ?? s.clientId
+    if (!cid) return false
+    if (s.role === 'manager') return true
+    if (s.role === 'artist') {
+      if (s.authClientId !== cid) return false
+      return requireEdit ? section === 'projects' : true
+    }
+    const key = SECTION_TO_GRANT_KEY[section]
+    return s.grants.some(g =>
+      g.section === key && (g.clientId === null || g.clientId === cid) && (!requireEdit || g.canEdit)
+    )
+  },
+
+  accessibleClientIds: () => {
+    const s = get()
+    if (s.role === 'manager') return 'all'
+    if (s.role === 'artist') return s.authClientId ? [s.authClientId] : []
+    const ids = new Set<string>()
+    for (const g of s.grants) {
+      if (g.clientId === null) return 'all'
+      ids.add(g.clientId)
+    }
+    return Array.from(ids)
+  },
+
   // ── Supabase init ──
   initFromSupabase: async (userId) => {
     set({ isLoading: true, userId })
@@ -268,15 +328,31 @@ export const useStore = create<StudioState>((set, get) => ({
         set({ isLoading: false })
         return
       }
-      const { workspaceId, role } = membership
+      const { workspaceId, role, clientId: memberClientId, memberId } = membership
       const appData = await loadWorkspaceData(workspaceId)
-      // If workspace is empty, seed with demo data structure (no data, clean slate)
+      const hasClients = appData.clients.length > 0
+
+      let grants: AccessGrant[] = []
+      let previewMembers: PreviewMember[] = []
+      if (role === 'agent' || role === 'lawyer' || role === 'team') {
+        grants = await getGrantsForMember(memberId)
+      } else if (role === 'manager') {
+        previewMembers = await getPreviewableMembers(workspaceId)
+      }
+
       set({
         workspaceId,
         isLoading: false,
         role,
         authRole: role,
-        data: appData.clients.length > 0 ? appData : { clients: [] },
+        authClientId: memberClientId,
+        grants,
+        previewMembers,
+        data: hasClients ? appData : { clients: [] },
+        // Artists land straight in their own client — no roster to pick from.
+        ...(role === 'artist' && memberClientId
+          ? { view: 'studio' as const, clientId: memberClientId }
+          : {}),
       })
       // Clear localStorage since we now use Supabase
       if (typeof window !== 'undefined') localStorage.removeItem('studio-v1')
@@ -293,11 +369,34 @@ export const useStore = create<StudioState>((set, get) => ({
   },
 
   // ── Role ──
-  setRole: (role) => set({ role }),
+  previewAs: async (memberId) => {
+    if (memberId === null) {
+      set({ role: 'manager', grants: [], authClientId: null, previewMemberId: null, view: 'dashboard', clientId: null, section: 'songs' })
+      return
+    }
+    const member = get().previewMembers.find(m => m.id === memberId)
+    if (!member) return
+    const grants = member.role === 'artist' ? [] : await getGrantsForMember(member.id)
+    set({
+      role: member.role,
+      grants,
+      authClientId: member.clientId,
+      previewMemberId: memberId,
+      view: member.role === 'artist' ? 'studio' : 'dashboard',
+      clientId: member.role === 'artist' ? member.clientId : null,
+      section: 'songs',
+    })
+  },
 
   // ── Navigation ──
   goToDashboard: () => set({ view: 'dashboard', clientId: null, selectedShowId: null }),
-  openClient:    (id) => set({ view: 'studio', clientId: id, section: 'songs', selectedShowId: null }),
+  openClient: (id) => {
+    const s = get()
+    const firstSection = (s.role === 'manager' || s.role === 'artist')
+      ? 'songs'
+      : (ALL_SECTIONS.find(sec => s.hasAccess(sec, id)) ?? 'songs')
+    set({ view: 'studio', clientId: id, section: firstSection, selectedShowId: null })
+  },
   setSection:    (section) => set({ section, selectedShowId: null }),
   setSongsSub:   (sub) => set({ songsSub: sub }),
   setContentSub: (sub) => set({ contentSub: sub }),

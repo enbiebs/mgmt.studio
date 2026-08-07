@@ -239,7 +239,7 @@ export interface AppData {
 // 'artist'  = clean artist portal (no internal ops details)
 // 'agent'   = booking agent — offers, routing, settlements
 // 'lawyer'  = attorney — contracts, rights, deadlines
-export type UserRole = 'manager' | 'artist' | 'agent' | 'lawyer'
+export type UserRole = 'manager' | 'artist' | 'agent' | 'lawyer' | 'team'
 
 // ── Projects (management-side tracking) ─────────────────────
 export type ProjectStatus = 'submitted' | 'in-progress' | 'review' | 'done'
@@ -416,11 +416,11 @@ export interface AnalyticsData {
 }
 
 // ── Section / view routing ──────────────────────────────────
-export type MainSection  = 'songs' | 'tour' | 'content' | 'business' | 'projects' | 'analytics' | 'fandom' | 'team'
+export type MainSection  = 'songs' | 'tour' | 'content' | 'business' | 'projects' | 'analytics' | 'fandom' | 'team' | 'legal'
 export type SongsSub     = 'tracks' | 'labelcopy' | 'checklist' | 'status'
 export type ContentSub   = 'manage' | 'studio' | 'lab'
 export type BizSub       = 'royalties' | 'banking' | 'catalog' | 'pl' | 'invoices' | 'payments'
-export type TourSub      = 'tour' | 'stage-plot' | 'advance' | 'daysheet' | 'crew' | 'guests' | 'travel'
+export type TourSub      = 'tour' | 'stage-plot' | 'advance' | 'daysheet' | 'crew' | 'guests' | 'travel' | 'offers'
 export type AnalyticsSub = 'overview' | 'streaming' | 'playlists' | 'social' | 'tiktok' | 'audience' | 'charts'
 
 // ── Tour Management — Advance System ────────────────────────
