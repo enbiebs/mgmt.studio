@@ -8,7 +8,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-type Mode = 'login' | 'signup' | 'magic'
+type Mode = 'login' | 'signup' | 'magic' | 'reset'
 
 export default function LoginPage() {
   const [mode, setMode] = useState<Mode>('login')
@@ -56,6 +56,14 @@ export default function LoginPage() {
         if (error) throw error
         setMessage({ text: 'Magic link sent — check your email.', type: 'success' })
       }
+
+      else if (mode === 'reset') {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth/callback?next=/auth/update-password`,
+        })
+        if (error) throw error
+        setMessage({ text: 'Password reset link sent — check your email.', type: 'success' })
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Something went wrong'
       setMessage({ text: msg, type: 'error' })
@@ -89,6 +97,12 @@ export default function LoginPage() {
           ))}
         </div>
 
+        {mode === 'reset' && (
+          <p className="text-xs text-gray-400 mb-3 -mt-2">
+            Enter your email and we&apos;ll send you a link to set a new password.
+          </p>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-3">
           {/* Workspace name (signup only) */}
           {mode === 'signup' && (
@@ -117,10 +131,21 @@ export default function LoginPage() {
             />
           </div>
 
-          {/* Password (not for magic link) */}
-          {mode !== 'magic' && (
+          {/* Password (not for magic link or password reset) */}
+          {mode !== 'magic' && mode !== 'reset' && (
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Password</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-gray-500">Password</label>
+                {mode === 'login' && (
+                  <button
+                    type="button"
+                    onClick={() => { setMode('reset'); setMessage(null) }}
+                    className="text-xs text-blue-500 hover:underline"
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
               <input
                 type="password"
                 value={password}
@@ -153,6 +178,7 @@ export default function LoginPage() {
             {loading ? 'Loading…' : (
               mode === 'login'  ? 'Sign in' :
               mode === 'signup' ? 'Create account' :
+              mode === 'reset'  ? 'Send reset link' :
               'Send magic link'
             )}
           </button>
