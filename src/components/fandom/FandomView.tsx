@@ -353,8 +353,8 @@ export function FandomView() {
 
             {/* Compose */}
             {msgCompose && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
-                <div className="text-sm font-semibold text-amber-800 mb-3">Compose message</div>
+              <div className="bg-canvas border border-amber-500/30 rounded-2xl p-5">
+                <div className="text-sm font-semibold text-amber-500 mb-3">Compose message</div>
                 <div className="space-y-3">
                   <div>
                     <label className="text-xs text-gray-500 font-medium block mb-1">Send to</label>
@@ -373,7 +373,7 @@ export function FandomView() {
                   <div>
                     <label className="text-xs text-gray-500 font-medium block mb-1">Subject</label>
                     <input
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-400"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-canvas focus:outline-none focus:border-amber-400"
                       placeholder="e.g. You'll hear it first — new music dropping Friday"
                       value={msgSubject}
                       onChange={e => setMsgSubject(e.target.value)}
@@ -382,7 +382,7 @@ export function FandomView() {
                   <div>
                     <label className="text-xs text-gray-500 font-medium block mb-1">Message</label>
                     <textarea
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm min-h-[100px] resize-none focus:outline-none focus:border-amber-400"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-canvas min-h-[100px] resize-none focus:outline-none focus:border-amber-400"
                       placeholder="Write something for your fans..."
                       value={msgBody}
                       onChange={e => setMsgBody(e.target.value)}
