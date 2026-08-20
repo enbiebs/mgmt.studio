@@ -6,6 +6,7 @@ import { MONTH_NAMES, MONTH_SHORT } from '@/lib/utils'
 
 export function TourView() {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('tour'))
   const { selectedShowId, setSelectedShow, addShow, deleteShow } = useStore()
   const [addOpen, setAddOpen] = useState(false)
   const [f, setF] = useState({ date: '', city: '', venue: '', time: '20:00' })
@@ -28,12 +29,14 @@ export function TourView() {
       <div className="w-[272px] flex-shrink-0 border-r border-gray-100 flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Tour</span>
-          <button
-            onClick={() => setAddOpen(true)}
-            className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
-          >
-            + Show
-          </button>
+          {editable && (
+            <button
+              onClick={() => setAddOpen(true)}
+              className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+            >
+              + Show
+            </button>
+          )}
         </div>
 
         <div className="flex-1 overflow-auto">
@@ -100,12 +103,14 @@ export function TourView() {
                 <span key={l} className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium text-gray-500 cursor-pointer hover:bg-gray-50 transition-colors">{l}</span>
               ))}
             </div>
-            <button
-              onClick={() => deleteShow(selected.id)}
-              className="text-sm text-red-400 hover:text-red-500 transition-colors"
-            >
-              Remove show
-            </button>
+            {editable && (
+              <button
+                onClick={() => deleteShow(selected.id)}
+                className="text-sm text-red-400 hover:text-red-500 transition-colors"
+              >
+                Remove show
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-gray-300">

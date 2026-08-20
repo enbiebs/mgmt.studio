@@ -21,6 +21,7 @@ const CATEGORY_LABEL: Record<GuestListCategory, string> = {
 
 export function GuestListView() {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('tour'))
   const { toggleGuestCheckedIn, deleteGuest } = useStore()
   const [selectedShowId, setSelectedShowId] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
@@ -81,12 +82,14 @@ export function GuestListView() {
                   {checkedInQty} of {totalQty} checked in · {guests.length} {guests.length === 1 ? 'entry' : 'entries'}
                 </div>
               </div>
-              <button
-                onClick={() => setAddOpen(true)}
-                className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors flex-shrink-0"
-              >
-                + Add guest
-              </button>
+              {editable && (
+                <button
+                  onClick={() => setAddOpen(true)}
+                  className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors flex-shrink-0"
+                >
+                  + Add guest
+                </button>
+              )}
             </div>
 
             <div className="flex flex-col gap-2">
@@ -96,7 +99,8 @@ export function GuestListView() {
                     type="checkbox"
                     checked={g.checkedIn}
                     onChange={() => toggleGuestCheckedIn(g.id)}
-                    className="w-4 h-4 flex-shrink-0"
+                    disabled={!editable}
+                    className="w-4 h-4 flex-shrink-0 disabled:cursor-not-allowed"
                     title="Checked in"
                   />
                   <div className="flex-1 min-w-0">
@@ -112,12 +116,14 @@ export function GuestListView() {
                   <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold flex-shrink-0 ${CATEGORY_STYLES[g.category]}`}>
                     {CATEGORY_LABEL[g.category]}
                   </span>
-                  <button
-                    onClick={() => { if (confirm(`Remove "${g.name}" from the guest list?`)) deleteGuest(g.id) }}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
-                  >
-                    ✕
-                  </button>
+                  {editable && (
+                    <button
+                      onClick={() => { if (confirm(`Remove "${g.name}" from the guest list?`)) deleteGuest(g.id) }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
               ))}
               {guests.length === 0 && (

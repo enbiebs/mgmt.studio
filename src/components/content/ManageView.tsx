@@ -24,6 +24,7 @@ const PLATFORM_STYLE: Record<PostType, string> = {
 
 export function ManageView() {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('content'))
   const { calYear, calMonth, calPrev, calNext, calToday, addPost, deletePost } = useStore()
   const [addOpen, setAddOpen] = useState(false)
   const [clickedDate, setClickedDate] = useState('')
@@ -57,7 +58,9 @@ export function ManageView() {
         <button onClick={calNext} className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors">›</button>
         <span className="font-serif text-[18px] font-medium">{MONTH_NAMES[calMonth]} {calYear}</span>
         <button onClick={calToday} className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors">Today</button>
-        <button onClick={() => openAdd()} className="ml-auto px-2.5 py-1 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition-colors">+ New post</button>
+        {editable && (
+          <button onClick={() => openAdd()} className="ml-auto px-2.5 py-1 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition-colors">+ New post</button>
+        )}
       </div>
 
       {/* Calendar grid */}
@@ -88,12 +91,14 @@ export function ManageView() {
                     {p.title} {p.time}
                   </div>
                 ))}
-                <button
-                  onClick={() => openAdd(dStr)}
-                  className="absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center text-gray-300 opacity-0 group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-500 transition-all text-sm"
-                >
-                  +
-                </button>
+                {editable && (
+                  <button
+                    onClick={() => openAdd(dStr)}
+                    className="absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center text-gray-300 opacity-0 group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-500 transition-all text-sm"
+                  >
+                    +
+                  </button>
+                )}
               </div>
             )
           })}
@@ -118,12 +123,14 @@ export function ManageView() {
       {viewPost && (
         <Modal title={viewPost.title} onClose={() => setViewPost(null)} footer={
           <>
-            <button
-              onClick={() => { deletePost(viewPost.id); setViewPost(null) }}
-              className="px-3 py-1.5 border border-red-200 text-red-500 rounded-lg text-sm hover:bg-red-50 mr-auto"
-            >
-              Delete post
-            </button>
+            {editable && (
+              <button
+                onClick={() => { deletePost(viewPost.id); setViewPost(null) }}
+                className="px-3 py-1.5 border border-red-200 text-red-500 rounded-lg text-sm hover:bg-red-50 mr-auto"
+              >
+                Delete post
+              </button>
+            )}
             <button onClick={() => setViewPost(null)} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Close</button>
           </>
         }>

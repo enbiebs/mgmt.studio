@@ -17,6 +17,7 @@ import type {
 // ── Travelers editor — links a booking to Team members ────────
 function TravelersEditor({ item, onChange }: { item: TravelItem; onChange: (personIds: string[]) => void }) {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('tour'))
   const [pickerOpen, setPickerOpen] = useState(false)
   const people = client?.people ?? []
   const linkedIds = item.personIds ?? []
@@ -30,13 +31,16 @@ function TravelersEditor({ item, onChange }: { item: TravelItem; onChange: (pers
         {linked.map((p: Person) => (
           <span key={p.id} className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700">
             {p.name}
-            <button
-              onClick={() => onChange(linkedIds.filter(id => id !== p.id))}
-              className="text-blue-400 hover:text-red-400"
-            >✕</button>
+            {editable && (
+              <button
+                onClick={() => onChange(linkedIds.filter(id => id !== p.id))}
+                className="text-blue-400 hover:text-red-400"
+              >✕</button>
+            )}
           </span>
         ))}
         {linked.length === 0 && <span className="text-[11px] text-gray-300">Not linked to anyone yet</span>}
+        {editable && (
         <div className="relative">
           <button
             onClick={() => setPickerOpen(v => !v)}
@@ -58,6 +62,7 @@ function TravelersEditor({ item, onChange }: { item: TravelItem; onChange: (pers
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   )
@@ -116,6 +121,7 @@ function fmtCost(cost: number | undefined, currency: Currency | undefined) {
 
 // ── Flight card ──────────────────────────────────────────────
 function FlightCard({ item, onRemove, onLink }: { item: TravelFlight; onRemove: () => void; onLink: (personIds: string[]) => void }) {
+  const editable = useStore(s => s.canEdit('tour'))
   return (
     <div className="border border-gray-100 rounded-xl p-4 hover:border-gray-200 transition-colors">
       <div className="flex items-start justify-between mb-2">
@@ -139,10 +145,12 @@ function FlightCard({ item, onRemove, onLink }: { item: TravelFlight; onRemove: 
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge status={item.status} />
-          <button
-            onClick={onRemove}
-            className="text-gray-300 hover:text-red-400 text-xs transition-colors"
-          >✕</button>
+          {editable && (
+            <button
+              onClick={onRemove}
+              className="text-gray-300 hover:text-red-400 text-xs transition-colors"
+            >✕</button>
+          )}
         </div>
       </div>
 
@@ -194,6 +202,7 @@ function FlightCard({ item, onRemove, onLink }: { item: TravelFlight; onRemove: 
 
 // ── Hotel card ───────────────────────────────────────────────
 function HotelCard({ item, onRemove, onLink }: { item: TravelHotel; onRemove: () => void; onLink: (personIds: string[]) => void }) {
+  const editable = useStore(s => s.canEdit('tour'))
   return (
     <div className="border border-gray-100 rounded-xl p-4 hover:border-gray-200 transition-colors">
       <div className="flex items-start justify-between mb-2">
@@ -206,10 +215,12 @@ function HotelCard({ item, onRemove, onLink }: { item: TravelHotel; onRemove: ()
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge status={item.status} />
-          <button
-            onClick={onRemove}
-            className="text-gray-300 hover:text-red-400 text-xs transition-colors"
-          >✕</button>
+          {editable && (
+            <button
+              onClick={onRemove}
+              className="text-gray-300 hover:text-red-400 text-xs transition-colors"
+            >✕</button>
+          )}
         </div>
       </div>
 
@@ -268,6 +279,7 @@ const GROUND_EMOJI: Record<string, string> = {
 }
 
 function GroundCard({ item, onRemove, onLink }: { item: TravelGround; onRemove: () => void; onLink: (personIds: string[]) => void }) {
+  const editable = useStore(s => s.canEdit('tour'))
   const emoji = GROUND_EMOJI[item.type] ?? '🚗'
   const typeLabel = item.type === 'rental-car' ? 'Rental Car' :
                     item.type === 'transfer' ? 'Transfer' :
@@ -290,10 +302,12 @@ function GroundCard({ item, onRemove, onLink }: { item: TravelGround; onRemove: 
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge status={item.status} />
-          <button
-            onClick={onRemove}
-            className="text-gray-300 hover:text-red-400 text-xs transition-colors"
-          >✕</button>
+          {editable && (
+            <button
+              onClick={onRemove}
+              className="text-gray-300 hover:text-red-400 text-xs transition-colors"
+            >✕</button>
+          )}
         </div>
       </div>
 
@@ -358,6 +372,7 @@ function SectionHeader({
 }: {
   icon: string; title: string; count: number; onAdd: () => void
 }) {
+  const editable = useStore(s => s.canEdit('tour'))
   return (
     <div className="flex items-center justify-between mb-3">
       <div className="flex items-center gap-2">
@@ -367,18 +382,28 @@ function SectionHeader({
           <span className="text-[10px] text-gray-400 bg-gray-100 rounded-full px-1.5 py-0.5">{count}</span>
         )}
       </div>
-      <button
-        onClick={onAdd}
-        className="text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors"
-      >
-        + Add
-      </button>
+      {editable && (
+        <button
+          onClick={onAdd}
+          className="text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors"
+        >
+          + Add
+        </button>
+      )}
     </div>
   )
 }
 
 // ── Empty section placeholder ────────────────────────────────
 function EmptySlot({ kind, onAdd }: { kind: string; onAdd: () => void }) {
+  const editable = useStore(s => s.canEdit('tour'))
+  if (!editable) {
+    return (
+      <div className="w-full border-2 border-dashed border-gray-100 rounded-xl p-4 text-center text-xs text-gray-300">
+        No {kind} added yet
+      </div>
+    )
+  }
   return (
     <button
       onClick={onAdd}
@@ -679,6 +704,7 @@ function CostSummary({ items }: { items: TravelItem[] }) {
 // ── Main view ────────────────────────────────────────────────
 export function TravelView() {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('tour'))
   const saveTravel   = useStore(s => s.saveTravelItem)
   const deleteTravel = useStore(s => s.deleteTravelItem)
   const [selectedShowId, setSelectedShowId] = useState<string | null>(null)
@@ -861,15 +887,17 @@ export function TravelView() {
             <CostSummary items={showTravel} />
 
             {/* Push to advance banner */}
-            <div className="mt-6 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 flex items-center justify-between">
-              <div>
-                <div className="text-xs font-semibold text-gray-700">Push to Advance</div>
-                <div className="text-xs text-gray-400">Sync hotel + flight details into the show's advance → logistics</div>
+            {editable && (
+              <div className="mt-6 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-semibold text-gray-700">Push to Advance</div>
+                  <div className="text-xs text-gray-400">Sync hotel + flight details into the show's advance → logistics</div>
+                </div>
+                <button className="px-3 py-1.5 text-xs font-semibold bg-gray-900 text-canvas rounded-lg hover:bg-gray-700 transition-colors">
+                  Sync to Advance →
+                </button>
               </div>
-              <button className="px-3 py-1.5 text-xs font-semibold bg-gray-900 text-canvas rounded-lg hover:bg-gray-700 transition-colors">
-                Sync to Advance →
-              </button>
-            </div>
+            )}
           </div>
         )}
       </div>

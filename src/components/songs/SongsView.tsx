@@ -20,6 +20,7 @@ const STAGES: Stage[] = ['track', 'mix', 'master', 'done']
 
 export function SongsView() {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('songs'))
   const { advanceTrack, deleteTrack, addTrack } = useStore()
   const [addOpen, setAddOpen] = useState(false)
   const [newTitle, setNewTitle] = useState('')
@@ -58,12 +59,14 @@ export function SongsView() {
             {tracks.length} tracks · {done} done · {inProd} in mix/master
             {stalled > 0 && <span className="text-amber-500"> · {stalled} stalled 10d+</span>}
           </div>
-          <button
-            onClick={() => setAddOpen(true)}
-            className="mt-2 px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
-          >
-            + New track
-          </button>
+          {editable && (
+            <button
+              onClick={() => setAddOpen(true)}
+              className="mt-2 px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+            >
+              + New track
+            </button>
+          )}
         </div>
       </div>
 
@@ -148,22 +151,24 @@ export function SongsView() {
                 <td className="px-2.5 py-2.5 text-xs text-gray-400">{t.touched}</td>
                 <td className="px-2.5 py-2.5 text-xs text-gray-400 max-w-[220px] truncate">{t.owner || '—'}</td>
                 <td className="px-2.5 py-2.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <div className="flex gap-1.5">
-                    {idx < STAGES.length - 1 && (
+                  {editable && (
+                    <div className="flex gap-1.5">
+                      {idx < STAGES.length - 1 && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); advanceTrack(t.id) }}
+                          className="px-2 py-0.5 border border-gray-200 rounded text-[11px] font-medium hover:bg-gray-100 transition-colors"
+                        >
+                          → {stageLabel(STAGES[idx + 1])}
+                        </button>
+                      )}
                       <button
-                        onClick={(e) => { e.stopPropagation(); advanceTrack(t.id) }}
-                        className="px-2 py-0.5 border border-gray-200 rounded text-[11px] font-medium hover:bg-gray-100 transition-colors"
+                        onClick={(e) => { e.stopPropagation(); if (confirm(`Delete "${t.title}"?`)) deleteTrack(t.id) }}
+                        className="px-2 py-0.5 border border-gray-200 rounded text-[11px] text-red-400 hover:bg-red-50 transition-colors"
                       >
-                        → {stageLabel(STAGES[idx + 1])}
+                        ✕
                       </button>
-                    )}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); if (confirm(`Delete "${t.title}"?`)) deleteTrack(t.id) }}
-                      className="px-2 py-0.5 border border-gray-200 rounded text-[11px] text-red-400 hover:bg-red-50 transition-colors"
-                    >
-                      ✕
-                    </button>
-                  </div>
+                    </div>
+                  )}
                 </td>
               </tr>
             )
@@ -208,6 +213,7 @@ export function SongsView() {
 }
 
 function TrackDetailModal({ track, onClose }: { track: Track; onClose: () => void }) {
+  const editable = useStore(s => s.canEdit('songs'))
   const { updateTrackDetails } = useStore()
   const [title, setTitle] = useState(track.title)
   const [stage, setStage] = useState<Stage>(track.stage)
@@ -231,17 +237,21 @@ function TrackDetailModal({ track, onClose }: { track: Track; onClose: () => voi
 
   return (
     <Modal title={`Track · ${track.title}`} onClose={onClose} footer={
-      <>
-        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Save</button>
-      </>
+      editable ? (
+        <>
+          <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+          <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Save</button>
+        </>
+      ) : (
+        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Close</button>
+      )
     }>
       <FormField label="Title">
-        <input className={inputClass} value={title} onChange={e => setTitle(e.target.value)} autoFocus />
+        <input className={inputClass} value={title} onChange={e => setTitle(e.target.value)} autoFocus disabled={!editable} />
       </FormField>
       <div className="grid grid-cols-2 gap-3">
         <FormField label="Stage">
-          <select className={selectClass} value={stage} onChange={e => setStage(e.target.value as Stage)}>
+          <select className={selectClass} value={stage} onChange={e => setStage(e.target.value as Stage)} disabled={!editable}>
             <option value="track">Track</option>
             <option value="mix">Mix</option>
             <option value="master">Master</option>
@@ -249,7 +259,7 @@ function TrackDetailModal({ track, onClose }: { track: Track; onClose: () => voi
           </select>
         </FormField>
         <FormField label="Priority">
-          <select className={selectClass} value={priority} onChange={e => setPriority(e.target.value as TrackPriority)}>
+          <select className={selectClass} value={priority} onChange={e => setPriority(e.target.value as TrackPriority)} disabled={!editable}>
             <option value="album-cut">Album Cut</option>
             <option value="single">Single</option>
             <option value="lead-single">Lead Single</option>
@@ -257,10 +267,10 @@ function TrackDetailModal({ track, onClose }: { track: Track; onClose: () => voi
         </FormField>
       </div>
       <FormField label="Next action / owner">
-        <input className={inputClass} placeholder="e.g. Alex — mixing, Awaiting artist approval" value={owner} onChange={e => setOwner(e.target.value)} />
+        <input className={inputClass} placeholder="e.g. Alex — mixing, Awaiting artist approval" value={owner} onChange={e => setOwner(e.target.value)} disabled={!editable} />
       </FormField>
       <FormField label="Due date">
-        <input type="date" className={inputClass} value={dueDate} onChange={e => setDueDate(e.target.value)} />
+        <input type="date" className={inputClass} value={dueDate} onChange={e => setDueDate(e.target.value)} disabled={!editable} />
       </FormField>
       <FormField label="Notes">
         <textarea
@@ -269,6 +279,7 @@ function TrackDetailModal({ track, onClose }: { track: Track; onClose: () => voi
           placeholder="Feedback, revision requests, context for the next person picking this up…"
           value={notes}
           onChange={e => setNotes(e.target.value)}
+          disabled={!editable}
         />
       </FormField>
 

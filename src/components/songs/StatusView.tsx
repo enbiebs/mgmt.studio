@@ -95,6 +95,7 @@ function buildSummary(client: Client, album: Album): string {
 
 export function StatusView() {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('songs'))
   const { deleteStakeholder } = useStore()
   const [addOpen, setAddOpen] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -137,12 +138,14 @@ export function StatusView() {
       {/* Stakeholders */}
       <div className="flex items-center justify-between mb-3">
         <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Stakeholders</div>
-        <button
-          onClick={() => setAddOpen(true)}
-          className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
-        >
-          + Add stakeholder
-        </button>
+        {editable && (
+          <button
+            onClick={() => setAddOpen(true)}
+            className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+          >
+            + Add stakeholder
+          </button>
+        )}
       </div>
 
       {stakeholders.length === 0 && (
@@ -169,12 +172,14 @@ export function StatusView() {
                         </div>
                       )}
                     </div>
-                    <button
-                      onClick={() => { if (confirm(`Remove ${person.name} as a stakeholder?`)) deleteStakeholder(s.id) }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
-                    >
-                      ✕
-                    </button>
+                    {editable && (
+                      <button
+                        onClick={() => { if (confirm(`Remove ${person.name} as a stakeholder?`)) deleteStakeholder(s.id) }}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 )
               })}

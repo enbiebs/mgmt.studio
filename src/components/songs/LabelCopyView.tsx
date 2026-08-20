@@ -6,6 +6,7 @@ import type { Track, TrackLabelCopy } from '@/types'
 
 export function LabelCopyView() {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('songs'))
   const { updateAlbumLabelCopy, updateTrackLabelCopy, scheduleRelease } = useStore()
   const [editTrack, setEditTrack] = useState<Track | null>(null)
 
@@ -31,7 +32,7 @@ export function LabelCopyView() {
         <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Release info</div>
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Release date">
-            <input type="date" className={inputClass}
+            <input type="date" className={inputClass} disabled={!editable}
               value={album.releaseDate ?? ''} onChange={e => e.target.value && scheduleRelease(album.id, e.target.value)} />
           </FormField>
           <div className="flex items-end pb-2 text-xs text-gray-400">
@@ -40,27 +41,27 @@ export function LabelCopyView() {
               : 'Set a date to auto-populate the content calendar with a rollout.'}
           </div>
           <FormField label="UPC / Barcode">
-            <input className={inputClass} placeholder="Not assigned"
+            <input className={inputClass} placeholder="Not assigned" disabled={!editable}
               value={lc.upc ?? ''} onChange={e => updateAlbumLabelCopy(album.id, { upc: e.target.value })} />
           </FormField>
           <FormField label="Label">
-            <input className={inputClass} placeholder="e.g. Independent"
+            <input className={inputClass} placeholder="e.g. Independent" disabled={!editable}
               value={lc.label ?? ''} onChange={e => updateAlbumLabelCopy(album.id, { label: e.target.value })} />
           </FormField>
           <FormField label="Primary artist">
-            <input className={inputClass} placeholder={client.name}
+            <input className={inputClass} placeholder={client.name} disabled={!editable}
               value={lc.primaryArtist ?? ''} onChange={e => updateAlbumLabelCopy(album.id, { primaryArtist: e.target.value })} />
           </FormField>
           <FormField label="Genre">
-            <input className={inputClass} placeholder={client.genre}
+            <input className={inputClass} placeholder={client.genre} disabled={!editable}
               value={lc.genre ?? ''} onChange={e => updateAlbumLabelCopy(album.id, { genre: e.target.value })} />
           </FormField>
           <FormField label="℗ line">
-            <input className={inputClass} placeholder={`℗ ${new Date().getFullYear()} …`}
+            <input className={inputClass} placeholder={`℗ ${new Date().getFullYear()} …`} disabled={!editable}
               value={lc.copyrightP ?? ''} onChange={e => updateAlbumLabelCopy(album.id, { copyrightP: e.target.value })} />
           </FormField>
           <FormField label="© line">
-            <input className={inputClass} placeholder={`© ${new Date().getFullYear()} …`}
+            <input className={inputClass} placeholder={`© ${new Date().getFullYear()} …`} disabled={!editable}
               value={lc.copyrightC ?? ''} onChange={e => updateAlbumLabelCopy(album.id, { copyrightC: e.target.value })} />
           </FormField>
         </div>
@@ -85,12 +86,14 @@ export function LabelCopyView() {
               <td className="px-2.5 py-2.5 text-xs text-gray-400">{t.labelCopy?.explicit ? 'E' : '—'}</td>
               <td className="px-2.5 py-2.5 text-xs text-gray-400">{t.labelCopy?.duration || '—'}</td>
               <td className="px-2.5 py-2.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => setEditTrack(t)}
-                  className="px-2 py-0.5 border border-gray-200 rounded text-[11px] font-medium hover:bg-gray-100 transition-colors"
-                >
-                  Edit
-                </button>
+                {editable && (
+                  <button
+                    onClick={() => setEditTrack(t)}
+                    className="px-2 py-0.5 border border-gray-200 rounded text-[11px] font-medium hover:bg-gray-100 transition-colors"
+                  >
+                    Edit
+                  </button>
+                )}
               </td>
             </tr>
           ))}

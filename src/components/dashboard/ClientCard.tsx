@@ -6,6 +6,10 @@ import { fmt, initials } from '@/lib/utils'
 import type { Client } from '@/types'
 
 export function ClientCard({ client: c }: { client: Client }) {
+  // Client create/edit/delete is manager-only structurally (clients RLS
+  // requires role = 'manager'), unlike everything else which is scoped
+  // per-section — so this checks role directly, not a section grant.
+  const isManager = useStore(s => s.role === 'manager')
   const { openClient, openModal, deleteClient } = useStore()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -34,6 +38,7 @@ export function ClientCard({ client: c }: { client: Client }) {
       onClick={() => openClient(c.id)}
     >
       {/* ── 3-dot menu ── */}
+      {isManager && (
       <div
         ref={menuRef}
         className="absolute top-4 right-4"
@@ -62,6 +67,7 @@ export function ClientCard({ client: c }: { client: Client }) {
           </div>
         )}
       </div>
+      )}
 
       {/* ── Header ── */}
       <div className="flex items-center gap-3 mb-5">

@@ -19,6 +19,7 @@ export const CREW_ROLE_LABEL: Record<CrewRole, string> = {
 
 export function CrewView() {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('tour'))
   const { deleteCrewMember } = useStore()
   const [addOpen, setAddOpen] = useState(false)
 
@@ -33,12 +34,14 @@ export function CrewView() {
           <div className="font-serif text-2xl font-medium">Tour Crew</div>
           <div className="text-sm text-gray-400 mt-1">{crew.length} on the roster</div>
         </div>
-        <button
-          onClick={() => setAddOpen(true)}
-          className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
-        >
-          + Add crew member
-        </button>
+        {editable && (
+          <button
+            onClick={() => setAddOpen(true)}
+            className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+          >
+            + Add crew member
+          </button>
+        )}
       </div>
 
       {crew.length === 0 && (
@@ -67,12 +70,14 @@ export function CrewView() {
               <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-gray-100 text-gray-600 flex-shrink-0">
                 {CREW_ROLE_LABEL[cm.role]}
               </span>
-              <button
-                onClick={() => { if (confirm(`Remove ${person.name} from crew?`)) deleteCrewMember(cm.id) }}
-                className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
-              >
-                ✕
-              </button>
+              {editable && (
+                <button
+                  onClick={() => { if (confirm(`Remove ${person.name} from crew?`)) deleteCrewMember(cm.id) }}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           )
         })}

@@ -132,6 +132,9 @@ interface StudioState {
   // client, edit limited to 'projects' (the todo/request list). Agent/
   // lawyer/team: driven by resolved access_grants.
   hasAccess: (section: MainSection, clientId?: string, requireEdit?: boolean) => boolean
+  // Shorthand for hasAccess(section, undefined, true) against the current
+  // client — what every Add/Edit/Delete button in a view should check.
+  canEdit: (section: MainSection) => boolean
   // Client ids the active identity may see in a roster — 'all' for manager,
   // otherwise the specific set implied by grants/authClientId.
   accessibleClientIds: () => 'all' | string[]
@@ -304,6 +307,8 @@ export const useStore = create<StudioState>((set, get) => ({
       g.section === key && (g.clientId === null || g.clientId === cid) && (!requireEdit || g.canEdit)
     )
   },
+
+  canEdit: (section) => get().hasAccess(section, undefined, true),
 
   accessibleClientIds: () => {
     const s = get()

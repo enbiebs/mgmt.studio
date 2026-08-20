@@ -46,6 +46,7 @@ const STATUS_NEXT: Record<ProjectStatus, ProjectStatus | null> = {
 
 export function ProjectsView() {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('projects'))
   const { addProject, updateProjectStatus, assignProject, deleteProject, openModal, modal, closeModal } = useStore()
   const [filter, setFilter] = useState<'all' | ProjectStatus>('all')
 
@@ -77,12 +78,14 @@ export function ProjectsView() {
             {projects.length} total
           </div>
         </div>
-        <button
-          onClick={() => openModal('add-project')}
-          className="px-3 py-1.5 bg-[#4c8df6] text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition-colors"
-        >
-          + New project
-        </button>
+        {editable && (
+          <button
+            onClick={() => openModal('add-project')}
+            className="px-3 py-1.5 bg-[#4c8df6] text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            + New project
+          </button>
+        )}
       </div>
 
       {/* Filter tabs */}
@@ -152,7 +155,8 @@ export function ProjectsView() {
                     <select
                       value={project.assignee ?? ''}
                       onChange={e => assignProject(project.id, e.target.value as Stakeholder)}
-                      className="text-xs text-gray-500 border border-gray-200 rounded-md px-2 py-0.5 bg-canvas hover:border-gray-300 transition-colors cursor-pointer"
+                      disabled={!editable}
+                      className="text-xs text-gray-500 border border-gray-200 rounded-md px-2 py-0.5 bg-canvas hover:border-gray-300 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                       title={project.assignee ? STAKEHOLDER_TOOLTIPS[project.assignee] : 'Unassigned'}
                     >
                       <option value="">Unassigned</option>
@@ -169,23 +173,25 @@ export function ProjectsView() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {next && (
+                {editable && (
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {next && (
+                      <button
+                        onClick={() => updateProjectStatus(project.id, next)}
+                        className="px-2.5 py-1 text-[11px] font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors whitespace-nowrap"
+                      >
+                        → {STATUS_CONFIG[next].label}
+                      </button>
+                    )}
                     <button
-                      onClick={() => updateProjectStatus(project.id, next)}
-                      className="px-2.5 py-1 text-[11px] font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors whitespace-nowrap"
+                      onClick={() => deleteProject(project.id)}
+                      className="text-gray-300 hover:text-red-400 transition-colors text-lg leading-none px-1"
+                      title="Remove"
                     >
-                      → {STATUS_CONFIG[next].label}
+                      ×
                     </button>
-                  )}
-                  <button
-                    onClick={() => deleteProject(project.id)}
-                    className="text-gray-300 hover:text-red-400 transition-colors text-lg leading-none px-1"
-                    title="Remove"
-                  >
-                    ×
-                  </button>
-                </div>
+                  </div>
+                )}
               </div>
             </div>
           )

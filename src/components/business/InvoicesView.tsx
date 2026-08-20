@@ -41,6 +41,7 @@ type InvFilter = 'all' | InvoiceStatus
 
 export function InvoicesView() {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('business'))
   const [filter, setFilter] = useState<InvFilter>('all')
   const [selected, setSelected] = useState<Invoice | null>(null)
   const [addOpen, setAddOpen] = useState(false)
@@ -64,12 +65,14 @@ export function InvoicesView() {
   return (
     <div className="flex-1 overflow-auto p-6">
       <div className="flex items-center justify-end mb-4">
-        <button
-          onClick={() => setAddOpen(true)}
-          className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
-        >
-          + New invoice
-        </button>
+        {editable && (
+          <button
+            onClick={() => setAddOpen(true)}
+            className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+          >
+            + New invoice
+          </button>
+        )}
       </div>
 
       {/* Summary cards */}
@@ -325,6 +328,7 @@ function InvoiceDetail({ invoice: inv, onClose }: { invoice: Invoice; onClose: (
 
 function InvoicePaymentLinker({ invoice: inv }: { invoice: Invoice }) {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('business'))
   const { linkTransactionToInvoice } = useStore()
   const [pickerOpen, setPickerOpen] = useState(false)
   if (!client) return null
@@ -339,8 +343,12 @@ function InvoicePaymentLinker({ invoice: inv }: { invoice: Invoice }) {
       {linked ? (
         <div className="flex items-center justify-between text-xs bg-green-50 text-green-700 rounded-lg px-3 py-2">
           <span>Confirmed — {linked.merchantName ?? linked.name} · {linked.date} · {fmt(Math.abs(linked.amount), linked.currency)}</span>
-          <button onClick={() => linkTransactionToInvoice(linked.id, null)} className="text-green-500 hover:text-red-500 font-medium">Unlink</button>
+          {editable && (
+            <button onClick={() => linkTransactionToInvoice(linked.id, null)} className="text-green-500 hover:text-red-500 font-medium">Unlink</button>
+          )}
         </div>
+      ) : !editable ? (
+        <div className="text-xs text-gray-400 italic px-3 py-2">No bank payment linked yet</div>
       ) : (
         <div className="relative">
           <button

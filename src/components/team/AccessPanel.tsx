@@ -29,6 +29,12 @@ function levelOf(grants: GrantRow[], section: string, clientId: string): Level {
 
 export function AccessPanel({ person }: { person: Person }) {
   const clients = useStore(s => s.data.clients)
+  // Invite-sending and grant management are manager-exclusive at the RLS
+  // level (access_grants select/insert/update/delete all check role =
+  // 'manager'), so a non-manager querying this would just get empty
+  // results back — hide the panel entirely instead of showing a
+  // misleading "no login yet" state.
+  const isManager = useStore(s => s.role === 'manager')
   const [loading, setLoading] = useState(true)
   const [member, setMember] = useState<Member>(null)
   const [grants, setGrants] = useState<GrantRow[]>([])
@@ -37,7 +43,8 @@ export function AccessPanel({ person }: { person: Person }) {
   const [inviting, setInviting] = useState(false)
   const [inviteMessage, setInviteMessage] = useState<string | null>(null)
 
-  async function fetchAccess(personId: string) {
+  async function fetchAccess(personId: string): Promise<{ member: Member; grants: GrantRow[] }> {
+    if (!isManager) return { member: null, grants: [] }
     const { createClient } = await import('@/lib/supabase/client')
     const supabase = createClient()
     const { data: wm } = await supabase
@@ -54,7 +61,7 @@ export function AccessPanel({ person }: { person: Person }) {
       setGrants(grants)
       setLoading(false)
     })
-  }, [person.id])
+  }, [person.id, isManager])
 
   async function sendInvite() {
     if (!inviteEmail.trim()) return
@@ -95,6 +102,8 @@ export function AccessPanel({ person }: { person: Person }) {
       setGrants(g => g.filter(row => row.id !== existing.id))
     }
   }
+
+  if (!isManager) return null
 
   if (loading) {
     return <div className="text-xs text-gray-300 py-2">Checking login status…</div>

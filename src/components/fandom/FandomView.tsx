@@ -33,6 +33,7 @@ const ACTIVITY_ICON: Record<string, string> = {
 
 export function FandomView() {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('fandom'))
   const [tab, setTab] = useState<FandomTab>('overview')
   const [msgCompose, setMsgCompose] = useState(false)
   const [msgSegment, setMsgSegment] = useState('all')
@@ -345,7 +346,8 @@ export function FandomView() {
               </div>
               <button
                 onClick={() => setMsgCompose(v => !v)}
-                className="px-3 py-1.5 bg-amber-500 text-white text-xs font-semibold rounded-lg hover:bg-amber-600 transition-colors"
+                disabled={!editable}
+                className="px-3 py-1.5 bg-amber-500 text-white text-xs font-semibold rounded-lg hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 + New message
               </button>

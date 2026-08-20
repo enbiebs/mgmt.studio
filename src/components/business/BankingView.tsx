@@ -5,6 +5,7 @@ import { useStore } from '@/lib/store'
 import { fmt } from '@/lib/utils'
 
 function ConnectBankButton({ clientId }: { clientId: string }) {
+  const editable = useStore(s => s.canEdit('business'))
   const loadBankData = useStore(s => s.loadBankData)
   const [linkToken, setLinkToken] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -58,6 +59,8 @@ function ConnectBankButton({ clientId }: { clientId: string }) {
     if (linkToken && ready) open()
   }, [linkToken, ready, open])
 
+  if (!editable) return null
+
   return (
     <div>
       <button
@@ -73,6 +76,7 @@ function ConnectBankButton({ clientId }: { clientId: string }) {
 }
 
 function RefreshButton({ clientId }: { clientId: string }) {
+  const editable = useStore(s => s.canEdit('business'))
   const loadBankData = useStore(s => s.loadBankData)
   const [busy, setBusy] = useState(false)
 
@@ -87,6 +91,8 @@ function RefreshButton({ clientId }: { clientId: string }) {
     setBusy(false)
   }
 
+  if (!editable) return null
+
   return (
     <button
       onClick={refresh}
@@ -100,6 +106,7 @@ function RefreshButton({ clientId }: { clientId: string }) {
 
 export function BankingView() {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('business'))
   const { markDepositDone, dismissDeposit, loadBankData } = useStore()
 
   useEffect(() => {
@@ -197,10 +204,12 @@ export function BankingView() {
                       </div>
                     ))}
                   </div>
-                  <div className="flex gap-2 mt-4">
-                    <button onClick={() => markDepositDone(d.id)} className="px-3 py-1.5 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition-colors">Mark all moved</button>
-                    <button onClick={() => dismissDeposit(d.id)} className="px-3 py-1.5 border border-gray-200 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors">Dismiss</button>
-                  </div>
+                  {editable && (
+                    <div className="flex gap-2 mt-4">
+                      <button onClick={() => markDepositDone(d.id)} className="px-3 py-1.5 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition-colors">Mark all moved</button>
+                      <button onClick={() => dismissDeposit(d.id)} className="px-3 py-1.5 border border-gray-200 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors">Dismiss</button>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -230,9 +239,11 @@ export function BankingView() {
         </>
       )}
 
-      <button className="text-sm font-medium text-gray-400 hover:text-gray-600 transition-colors">
-        + Log a deposit
-      </button>
+      {editable && (
+        <button className="text-sm font-medium text-gray-400 hover:text-gray-600 transition-colors">
+          + Log a deposit
+        </button>
+      )}
     </div>
   )
 }

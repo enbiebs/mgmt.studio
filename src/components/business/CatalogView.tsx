@@ -19,6 +19,7 @@ function unlinkedIncome(transactions: BankTransaction[]) {
 
 function TransactionLinker({ workId, currency }: { workId: string; currency: Currency }) {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('business'))
   const { linkTransactionToCatalogWork } = useStore()
   const [pickerOpen, setPickerOpen] = useState(false)
   if (!client) return null
@@ -38,10 +39,13 @@ function TransactionLinker({ workId, currency }: { workId: string; currency: Cur
         {linked.map(t => (
           <span key={t.id} className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700">
             {t.merchantName ?? t.name} · {t.date}
-            <button onClick={() => linkTransactionToCatalogWork(t.id, null)} className="text-green-400 hover:text-red-400">✕</button>
+            {editable && (
+              <button onClick={() => linkTransactionToCatalogWork(t.id, null)} className="text-green-400 hover:text-red-400">✕</button>
+            )}
           </span>
         ))}
         {linked.length === 0 && <span className="text-[11px] text-gray-300">No bank income linked yet</span>}
+        {editable && (
         <div className="relative">
           <button onClick={() => setPickerOpen(v => !v)} className="text-[10px] text-gray-400 hover:text-blue-500 font-medium px-1">+ Link</button>
           {pickerOpen && (
@@ -61,6 +65,7 @@ function TransactionLinker({ workId, currency }: { workId: string; currency: Cur
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   )
@@ -110,6 +115,7 @@ function AddWorkModal({ onClose }: { onClose: () => void }) {
 
 export function CatalogView() {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('business'))
   const { deleteCatalogWork } = useStore()
   const [addOpen, setAddOpen] = useState(false)
   if (!client) return null
@@ -122,12 +128,14 @@ export function CatalogView() {
           Works Catalog · {works.length} works
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setAddOpen(true)}
-            className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
-          >
-            + Add work
-          </button>
+          {editable && (
+            <button
+              onClick={() => setAddOpen(true)}
+              className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+            >
+              + Add work
+            </button>
+          )}
           <button className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors">
             Export catalog
           </button>
@@ -160,12 +168,14 @@ export function CatalogView() {
               <div className="font-serif font-semibold text-sm text-right flex-shrink-0 w-16">
                 {w.amount > 0 ? fmt(w.amount, w.currency) : '—'}
               </div>
-              <button
-                onClick={() => { if (confirm(`Delete "${w.title}"? This also unlinks any bank income confirmed against it.`)) deleteCatalogWork(w.id) }}
-                className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
-              >
-                ✕
-              </button>
+              {editable && (
+                <button
+                  onClick={() => { if (confirm(`Delete "${w.title}"? This also unlinks any bank income confirmed against it.`)) deleteCatalogWork(w.id) }}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
+                >
+                  ✕
+                </button>
+              )}
             </div>
             <TransactionLinker workId={w.id} currency={w.currency} />
           </div>

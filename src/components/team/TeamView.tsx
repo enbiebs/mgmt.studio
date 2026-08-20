@@ -16,6 +16,7 @@ function travelLabel(item: TravelItem): string {
 
 export function TeamView() {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('team'))
   const { deletePerson } = useStore()
   const [addOpen, setAddOpen] = useState(false)
   const [openPersonId, setOpenPersonId] = useState<string | null>(null)
@@ -48,12 +49,14 @@ export function TeamView() {
             One record per person, shared across the whole app — crew, stakeholders, travel, and more all point back here
           </div>
         </div>
-        <button
-          onClick={() => setAddOpen(true)}
-          className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors flex-shrink-0"
-        >
-          + Add team member
-        </button>
+        {editable && (
+          <button
+            onClick={() => setAddOpen(true)}
+            className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors flex-shrink-0"
+          >
+            + Add team member
+          </button>
+        )}
       </div>
 
       {people.length === 0 && (
@@ -84,12 +87,14 @@ export function TeamView() {
                   <div className="text-[11px] text-gray-300 mt-1">Not linked anywhere yet</div>
                 )}
               </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); if (confirm(`Delete ${p.name}? This also removes them from anywhere they're linked (crew, stakeholders).`)) deletePerson(p.id) }}
-                className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
-              >
-                ✕
-              </button>
+              {editable && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); if (confirm(`Delete ${p.name}? This also removes them from anywhere they're linked (crew, stakeholders).`)) deletePerson(p.id) }}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           )
         })}
@@ -102,6 +107,7 @@ export function TeamView() {
 }
 
 function PersonModal({ person, links, onClose }: { person?: Person; links?: string[]; onClose: () => void }) {
+  const editable = useStore(s => s.canEdit('team'))
   const { addPerson, updatePerson } = useStore()
   const [name, setName] = useState(person?.name ?? '')
   const [email, setEmail] = useState(person?.email ?? '')
@@ -133,27 +139,31 @@ function PersonModal({ person, links, onClose }: { person?: Person; links?: stri
 
   return (
     <Modal title={person ? person.name : 'Add a team member'} onClose={onClose} footer={
-      <>
-        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Save</button>
-      </>
+      editable ? (
+        <>
+          <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+          <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Save</button>
+        </>
+      ) : (
+        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Close</button>
+      )
     }>
       <FormField label="Name">
-        <input className={inputClass} placeholder="Full name" value={name} onChange={e => setName(e.target.value)} autoFocus />
+        <input className={inputClass} placeholder="Full name" value={name} onChange={e => setName(e.target.value)} autoFocus disabled={!editable} />
       </FormField>
       <div className="grid grid-cols-2 gap-3">
         <FormField label="Email">
-          <input className={inputClass} type="email" value={email} onChange={e => setEmail(e.target.value)} />
+          <input className={inputClass} type="email" value={email} onChange={e => setEmail(e.target.value)} disabled={!editable} />
         </FormField>
         <FormField label="Phone">
-          <input className={inputClass} value={phone} onChange={e => setPhone(e.target.value)} />
+          <input className={inputClass} value={phone} onChange={e => setPhone(e.target.value)} disabled={!editable} />
         </FormField>
       </div>
       <FormField label="Org / company">
-        <input className={inputClass} value={org} onChange={e => setOrg(e.target.value)} />
+        <input className={inputClass} value={org} onChange={e => setOrg(e.target.value)} disabled={!editable} />
       </FormField>
       <FormField label="Notes">
-        <input className={inputClass} value={notes} onChange={e => setNotes(e.target.value)} />
+        <input className={inputClass} value={notes} onChange={e => setNotes(e.target.value)} disabled={!editable} />
       </FormField>
 
       {person && (
@@ -169,16 +179,18 @@ function PersonModal({ person, links, onClose }: { person?: Person; links?: stri
 
           <div className="pt-1 border-t border-gray-100 mt-3">
             <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 mt-3">Comms log</div>
-            <div className="flex gap-2 mb-2">
-              <input
-                className={inputClass}
-                placeholder="e.g. Reminded her to confirm the flight"
-                value={newLog}
-                onChange={e => setNewLog(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleLogEntry() } }}
-              />
-              <button type="button" onClick={handleLogEntry} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 flex-shrink-0">Log</button>
-            </div>
+            {editable && (
+              <div className="flex gap-2 mb-2">
+                <input
+                  className={inputClass}
+                  placeholder="e.g. Reminded her to confirm the flight"
+                  value={newLog}
+                  onChange={e => setNewLog(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleLogEntry() } }}
+                />
+                <button type="button" onClick={handleLogEntry} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 flex-shrink-0">Log</button>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5 max-h-32 overflow-auto">
               {(person.activity ?? []).length === 0 && (
                 <div className="text-xs text-gray-300">Nothing logged yet</div>

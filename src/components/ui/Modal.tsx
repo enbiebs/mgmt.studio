@@ -52,5 +52,5 @@ export function FormField({ label, children }: { label: string; children: React.
   )
 }
 
-export const inputClass = 'w-full px-2.5 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-400 bg-canvas transition-colors duration-150'
-export const selectClass = 'w-full px-2.5 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-400 bg-canvas transition-colors duration-150'
+export const inputClass = 'w-full px-2.5 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-400 bg-canvas transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed'
+export const selectClass = 'w-full px-2.5 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-400 bg-canvas transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed'

@@ -7,6 +7,7 @@ const PHASE_ORDER: ChecklistPhase[] = ['Rights & Credits', 'Audio Delivery', 'Re
 
 export function ChecklistView() {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('songs'))
   const { toggleChecklistItem, updateChecklistNote } = useStore()
 
   if (!client) return null
@@ -45,17 +46,19 @@ export function ChecklistView() {
                     type="checkbox"
                     checked={item.done}
                     onChange={() => toggleChecklistItem(album.id, item.key)}
-                    className="mt-0.5 w-4 h-4 flex-shrink-0"
+                    disabled={!editable}
+                    className="mt-0.5 w-4 h-4 flex-shrink-0 disabled:cursor-not-allowed"
                   />
                   <div className="flex-1 min-w-0">
                     <div className={`text-sm font-medium ${item.done ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
                       {item.label}
                     </div>
                     <input
-                      className="w-full mt-1 text-xs text-gray-400 outline-none bg-transparent placeholder:text-gray-300"
+                      className="w-full mt-1 text-xs text-gray-400 outline-none bg-transparent placeholder:text-gray-300 disabled:cursor-not-allowed"
                       placeholder="Add a note…"
                       defaultValue={item.note ?? ''}
                       onBlur={e => updateChecklistNote(album.id, item.key, e.target.value)}
+                      disabled={!editable}
                     />
                   </div>
                 </div>
