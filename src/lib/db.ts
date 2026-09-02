@@ -705,6 +705,24 @@ export async function deleteDeposit(depositId: string) {
   await supabase.from('deposits').delete().eq('id', depositId)
 }
 
+// ── Royalty stream ───────────────────────────────────────────
+export async function upsertRoyaltyStream(
+  stream: { id: string; name: string; type: string; amount: number; currency: string; period: string },
+  clientId: string
+) {
+  const supabase = createClient()
+  await supabase.from('royalty_streams').upsert({
+    id: stream.id, client_id: clientId,
+    name: stream.name, type: stream.type,
+    amount: stream.amount, currency: stream.currency, period: stream.period,
+  })
+}
+
+export async function deleteRoyaltyStream(streamId: string) {
+  const supabase = createClient()
+  await supabase.from('royalty_streams').delete().eq('id', streamId)
+}
+
 // ── Catalog work ───────────────────────────────────────────
 export async function upsertCatalogWork(work: CatalogWork, clientId: string) {
   const supabase = createClient()

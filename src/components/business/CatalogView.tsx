@@ -113,6 +113,23 @@ function AddWorkModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+function exportCatalogCsv(clientName: string, works: { title: string; ipi?: string; writers: string; amount: number; currency: string; bmi: string; mlc: string; sx: string; ppl: string }[]) {
+  const header = ['Title', 'IPI', 'Writers', 'Amount', 'Currency', 'BMI', 'MLC', 'SX', 'PPL']
+  const rows = works.map(w => [w.title, w.ipi ?? '', w.writers, String(w.amount), w.currency, w.bmi, w.mlc, w.sx, w.ppl])
+  const csv = [header, ...rows]
+    .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${clientName.replace(/[^a-z0-9]+/gi, '-')}-catalog.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 export function CatalogView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('business'))
@@ -136,7 +153,11 @@ export function CatalogView() {
               + Add work
             </button>
           )}
-          <button className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors">
+          <button
+            onClick={() => exportCatalogCsv(client.name, works)}
+            disabled={works.length === 0}
+            className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
             Export catalog
           </button>
         </div>

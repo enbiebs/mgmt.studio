@@ -707,8 +707,10 @@ export function TravelView() {
   const editable = useStore(s => s.canEdit('tour'))
   const saveTravel   = useStore(s => s.saveTravelItem)
   const deleteTravel = useStore(s => s.deleteTravelItem)
+  const saveAdvance  = useStore(s => s.saveAdvance)
   const [selectedShowId, setSelectedShowId] = useState<string | null>(null)
   const [addMode, setAddMode] = useState<AddMode>(null)
+  const [synced, setSynced] = useState(false)
 
   if (!client) return null
 
@@ -735,6 +737,48 @@ export function TravelView() {
 
   function linkTravelers(item: TravelItem, personIds: string[]) {
     saveTravel({ ...item, personIds })
+  }
+
+  function syncToAdvance() {
+    if (!show) return
+    const advances = client!.tour.advances ?? []
+    const existing = advances.find(a => a.showId === show.id)
+    const advance = existing ?? {
+      id: 'adv-' + uid(), showId: show.id, status: 'draft' as const,
+      schedule: {}, production: {}, hospitality: {}, logistics: {}, contacts: [],
+    }
+
+    const flightsText = flights.map(f => {
+      const route = [f.from, f.to].filter(Boolean).join(' → ')
+      return [f.airline, f.flightNumber, route, f.departure].filter(Boolean).join(' · ')
+    }).join('\n')
+
+    const groundText = ground.map(g => {
+      const route = [g.from, g.to].filter(Boolean).join(' → ')
+      return [g.provider, g.vehicleType, route, g.pickupTime].filter(Boolean).join(' · ')
+    }).join('\n')
+
+    const primaryHotel = hotels[0]
+
+    saveAdvance({
+      ...advance,
+      logistics: {
+        ...advance.logistics,
+        flights: flightsText || advance.logistics.flights,
+        groundTransport: groundText || advance.logistics.groundTransport,
+      },
+      hospitality: primaryHotel ? {
+        ...advance.hospitality,
+        hotel: primaryHotel.name ?? advance.hospitality.hotel,
+        hotelAddress: primaryHotel.address ?? advance.hospitality.hotelAddress,
+        hotelPhone: primaryHotel.phone ?? advance.hospitality.hotelPhone,
+        hotelConfirmation: primaryHotel.confirmationCode ?? advance.hospitality.hotelConfirmation,
+        checkIn: primaryHotel.checkIn ?? advance.hospitality.checkIn,
+        checkOut: primaryHotel.checkOut ?? advance.hospitality.checkOut,
+      } : advance.hospitality,
+    })
+    setSynced(true)
+    setTimeout(() => setSynced(false), 2000)
   }
 
   const showDate = show ? new Date(show.date) : null
@@ -893,8 +937,12 @@ export function TravelView() {
                   <div className="text-xs font-semibold text-gray-700">Push to Advance</div>
                   <div className="text-xs text-gray-400">Sync hotel + flight details into the show's advance → logistics</div>
                 </div>
-                <button className="px-3 py-1.5 text-xs font-semibold bg-gray-900 text-canvas rounded-lg hover:bg-gray-700 transition-colors">
-                  Sync to Advance →
+                <button
+                  onClick={syncToAdvance}
+                  disabled={flights.length + hotels.length + ground.length === 0}
+                  className="px-3 py-1.5 text-xs font-semibold bg-gray-900 text-canvas rounded-lg hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  {synced ? 'Synced ✓' : 'Sync to Advance →'}
                 </button>
               </div>
             )}

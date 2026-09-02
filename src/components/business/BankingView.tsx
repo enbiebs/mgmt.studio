@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 import { useStore } from '@/lib/store'
 import { fmt } from '@/lib/utils'
+import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
+import type { Currency } from '@/types'
 
 function ConnectBankButton({ clientId }: { clientId: string }) {
   const editable = useStore(s => s.canEdit('business'))
@@ -108,6 +110,7 @@ export function BankingView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('business'))
   const { markDepositDone, dismissDeposit, loadBankData } = useStore()
+  const [addOpen, setAddOpen] = useState(false)
 
   useEffect(() => {
     if (client?.id) loadBankData(client.id)
@@ -240,10 +243,77 @@ export function BankingView() {
       )}
 
       {editable && (
-        <button className="text-sm font-medium text-gray-400 hover:text-gray-600 transition-colors">
+        <button
+          onClick={() => setAddOpen(true)}
+          className="text-sm font-medium text-gray-400 hover:text-gray-600 transition-colors"
+        >
           + Log a deposit
         </button>
       )}
+
+      {addOpen && <AddDepositModal onClose={() => setAddOpen(false)} />}
     </div>
+  )
+}
+
+function AddDepositModal({ onClose }: { onClose: () => void }) {
+  const { addDeposit } = useStore()
+  const [name, setName] = useState('')
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [amount, setAmount] = useState('')
+  const [currency, setCurrency] = useState<Currency>('USD')
+  const [mgmtPct, setMgmtPct] = useState('')
+  const [lawyerPct, setLawyerPct] = useState('')
+  const [taxesPct, setTaxesPct] = useState('')
+
+  function handleAdd() {
+    const n = Number(amount)
+    if (!name.trim() || !date || !n) return
+    addDeposit(
+      name.trim(), date, n, currency,
+      (Number(mgmtPct) || 0) / 100,
+      (Number(lawyerPct) || 0) / 100,
+      (Number(taxesPct) || 0) / 100,
+    )
+    onClose()
+  }
+
+  return (
+    <Modal title="Log a deposit" onClose={onClose} footer={
+      <>
+        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+        <button onClick={handleAdd} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Log deposit</button>
+      </>
+    }>
+      <FormField label="Source">
+        <input className={inputClass} placeholder="e.g. Sync Licensing Co." value={name} onChange={e => setName(e.target.value)} autoFocus />
+      </FormField>
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label="Date">
+          <input type="date" className={inputClass} value={date} onChange={e => setDate(e.target.value)} />
+        </FormField>
+        <FormField label="Amount">
+          <input type="number" min="0" className={inputClass} value={amount} onChange={e => setAmount(e.target.value)} />
+        </FormField>
+      </div>
+      <FormField label="Currency">
+        <select className={selectClass} value={currency} onChange={e => setCurrency(e.target.value as Currency)}>
+          <option value="USD">USD</option>
+          <option value="GBP">GBP</option>
+          <option value="EUR">EUR</option>
+        </select>
+      </FormField>
+      <div className="grid grid-cols-3 gap-3">
+        <FormField label="Management %">
+          <input type="number" min="0" max="100" className={inputClass} placeholder="0" value={mgmtPct} onChange={e => setMgmtPct(e.target.value)} />
+        </FormField>
+        <FormField label="Lawyer %">
+          <input type="number" min="0" max="100" className={inputClass} placeholder="0" value={lawyerPct} onChange={e => setLawyerPct(e.target.value)} />
+        </FormField>
+        <FormField label="Taxes %">
+          <input type="number" min="0" max="100" className={inputClass} placeholder="0" value={taxesPct} onChange={e => setTaxesPct(e.target.value)} />
+        </FormField>
+      </div>
+    </Modal>
   )
 }

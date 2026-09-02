@@ -41,6 +41,7 @@ import {
   upsertShow, deleteShow as dbDeleteShow,
   upsertPost, deletePost as dbDeletePost, replaceAutoPosts,
   upsertDeposit, deleteDeposit as dbDeleteDeposit,
+  upsertRoyaltyStream, deleteRoyaltyStream as dbDeleteRoyaltyStream,
   upsertProject, deleteProject as dbDeleteProject,
   upsertArtistTodo, deleteArtistTodo as dbDeleteArtistTodo,
   upsertCrewMember, deleteCrewMember as dbDeleteCrewMember,
@@ -236,7 +237,12 @@ interface StudioState {
   addPost: (date: string, title: string, time: string, type: string) => void
   deletePost: (postId: string) => void
 
+  // ── Royalties ──
+  addRoyaltyStream: (name: string, type: string, amount: number, currency: Currency, period: string) => void
+  deleteRoyaltyStream: (streamId: string) => void
+
   // ── Banking ──
+  addDeposit: (name: string, date: string, amount: number, currency: Currency, mgmt: number, lawyer: number, taxes: number) => void
   markDepositDone: (depositId: string) => void
   dismissDeposit: (depositId: string) => void
 
@@ -1215,7 +1221,70 @@ export const useStore = create<StudioState>((set, get) => ({
     dbDeletePost(postId).catch(console.error)
   },
 
+  // ── Royalties ──
+  addRoyaltyStream: (name, type, amount, currency, period) => {
+    const { data, clientId, workspaceId } = get()
+    const newStream = { id: 'roy-' + uid(), name, type, amount, currency, period }
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          business: {
+            ...c.business,
+            royalties: { streams: [newStream, ...c.business.royalties.streams] },
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId) upsertRoyaltyStream(newStream, clientId).catch(console.error)
+  },
+
+  deleteRoyaltyStream: (streamId) => {
+    const { data, clientId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          business: {
+            ...c.business,
+            royalties: { streams: c.business.royalties.streams.filter(s => s.id !== streamId) },
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    dbDeleteRoyaltyStream(streamId).catch(console.error)
+  },
+
   // ── Banking ──
+  addDeposit: (name, date, amount, currency, mgmt, lawyer, taxes) => {
+    const { data, clientId, workspaceId } = get()
+    const newDeposit = {
+      id: 'dep-' + uid(), name, date, amount, currency,
+      mgmt, lawyer, taxes, done: false,
+    }
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          business: {
+            ...c.business,
+            banking: { ...c.business.banking, deposits: [newDeposit, ...c.business.banking.deposits] },
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId) upsertDeposit(newDeposit, clientId).catch(console.error)
+  },
+
   markDepositDone: (depositId) => {
     const { data, clientId } = get()
     let updatedDeposit: typeof data.clients[0]['business']['banking']['deposits'][0] | undefined
