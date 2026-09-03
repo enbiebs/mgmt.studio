@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { fmt } from '@/lib/utils'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
-import type { RegStatus, Currency, BankTransaction } from '@/types'
+import type { RegStatus, Currency, BankTransaction, CatalogWork } from '@/types'
 
 const REG: Record<RegStatus, [string, string]> = {
   ok:   ['ok', 'bg-green-100 text-green-700'],
@@ -11,6 +11,7 @@ const REG: Record<RegStatus, [string, string]> = {
   no:   ['–',  'bg-gray-100 text-gray-400'],
   q:    ['?',  'bg-gray-100 text-gray-400'],
 }
+const REG_LABEL: Record<RegStatus, string> = { ok: 'Registered', warn: 'Needs attention', no: 'Not registered', q: 'Pending' }
 
 // Bank income not yet linked to any work — the pool a work's picker offers.
 function unlinkedIncome(transactions: BankTransaction[]) {
@@ -113,6 +114,75 @@ function AddWorkModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+function EditWorkModal({ work, onClose }: { work: CatalogWork; onClose: () => void }) {
+  const editable = useStore(s => s.canEdit('business'))
+  const { updateCatalogWork } = useStore()
+  const [title, setTitle] = useState(work.title)
+  const [writers, setWriters] = useState(work.writers)
+  const [ipi, setIpi] = useState(work.ipi ?? '')
+  const [currency, setCurrency] = useState<Currency>(work.currency)
+  const [bmi, setBmi] = useState<RegStatus>(work.bmi)
+  const [mlc, setMlc] = useState<RegStatus>(work.mlc)
+  const [sx, setSx] = useState<RegStatus>(work.sx)
+  const [ppl, setPpl] = useState<RegStatus>(work.ppl)
+
+  function handleSave() {
+    if (!title.trim() || !writers.trim()) return
+    updateCatalogWork(work.id, { title: title.trim(), writers: writers.trim(), ipi: ipi.trim() || undefined, currency, bmi, mlc, sx, ppl })
+    onClose()
+  }
+
+  return (
+    <Modal title={editable ? 'Edit work' : work.title} onClose={onClose} footer={
+      editable ? (
+        <>
+          <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+          <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Save</button>
+        </>
+      ) : (
+        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Close</button>
+      )
+    }>
+      <FormField label="Title">
+        <input className={inputClass} value={title} onChange={e => setTitle(e.target.value)} autoFocus disabled={!editable} />
+      </FormField>
+      <FormField label="Writers">
+        <input className={inputClass} value={writers} onChange={e => setWriters(e.target.value)} disabled={!editable} />
+      </FormField>
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label="IPI (optional)">
+          <input className={inputClass} value={ipi} onChange={e => setIpi(e.target.value)} disabled={!editable} />
+        </FormField>
+        <FormField label="Currency">
+          <select className={selectClass} value={currency} onChange={e => setCurrency(e.target.value as Currency)} disabled={!editable}>
+            <option value="USD">USD</option>
+            <option value="GBP">GBP</option>
+            <option value="EUR">EUR</option>
+          </select>
+        </FormField>
+      </div>
+      <FormField label="Registration status">
+        <div className="grid grid-cols-2 gap-3">
+          {([['BMI', bmi, setBmi], ['MLC', mlc, setMlc], ['SX', sx, setSx], ['PPL', ppl, setPpl]] as const).map(([label, value, setter]) => (
+            <div key={label} className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-gray-500 w-9 flex-shrink-0">{label}</span>
+              <select
+                className={selectClass}
+                value={value}
+                onChange={e => setter(e.target.value as RegStatus)}
+                disabled={!editable}
+                title={REG_LABEL[value]}
+              >
+                {(Object.keys(REG_LABEL) as RegStatus[]).map(s => <option key={s} value={s}>{REG_LABEL[s]}</option>)}
+              </select>
+            </div>
+          ))}
+        </div>
+      </FormField>
+    </Modal>
+  )
+}
+
 function exportCatalogCsv(clientName: string, works: { title: string; ipi?: string; writers: string; amount: number; currency: string; bmi: string; mlc: string; sx: string; ppl: string }[]) {
   const header = ['Title', 'IPI', 'Writers', 'Amount', 'Currency', 'BMI', 'MLC', 'SX', 'PPL']
   const rows = works.map(w => [w.title, w.ipi ?? '', w.writers, String(w.amount), w.currency, w.bmi, w.mlc, w.sx, w.ppl])
@@ -135,6 +205,7 @@ export function CatalogView() {
   const editable = useStore(s => s.canEdit('business'))
   const { deleteCatalogWork } = useStore()
   const [addOpen, setAddOpen] = useState(false)
+  const [editWork, setEditWork] = useState<CatalogWork | null>(null)
   if (!client) return null
   const works = client.business.catalog.works
 
@@ -169,7 +240,11 @@ export function CatalogView() {
 
       <div className="flex flex-col gap-2">
         {works.map(w => (
-          <div key={w.id} className="group border border-gray-100 rounded-xl px-4 py-3 hover:bg-gray-50 transition-colors">
+          <div
+            key={w.id}
+            onClick={() => setEditWork(w)}
+            className="group border border-gray-100 rounded-xl px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer"
+          >
             <div className="flex items-center gap-4">
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-sm truncate">{w.title}{w.ipi ? ` ${w.ipi}` : ''}</div>
@@ -191,19 +266,22 @@ export function CatalogView() {
               </div>
               {editable && (
                 <button
-                  onClick={() => { if (confirm(`Delete "${w.title}"? This also unlinks any bank income confirmed against it.`)) deleteCatalogWork(w.id) }}
+                  onClick={(e) => { e.stopPropagation(); if (confirm(`Delete "${w.title}"? This also unlinks any bank income confirmed against it.`)) deleteCatalogWork(w.id) }}
                   className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
                 >
                   ✕
                 </button>
               )}
             </div>
-            <TransactionLinker workId={w.id} currency={w.currency} />
+            <div onClick={e => e.stopPropagation()}>
+              <TransactionLinker workId={w.id} currency={w.currency} />
+            </div>
           </div>
         ))}
       </div>
 
       {addOpen && <AddWorkModal onClose={() => setAddOpen(false)} />}
+      {editWork && <EditWorkModal work={editWork} onClose={() => setEditWork(null)} />}
     </div>
   )
 }

@@ -200,6 +200,7 @@ interface StudioState {
 
   // ── Catalog ──
   addCatalogWork: (patch: { title: string; ipi?: string; writers: string; currency: Currency; bmi?: RegStatus; mlc?: RegStatus; sx?: RegStatus; ppl?: RegStatus }) => void
+  updateCatalogWork: (workId: string, patch: { title: string; ipi?: string; writers: string; currency: Currency; bmi: RegStatus; mlc: RegStatus; sx: RegStatus; ppl: RegStatus }) => void
   deleteCatalogWork: (workId: string) => void
 
   // ── Invoices ──
@@ -213,6 +214,7 @@ interface StudioState {
 
   // ── Guest list ──
   addGuest: (showId: string, name: string, qty: number, category: GuestListCategory, credential?: string, notes?: string) => void
+  updateGuest: (guestId: string, patch: { name: string; qty: number; category: GuestListCategory; credential?: string; notes?: string }) => void
   toggleGuestCheckedIn: (guestId: string) => void
   deleteGuest: (guestId: string) => void
 
@@ -238,6 +240,7 @@ interface StudioState {
 
   // ── Post actions ──
   addPost: (date: string, title: string, time: string, type: string) => void
+  updatePost: (postId: string, patch: { date: string; title: string; time: string; type: string }) => void
   deletePost: (postId: string) => void
 
   // ── Royalties ──
@@ -763,6 +766,30 @@ export const useStore = create<StudioState>((set, get) => ({
     if (workspaceId) upsertGuestListEntry(newGuest).catch(console.error)
   },
 
+  updateGuest: (guestId, patch) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedGuest: GuestListEntry | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          tour: {
+            ...c.tour,
+            guestList: (c.tour.guestList ?? []).map(g => {
+              if (g.id !== guestId) return g
+              updatedGuest = { ...g, ...patch }
+              return updatedGuest
+            }),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && updatedGuest) upsertGuestListEntry(updatedGuest).catch(console.error)
+  },
+
   toggleGuestCheckedIn: (guestId) => {
     const { data, clientId, workspaceId } = get()
     let toggled: GuestListEntry | undefined
@@ -1079,6 +1106,32 @@ export const useStore = create<StudioState>((set, get) => ({
     if (workspaceId && clientId) upsertCatalogWork(work, clientId).catch(console.error)
   },
 
+  updateCatalogWork: (workId, patch) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedWork: CatalogWork | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          business: {
+            ...c.business,
+            catalog: {
+              works: c.business.catalog.works.map(w => {
+                if (w.id !== workId) return w
+                updatedWork = { ...w, ...patch }
+                return updatedWork
+              }),
+            },
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId && updatedWork) upsertCatalogWork(updatedWork, clientId).catch(console.error)
+  },
+
   deleteCatalogWork: (workId) => {
     const { data, clientId } = get()
     const updated = {
@@ -1270,6 +1323,29 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     if (clientId) upsertPost(newPost, clientId).catch(console.error)
+  },
+
+  updatePost: (postId, patch) => {
+    const { data, clientId } = get()
+    let updatedPost: Post | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          content: {
+            posts: c.content.posts.map(p => {
+              if (p.id !== postId) return p
+              updatedPost = { ...p, date: patch.date, title: patch.title, time: patch.time, type: patch.type as Post['type'] }
+              return updatedPost
+            }),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (clientId && updatedPost) upsertPost(updatedPost, clientId).catch(console.error)
   },
 
   deletePost: (postId) => {

@@ -22,6 +22,7 @@ export function CrewView() {
   const editable = useStore(s => s.canEdit('tour'))
   const { deleteCrewMember } = useStore()
   const [addOpen, setAddOpen] = useState(false)
+  const [editMember, setEditMember] = useState<CrewMember | null>(null)
 
   if (!client) return null
   const crew = client.tour.crew ?? []
@@ -53,7 +54,11 @@ export function CrewView() {
           const person = people.find(p => p.id === cm.personId)
           if (!person) return null
           return (
-            <div key={cm.id} className="group border border-gray-100 rounded-xl px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors">
+            <div
+              key={cm.id}
+              onClick={() => setEditMember(cm)}
+              className="group border border-gray-100 rounded-xl px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors cursor-pointer"
+            >
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium">{person.name}</div>
                 <div className="text-xs text-gray-400 mt-0.5">
@@ -72,7 +77,7 @@ export function CrewView() {
               </span>
               {editable && (
                 <button
-                  onClick={() => { if (confirm(`Remove ${person.name} from crew?`)) deleteCrewMember(cm.id) }}
+                  onClick={(e) => { e.stopPropagation(); if (confirm(`Remove ${person.name} from crew?`)) deleteCrewMember(cm.id) }}
                   className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
                 >
                   ✕
@@ -83,59 +88,75 @@ export function CrewView() {
         })}
       </div>
 
-      {addOpen && <AddCrewModal onClose={() => setAddOpen(false)} />}
+      {addOpen && <CrewMemberModal onClose={() => setAddOpen(false)} />}
+      {editMember && <CrewMemberModal member={editMember} onClose={() => setEditMember(null)} />}
     </div>
   )
 }
 
-function AddCrewModal({ onClose }: { onClose: () => void }) {
+function CrewMemberModal({ member, onClose }: { member?: CrewMember; onClose: () => void }) {
+  const editable = useStore(s => s.canEdit('tour'))
+  const client = useStore(s => s.getClient())
   const { saveCrewMember } = useStore()
-  const [personId, setPersonId] = useState('')
-  const [role, setRole] = useState<CrewRole>('other')
-  const [emergencyName, setEmergencyName] = useState('')
-  const [emergencyPhone, setEmergencyPhone] = useState('')
-  const [passport, setPassport] = useState('')
-  const [notes, setNotes] = useState('')
+  const [personId, setPersonId] = useState(member?.personId ?? '')
+  const [role, setRole] = useState<CrewRole>(member?.role ?? 'other')
+  const [emergencyName, setEmergencyName] = useState(member?.emergencyName ?? '')
+  const [emergencyPhone, setEmergencyPhone] = useState(member?.emergencyPhone ?? '')
+  const [passport, setPassport] = useState(member?.passport ?? '')
+  const [notes, setNotes] = useState(member?.notes ?? '')
+  const existingPerson = member ? client?.people?.find(p => p.id === member.personId) : undefined
 
-  function handleAdd() {
+  function handleSave() {
     if (!personId) return
-    const member: CrewMember = {
-      id: 'crew-' + uid(), personId, role,
+    saveCrewMember({
+      id: member?.id ?? 'crew-' + uid(), personId, role,
       emergencyName: emergencyName.trim() || undefined,
       emergencyPhone: emergencyPhone.trim() || undefined,
       passport: passport.trim() || undefined,
       notes: notes.trim() || undefined,
-    }
-    saveCrewMember(member)
+    })
     onClose()
   }
 
   return (
-    <Modal title="Add a crew member" onClose={onClose} footer={
-      <>
-        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={handleAdd} disabled={!personId} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:opacity-40">Add</button>
-      </>
+    <Modal title={member ? `Crew · ${existingPerson?.name ?? 'Member'}` : 'Add a crew member'} onClose={onClose} footer={
+      editable ? (
+        <>
+          <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+          <button onClick={handleSave} disabled={!personId} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:opacity-40">
+            {member ? 'Save' : 'Add'}
+          </button>
+        </>
+      ) : (
+        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Close</button>
+      )
     }>
-      <PersonPicker value={personId} onChange={setPersonId} />
+      {/* Reassigning who a crew record is about isn't supported here — remove and re-add instead */}
+      {member ? (
+        <FormField label="Person">
+          <div className={`${inputClass} flex items-center bg-gray-50 text-gray-500`}>{existingPerson?.name ?? 'Unknown'}</div>
+        </FormField>
+      ) : (
+        <PersonPicker value={personId} onChange={setPersonId} />
+      )}
       <FormField label="Role">
-        <select className={selectClass} value={role} onChange={e => setRole(e.target.value as CrewRole)}>
+        <select className={selectClass} value={role} onChange={e => setRole(e.target.value as CrewRole)} disabled={!editable}>
           {CREW_ROLE_ORDER.map(r => <option key={r} value={r}>{CREW_ROLE_LABEL[r]}</option>)}
         </select>
       </FormField>
       <div className="grid grid-cols-2 gap-3">
         <FormField label="Emergency contact">
-          <input className={inputClass} placeholder="Name" value={emergencyName} onChange={e => setEmergencyName(e.target.value)} />
+          <input className={inputClass} placeholder="Name" value={emergencyName} onChange={e => setEmergencyName(e.target.value)} disabled={!editable} />
         </FormField>
         <FormField label="Emergency phone">
-          <input className={inputClass} value={emergencyPhone} onChange={e => setEmergencyPhone(e.target.value)} />
+          <input className={inputClass} value={emergencyPhone} onChange={e => setEmergencyPhone(e.target.value)} disabled={!editable} />
         </FormField>
       </div>
       <FormField label="Passport expiry">
-        <input className={inputClass} placeholder="e.g. 2029-04" value={passport} onChange={e => setPassport(e.target.value)} />
+        <input className={inputClass} placeholder="e.g. 2029-04" value={passport} onChange={e => setPassport(e.target.value)} disabled={!editable} />
       </FormField>
       <FormField label="Notes">
-        <input className={inputClass} value={notes} onChange={e => setNotes(e.target.value)} />
+        <input className={inputClass} value={notes} onChange={e => setNotes(e.target.value)} disabled={!editable} />
       </FormField>
     </Modal>
   )

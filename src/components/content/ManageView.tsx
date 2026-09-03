@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
-import { Modal, FormField, inputClass } from '@/components/ui/Modal'
+import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { calendarDays, toDateStr, today, MONTH_NAMES, DOW_SHORT } from '@/lib/utils'
 import type { Post, PostType } from '@/types'
 
@@ -25,30 +25,13 @@ const PLATFORM_STYLE: Record<PostType, string> = {
 export function ManageView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('content'))
-  const { calYear, calMonth, calPrev, calNext, calToday, addPost, deletePost } = useStore()
-  const [addOpen, setAddOpen] = useState(false)
-  const [clickedDate, setClickedDate] = useState('')
-  const [f, setF] = useState({ title: '', date: '', time: '10:00' })
-  const [viewPost, setViewPost] = useState<Post | null>(null)
+  const { calYear, calMonth, calPrev, calNext, calToday } = useStore()
+  const [addDate, setAddDate] = useState<string | null>(null)
+  const [editPost, setEditPost] = useState<Post | null>(null)
 
   if (!client) return null
   const days = calendarDays(calYear, calMonth)
   const todayStr = today()
-
-  function openAdd(date?: string) {
-    setF({ title: '', date: date ?? '', time: '10:00' })
-    setClickedDate(date ?? '')
-    setAddOpen(true)
-  }
-
-  function handleAdd() {
-    if (!f.title.trim() || !f.date) return
-    const [h, m] = f.time.split(':')
-    const hr = parseInt(h) % 12 || 12
-    const ampm = parseInt(h) >= 12 ? 'pm' : 'am'
-    addPost(f.date, f.title.trim(), `${hr}:${m}${ampm}`, 'reel')
-    setAddOpen(false)
-  }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -59,7 +42,7 @@ export function ManageView() {
         <span className="font-serif text-[18px] font-medium">{MONTH_NAMES[calMonth]} {calYear}</span>
         <button onClick={calToday} className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors">Today</button>
         {editable && (
-          <button onClick={() => openAdd()} className="ml-auto px-2.5 py-1 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition-colors">+ New post</button>
+          <button onClick={() => setAddDate('')} className="ml-auto px-2.5 py-1 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition-colors">+ New post</button>
         )}
       </div>
 
@@ -84,7 +67,7 @@ export function ManageView() {
                 {posts.map(p => (
                   <div
                     key={p.id}
-                    onClick={() => setViewPost(p)}
+                    onClick={() => setEditPost(p)}
                     className={`border-l-2 px-1.5 py-0.5 rounded-r text-[10px] font-semibold mb-0.5 cursor-pointer hover:brightness-95 transition-all truncate ${PLATFORM_STYLE[p.type]}`}
                     title={PLATFORM_LABEL[p.type]}
                   >
@@ -93,7 +76,7 @@ export function ManageView() {
                 ))}
                 {editable && (
                   <button
-                    onClick={() => openAdd(dStr)}
+                    onClick={() => setAddDate(dStr)}
                     className="absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center text-gray-300 opacity-0 group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-500 transition-all text-sm"
                   >
                     +
@@ -105,41 +88,93 @@ export function ManageView() {
         </div>
       </div>
 
-      {/* Add post modal */}
-      {addOpen && (
-        <Modal title="Schedule a post" onClose={() => setAddOpen(false)} footer={
-          <>
-            <button onClick={() => setAddOpen(false)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-            <button onClick={handleAdd} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Schedule</button>
-          </>
-        }>
-          <FormField label="Title"><input type="text" className={inputClass} placeholder="Post title" value={f.title} onChange={e => setF(p => ({...p, title: e.target.value}))} autoFocus /></FormField>
-          <FormField label="Date"><input type="date" className={inputClass} value={f.date} onChange={e => setF(p => ({...p, date: e.target.value}))} /></FormField>
-          <FormField label="Time"><input type="time" className={inputClass} value={f.time} onChange={e => setF(p => ({...p, time: e.target.value}))} /></FormField>
-        </Modal>
-      )}
-
-      {/* View/delete post modal */}
-      {viewPost && (
-        <Modal title={viewPost.title} onClose={() => setViewPost(null)} footer={
-          <>
-            {editable && (
-              <button
-                onClick={() => { deletePost(viewPost.id); setViewPost(null) }}
-                className="px-3 py-1.5 border border-red-200 text-red-500 rounded-lg text-sm hover:bg-red-50 mr-auto"
-              >
-                Delete post
-              </button>
-            )}
-            <button onClick={() => setViewPost(null)} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Close</button>
-          </>
-        }>
-          <p className="text-sm text-gray-500">
-            {viewPost.date} · {viewPost.time} · {PLATFORM_LABEL[viewPost.type]}
-            {viewPost.auto && <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500">AUTO</span>}
-          </p>
-        </Modal>
-      )}
+      {addDate !== null && <PostModal defaultDate={addDate} onClose={() => setAddDate(null)} />}
+      {editPost && <PostModal post={editPost} onClose={() => setEditPost(null)} />}
     </div>
+  )
+}
+
+// Posts are stored/displayed as "10:00am" but a native <input type="time">
+// needs 24h "HH:MM" — convert at the edges rather than store either form
+// exclusively, so both the picker and the display stay in their ideal shape.
+function to24h(t: string): string {
+  const m = t.match(/^(\d{1,2}):(\d{2})(am|pm)$/i)
+  if (!m) return '10:00'
+  let h = parseInt(m[1], 10)
+  if (/pm/i.test(m[3]) && h !== 12) h += 12
+  if (/am/i.test(m[3]) && h === 12) h = 0
+  return `${String(h).padStart(2, '0')}:${m[2]}`
+}
+function to12h(t: string): string {
+  const [h, m] = t.split(':')
+  const hr = parseInt(h, 10) % 12 || 12
+  const ampm = parseInt(h, 10) >= 12 ? 'pm' : 'am'
+  return `${hr}:${m}${ampm}`
+}
+
+function PostModal({ post, defaultDate, onClose }: { post?: Post; defaultDate?: string; onClose: () => void }) {
+  const editable = useStore(s => s.canEdit('content'))
+  const { addPost, updatePost, deletePost } = useStore()
+  const [title, setTitle] = useState(post?.title ?? '')
+  const [date, setDate] = useState(post?.date ?? defaultDate ?? '')
+  const [time, setTime] = useState(post ? to24h(post.time) : '10:00')
+  const [type, setType] = useState<PostType>(post?.type ?? 'reel')
+
+  function handleSave() {
+    if (!title.trim() || !date) return
+    const time12h = to12h(time)
+    if (post) {
+      updatePost(post.id, { date, title: title.trim(), time: time12h, type })
+    } else {
+      addPost(date, title.trim(), time12h, type)
+    }
+    onClose()
+  }
+
+  function handleDelete() {
+    if (!post) return
+    if (!confirm(`Remove "${post.title}" from the calendar?`)) return
+    deletePost(post.id)
+    onClose()
+  }
+
+  return (
+    <Modal title={post ? 'Edit post' : 'Schedule a post'} onClose={onClose} footer={
+      editable ? (
+        <>
+          {post && (
+            <button onClick={handleDelete} className="px-3 py-1.5 border border-red-200 text-red-500 rounded-lg text-sm hover:bg-red-50 mr-auto">
+              Delete post
+            </button>
+          )}
+          <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+          <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">
+            {post ? 'Save' : 'Schedule'}
+          </button>
+        </>
+      ) : (
+        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Close</button>
+      )
+    }>
+      <FormField label="Title">
+        <input type="text" className={inputClass} placeholder="Post title" value={title} onChange={e => setTitle(e.target.value)} autoFocus disabled={!editable} />
+      </FormField>
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label="Date">
+          <input type="date" className={inputClass} value={date} onChange={e => setDate(e.target.value)} disabled={!editable} />
+        </FormField>
+        <FormField label="Time">
+          <input type="time" className={inputClass} value={time} onChange={e => setTime(e.target.value)} disabled={!editable} />
+        </FormField>
+      </div>
+      <FormField label="Platform">
+        <select className={selectClass} value={type} onChange={e => setType(e.target.value as PostType)} disabled={!editable}>
+          {(Object.keys(PLATFORM_LABEL) as PostType[]).map(t => <option key={t} value={t}>{PLATFORM_LABEL[t]}</option>)}
+        </select>
+      </FormField>
+      {post?.auto && (
+        <div className="text-xs text-gray-400">Auto-generated from the release rollout template.</div>
+      )}
+    </Modal>
   )
 }

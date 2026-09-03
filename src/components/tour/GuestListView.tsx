@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
-import type { Show, GuestListCategory } from '@/types'
+import type { Show, GuestListCategory, GuestListEntry } from '@/types'
 
 const CATEGORY_STYLES: Record<GuestListCategory, string> = {
   artist:     'bg-blue-50 text-blue-700',
@@ -25,6 +25,7 @@ export function GuestListView() {
   const { toggleGuestCheckedIn, deleteGuest } = useStore()
   const [selectedShowId, setSelectedShowId] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [editGuest, setEditGuest] = useState<GuestListEntry | null>(null)
 
   if (!client) return null
   const shows = client.tour.shows
@@ -94,11 +95,16 @@ export function GuestListView() {
 
             <div className="flex flex-col gap-2">
               {guests.map(g => (
-                <div key={g.id} className="group border border-gray-100 rounded-xl px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors">
+                <div
+                  key={g.id}
+                  onClick={() => setEditGuest(g)}
+                  className="group border border-gray-100 rounded-xl px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
                   <input
                     type="checkbox"
                     checked={g.checkedIn}
                     onChange={() => toggleGuestCheckedIn(g.id)}
+                    onClick={e => e.stopPropagation()}
                     disabled={!editable}
                     className="w-4 h-4 flex-shrink-0 disabled:cursor-not-allowed"
                     title="Checked in"
@@ -118,7 +124,7 @@ export function GuestListView() {
                   </span>
                   {editable && (
                     <button
-                      onClick={() => { if (confirm(`Remove "${g.name}" from the guest list?`)) deleteGuest(g.id) }}
+                      onClick={(e) => { e.stopPropagation(); if (confirm(`Remove "${g.name}" from the guest list?`)) deleteGuest(g.id) }}
                       className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
                     >
                       ✕
@@ -135,42 +141,68 @@ export function GuestListView() {
       </div>
 
       {addOpen && show && (
-        <AddGuestModal showId={show.id} onClose={() => setAddOpen(false)} />
+        <GuestModal showId={show.id} onClose={() => setAddOpen(false)} />
+      )}
+      {editGuest && (
+        <GuestModal showId={editGuest.showId} guest={editGuest} onClose={() => setEditGuest(null)} />
       )}
     </div>
   )
 }
 
-function AddGuestModal({ showId, onClose }: { showId: string; onClose: () => void }) {
-  const { addGuest } = useStore()
-  const [name, setName] = useState('')
-  const [qty, setQty] = useState(1)
-  const [category, setCategory] = useState<GuestListCategory>('vip')
-  const [credential, setCredential] = useState('')
-  const [notes, setNotes] = useState('')
+function GuestModal({ showId, guest, onClose }: { showId: string; guest?: GuestListEntry; onClose: () => void }) {
+  const editable = useStore(s => s.canEdit('tour'))
+  const { addGuest, updateGuest, deleteGuest } = useStore()
+  const [name, setName] = useState(guest?.name ?? '')
+  const [qty, setQty] = useState(guest?.qty ?? 1)
+  const [category, setCategory] = useState<GuestListCategory>(guest?.category ?? 'vip')
+  const [credential, setCredential] = useState(guest?.credential ?? '')
+  const [notes, setNotes] = useState(guest?.notes ?? '')
 
-  function handleAdd() {
+  function handleSave() {
     if (!name.trim()) return
-    addGuest(showId, name.trim(), qty, category, credential.trim() || undefined, notes.trim() || undefined)
+    if (guest) {
+      updateGuest(guest.id, { name: name.trim(), qty, category, credential: credential.trim() || undefined, notes: notes.trim() || undefined })
+    } else {
+      addGuest(showId, name.trim(), qty, category, credential.trim() || undefined, notes.trim() || undefined)
+    }
+    onClose()
+  }
+
+  function handleDelete() {
+    if (!guest) return
+    if (!confirm(`Remove "${guest.name}" from the guest list?`)) return
+    deleteGuest(guest.id)
     onClose()
   }
 
   return (
-    <Modal title="Add to guest list" onClose={onClose} footer={
-      <>
-        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={handleAdd} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Add guest</button>
-      </>
+    <Modal title={guest ? 'Edit guest' : 'Add to guest list'} onClose={onClose} footer={
+      editable ? (
+        <>
+          {guest && (
+            <button onClick={handleDelete} className="px-3 py-1.5 border border-red-200 text-red-500 rounded-lg text-sm hover:bg-red-50 mr-auto">
+              Remove
+            </button>
+          )}
+          <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+          <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">
+            {guest ? 'Save' : 'Add guest'}
+          </button>
+        </>
+      ) : (
+        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Close</button>
+      )
     }>
       <FormField label="Name">
-        <input className={inputClass} placeholder="Guest name" value={name} onChange={e => setName(e.target.value)} autoFocus />
+        <input className={inputClass} placeholder="Guest name" value={name} onChange={e => setName(e.target.value)} autoFocus disabled={!editable} />
       </FormField>
       <div className="grid grid-cols-2 gap-3">
         <FormField label="Party size">
-          <input type="number" min={1} className={inputClass} value={qty} onChange={e => setQty(Math.max(1, Number(e.target.value)))} />
+          <input type="number" min={1} className={inputClass} value={qty} onChange={e => setQty(Math.max(1, Number(e.target.value)))} disabled={!editable} />
         </FormField>
         <FormField label="Category">
-          <select className={selectClass} value={category} onChange={e => setCategory(e.target.value as GuestListCategory)}>
+          <select className={selectClass} value={category} onChange={e => setCategory(e.target.value as GuestListCategory)} disabled={!editable}>
             {(['vip', 'artist', 'label', 'management', 'media', 'family', 'promo', 'sponsor'] as GuestListCategory[]).map(c => (
               <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>
             ))}
@@ -178,10 +210,10 @@ function AddGuestModal({ showId, onClose }: { showId: string; onClose: () => voi
         </FormField>
       </div>
       <FormField label="Credential">
-        <input className={inputClass} placeholder="e.g. All Access, VIP, Press" value={credential} onChange={e => setCredential(e.target.value)} />
+        <input className={inputClass} placeholder="e.g. All Access, VIP, Press" value={credential} onChange={e => setCredential(e.target.value)} disabled={!editable} />
       </FormField>
       <FormField label="Notes">
-        <input className={inputClass} placeholder="Optional" value={notes} onChange={e => setNotes(e.target.value)} />
+        <input className={inputClass} placeholder="Optional" value={notes} onChange={e => setNotes(e.target.value)} disabled={!editable} />
       </FormField>
     </Modal>
   )
