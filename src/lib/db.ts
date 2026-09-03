@@ -808,6 +808,11 @@ export async function upsertInvoice(invoice: Invoice, clientId: string) {
   }
 }
 
+export async function deleteInvoice(invoiceId: string) {
+  const supabase = createClient()
+  await supabase.from('invoices').delete().eq('id', invoiceId)
+}
+
 // ── Crew ───────────────────────────────────────────────────
 export async function upsertCrewMember(member: CrewMember, clientId: string) {
   const supabase = createClient()

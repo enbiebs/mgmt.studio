@@ -7,7 +7,7 @@ import { MONTH_NAMES, MONTH_SHORT } from '@/lib/utils'
 export function TourView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('tour'))
-  const { selectedShowId, setSelectedShow, addShow, deleteShow } = useStore()
+  const { selectedShowId, setSelectedShow, addShow, updateShowStatus, deleteShow } = useStore()
   const [addOpen, setAddOpen] = useState(false)
   const [f, setF] = useState({ date: '', city: '', venue: '', time: '20:00' })
 
@@ -90,13 +90,36 @@ export function TourView() {
                 ['Date', (() => { const d = new Date(selected.date+'T00:00:00'); return `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}` })()],
                 ['Set Time', selected.time],
                 ['City', selected.city],
-                ['Status', selected.status.charAt(0).toUpperCase() + selected.status.slice(1)],
               ].map(([lbl, val]) => (
                 <div key={lbl}>
                   <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">{lbl}</div>
-                  <div className={`text-sm font-medium ${lbl === 'Status' ? (selected.status === 'confirmed' ? 'text-green-600' : 'text-amber-500') : ''}`}>{val}</div>
+                  <div className="text-sm font-medium">{val}</div>
                 </div>
               ))}
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Status</div>
+                {editable ? (
+                  <div className="flex items-center bg-gray-100 rounded-full p-0.5 text-xs gap-0.5 w-fit">
+                    {(['hold', 'confirmed', 'cancelled'] as const).map(s => (
+                      <button
+                        key={s}
+                        onClick={() => updateShowStatus(selected.id, s)}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                          selected.status === s
+                            ? s === 'confirmed' ? 'bg-green-600 text-white' : s === 'cancelled' ? 'bg-red-500 text-white' : 'bg-gray-900 text-canvas'
+                            : 'text-gray-400 hover:text-gray-600'
+                        }`}
+                      >
+                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className={`text-sm font-medium ${selected.status === 'confirmed' ? 'text-green-600' : selected.status === 'cancelled' ? 'text-red-500' : 'text-amber-500'}`}>
+                    {selected.status.charAt(0).toUpperCase() + selected.status.slice(1)}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex gap-2 flex-wrap mb-4">
               {['Maps ↗', 'Advance', 'Day Sheet', 'Stage Plot', 'Hotels', 'Flights'].map(l => (

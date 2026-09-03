@@ -14,13 +14,13 @@
 
 import { create } from 'zustand'
 import type {
-  AppData, Client, Track, Show, Post, Album,
+  AppData, Client, Track, Show, ShowStatus, Post, Album,
   MainSection, SongsSub, ContentSub, BizSub, TourSub, Stage, AnalyticsSub,
   UserRole, ProjectStatus, ProjectType, Stakeholder, Project, ArtistTodo,
   TrackLabelCopy, ReleaseLabelCopy, ChecklistItemKey, ChecklistItem, TrackPriority,
   GuestListEntry, GuestListCategory, ReleaseStakeholder, StakeholderRole,
   CrewMember, ShowAdvance, TravelItem, Person, PersonActivity, Currency,
-  CatalogWork, RegStatus, Invoice, InvoiceLineItem, RevenueStream,
+  CatalogWork, RegStatus, Invoice, InvoiceLineItem, InvoiceStatus, RevenueStream,
 } from '@/types'
 import { DEMO_DATA } from '@/lib/demo-data'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
@@ -50,7 +50,7 @@ import {
   upsertTravelItem, deleteTravelItem as dbDeleteTravelItem,
   upsertCatalogWork, deleteCatalogWork as dbDeleteCatalogWork,
   linkBankTransaction,
-  upsertInvoice,
+  upsertInvoice, deleteInvoice as dbDeleteInvoice,
 } from '@/lib/db'
 
 // ── Persistence helpers ─────────────────────────────────────
@@ -204,6 +204,8 @@ interface StudioState {
 
   // ── Invoices ──
   addInvoice: (patch: { number: string; to: string; toEmail?: string; category: RevenueStream; currency: Currency; issuedDate: string; dueDate: string; items: InvoiceLineItem[]; notes?: string }) => void
+  updateInvoiceStatus: (invoiceId: string, status: InvoiceStatus) => void
+  deleteInvoice: (invoiceId: string) => void
 
   // ── Release stakeholders ──
   addStakeholder: (albumId: string, patch: { personId: string; role: StakeholderRole; notes?: string }) => void
@@ -231,6 +233,7 @@ interface StudioState {
 
   // ── Show actions ──
   addShow: (date: string, city: string, venue: string, time: string) => void
+  updateShowStatus: (showId: string, status: ShowStatus) => void
   deleteShow: (showId: string) => void
 
   // ── Post actions ──
@@ -1121,6 +1124,43 @@ export const useStore = create<StudioState>((set, get) => ({
     if (workspaceId && clientId) upsertInvoice(invoice, clientId).catch(console.error)
   },
 
+  updateInvoiceStatus: (invoiceId, status) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedInvoice: Invoice | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId || !c.finance) return c
+        return {
+          ...c,
+          finance: {
+            ...c.finance,
+            invoices: c.finance.invoices.map(inv => {
+              if (inv.id !== invoiceId) return inv
+              updatedInvoice = { ...inv, status }
+              return updatedInvoice
+            }),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId && updatedInvoice) upsertInvoice(updatedInvoice, clientId).catch(console.error)
+  },
+
+  deleteInvoice: (invoiceId) => {
+    const { data, clientId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId || !c.finance) return c
+        return { ...c, finance: { ...c.finance, invoices: c.finance.invoices.filter(inv => inv.id !== invoiceId) } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    dbDeleteInvoice(invoiceId).catch(console.error)
+  },
+
   // ── Release stakeholders ──
   addStakeholder: (albumId, patch) => {
     const { data, clientId, workspaceId } = get()
@@ -1178,6 +1218,30 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     if (clientId) upsertShow(newShow, clientId).catch(console.error)
+  },
+
+  updateShowStatus: (showId, status) => {
+    const { data, clientId } = get()
+    let updatedShow: Show | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          tour: {
+            ...c.tour,
+            shows: c.tour.shows.map(s => {
+              if (s.id !== showId) return s
+              updatedShow = { ...s, status }
+              return updatedShow
+            }),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (clientId && updatedShow) upsertShow(updatedShow, clientId).catch(console.error)
   },
 
   deleteShow: (showId) => {

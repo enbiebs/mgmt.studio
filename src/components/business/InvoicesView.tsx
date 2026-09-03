@@ -7,6 +7,7 @@
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
+import { addDays } from '@/lib/utils'
 import type { Invoice, InvoiceStatus, Currency, RevenueStream, BankTransaction } from '@/types'
 
 const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string; bg: string }> = {
@@ -173,7 +174,7 @@ function AddInvoiceModal({ onClose }: { onClose: () => void }) {
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
   const [currency, setCurrency] = useState<Currency>('USD')
-  const [dueDate, setDueDate] = useState('')
+  const [dueDate, setDueDate] = useState(addDays(new Date().toISOString().slice(0, 10), 30))
 
   function handleSave() {
     const rate = Number(amount)
@@ -231,6 +232,7 @@ function AddInvoiceModal({ onClose }: { onClose: () => void }) {
       </div>
       <FormField label="Due date">
         <input className={inputClass} type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+        <div className="text-xs text-gray-400 mt-1">Defaults to 30 days out — change if this deal has different terms.</div>
       </FormField>
     </Modal>
   )
@@ -247,8 +249,22 @@ function SCard({ label, value, color, count }: { label: string; value: string; c
 }
 
 function InvoiceDetail({ invoice: inv, onClose }: { invoice: Invoice; onClose: () => void }) {
+  const editable = useStore(s => s.canEdit('business'))
+  const { updateInvoiceStatus, deleteInvoice } = useStore()
   const total = invTotal(inv)
   const cfg   = STATUS_CONFIG[inv.status]
+
+  function handleDelete() {
+    if (!confirm(`Delete draft invoice ${inv.number}? This can't be undone.`)) return
+    deleteInvoice(inv.id)
+    onClose()
+  }
+
+  function handleVoid() {
+    if (!confirm(`Void invoice ${inv.number}? It'll stay on record but won't count toward outstanding or paid totals.`)) return
+    updateInvoiceStatus(inv.id, 'void')
+  }
+
   return (
     <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-6" onClick={onClose}>
       <div
@@ -321,6 +337,30 @@ function InvoiceDetail({ invoice: inv, onClose }: { invoice: Invoice; onClose: (
 
           {inv.status !== 'void' && inv.status !== 'draft' && <InvoicePaymentLinker invoice={inv} />}
         </div>
+
+        {/* Status actions — one clear primary action for where this invoice is right now */}
+        {editable && (inv.status === 'draft' || inv.status === 'sent' || inv.status === 'overdue') && (
+          <div className="px-6 py-4 border-t border-gray-100 flex items-center gap-2">
+            {inv.status === 'draft' && (
+              <>
+                <button
+                  onClick={() => updateInvoiceStatus(inv.id, 'sent')}
+                  className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
+                >
+                  Mark as sent
+                </button>
+                <button onClick={handleDelete} className="ml-auto px-3 py-1.5 border border-red-200 text-red-500 text-sm rounded-lg hover:bg-red-50 transition-colors">
+                  Delete draft
+                </button>
+              </>
+            )}
+            {(inv.status === 'sent' || inv.status === 'overdue') && (
+              <button onClick={handleVoid} className="ml-auto px-3 py-1.5 border border-gray-200 text-gray-500 text-sm rounded-lg hover:bg-gray-50 transition-colors">
+                Void invoice
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
