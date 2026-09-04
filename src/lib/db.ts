@@ -15,7 +15,7 @@ import type {
   ShowAdvance, AdvanceContact, AdvanceSchedule, AdvanceProduction,
   AdvanceHospitality, AdvanceLogistics,
   CrewMember, GuestListEntry, TravelItem, Currency, Person, PersonActivity, CatalogWork,
-  LegalTemplate, LegalTemplateClause,
+  LegalTemplate, LegalTemplateClause, Stage, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
 } from '@/types'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
 import { EMPTY_FANDOM }    from '@/lib/fandom-demo'
@@ -49,6 +49,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     checklistItems, stakeholders,
     crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems,
     people, bankAccounts, bankTransactions,
+    trackRounds, trackNotes, trackNoteReplies, trackCredits,
   ] = await Promise.all([
     supabase.from('albums').select('*').in('client_id', clientIds),
     supabase.from('tracks').select('*'),
@@ -75,6 +76,10 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     supabase.from('people').select('*').in('client_id', clientIds),
     supabase.from('bank_accounts').select('*').in('client_id', clientIds),
     supabase.from('bank_transactions').select('*').in('client_id', clientIds).order('date', { ascending: false }),
+    supabase.from('track_rounds').select('*').order('sort_order'),
+    supabase.from('track_notes').select('*').order('timestamp'),
+    supabase.from('track_note_replies').select('*').order('created_at'),
+    supabase.from('track_credits').select('*').order('sort_order'),
   ])
 
   const albumRows     = albums.data       ?? []
@@ -158,6 +163,32 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       return acc
     }, {} as Record<string, typeof trackRows>)
 
+  // Build round→notes→replies lookups (audio review threads)
+  type ReplyRow = { id: string; note_id: string; author: string; text: string; created_at: string }
+  type NoteRow = { id: string; round_id: string; timestamp: number; author: string; text: string; resolved: boolean; created_at: string }
+  type RoundRow = { id: string; track_id: string; label: string; stage: string; audio_path?: string; duration?: number; created_at: string }
+  type CreditRow = { id: string; track_id: string; name: string; role: string; split: number }
+
+  const repliesByNote = ((trackNoteReplies.data ?? []) as ReplyRow[]).reduce((acc, r) => {
+    (acc[r.note_id] ??= []).push(r)
+    return acc
+  }, {} as Record<string, ReplyRow[]>)
+
+  const notesByRound = ((trackNotes.data ?? []) as NoteRow[]).reduce((acc, n) => {
+    (acc[n.round_id] ??= []).push(n)
+    return acc
+  }, {} as Record<string, NoteRow[]>)
+
+  const roundsByTrack = ((trackRounds.data ?? []) as RoundRow[]).reduce((acc, r) => {
+    (acc[r.track_id] ??= []).push(r)
+    return acc
+  }, {} as Record<string, RoundRow[]>)
+
+  const creditsByTrack = ((trackCredits.data ?? []) as CreditRow[]).reduce((acc, c) => {
+    (acc[c.track_id] ??= []).push(c)
+    return acc
+  }, {} as Record<string, CreditRow[]>)
+
   // Build invoice→lineItems lookup
   const invoiceIds = (invoices.data ?? []).map((i: { id: string }) => i.id)
   type LineItemRow = { invoice_id: string; description: string; quantity: number; rate: number }
@@ -184,6 +215,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       .map(a => ({
         id: a.id,
         title: a.title,
+        type: (a.type ?? 'album') as Album['type'],
         releaseDate: a.release_date ?? undefined,
         tracks: (tracksByAlbum[a.id] ?? [])
           .sort((x: { num: number }, y: { num: number }) => x.num - y.num)
@@ -192,6 +224,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
             isrc?: string; writers?: string; producers?: string; publisher?: string; pro?: string
             explicit?: boolean; duration?: string; language?: string
             priority?: string; owner?: string; due_date?: string
+            release_date?: string; lyrics?: string; mixer_brief?: string
           }) => ({
             id: t.id, num: t.num, title: t.title,
             stage: t.stage as Track['stage'],
@@ -199,12 +232,30 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
             priority: t.priority as Track['priority'],
             owner: t.owner ?? undefined,
             dueDate: t.due_date ?? undefined,
+            releaseDate: t.release_date ?? undefined,
+            lyrics: t.lyrics ?? undefined,
+            mixerBrief: t.mixer_brief ?? undefined,
             labelCopy: {
               isrc: t.isrc ?? undefined, writers: t.writers ?? undefined,
               producers: t.producers ?? undefined, publisher: t.publisher ?? undefined,
               pro: t.pro ?? undefined, explicit: t.explicit ?? undefined,
               duration: t.duration ?? undefined, language: t.language ?? undefined,
             },
+            rounds: (roundsByTrack[t.id] ?? []).map((r): TrackRound => ({
+              id: r.id, label: r.label, stage: r.stage as Stage,
+              audioPath: r.audio_path ?? undefined, duration: r.duration ?? undefined,
+              createdAt: r.created_at,
+              notes: (notesByRound[r.id] ?? []).map((n): TrackNote => ({
+                id: n.id, timestamp: n.timestamp, author: n.author, text: n.text,
+                resolved: n.resolved, createdAt: n.created_at,
+                replies: (repliesByNote[n.id] ?? []).map((rep): TrackNoteReply => ({
+                  id: rep.id, author: rep.author, text: rep.text, createdAt: rep.created_at,
+                })),
+              })),
+            })),
+            credits: (creditsByTrack[t.id] ?? []).map((c): TrackCredit => ({
+              id: c.id, name: c.name, role: c.role, split: c.split,
+            })),
           })),
         labelCopy: {
           upc: a.upc ?? undefined, label: a.label ?? undefined,
@@ -589,7 +640,89 @@ export async function upsertTrack(track: Track, albumId: string) {
     producers: lc?.producers ?? null, publisher: lc?.publisher ?? null,
     pro: lc?.pro ?? null, explicit: lc?.explicit ?? false,
     duration: lc?.duration ?? null, language: lc?.language ?? null,
+    release_date: track.releaseDate ?? null,
+    lyrics: track.lyrics ?? null,
+    mixer_brief: track.mixerBrief ?? null,
   })
+}
+
+// ── Track audio rounds, timestamped notes, credits ──────────
+export async function upsertTrackRound(round: TrackRound, trackId: string, sortOrder: number) {
+  const supabase = createClient()
+  await supabase.from('track_rounds').upsert({
+    id: round.id, track_id: trackId, label: round.label, stage: round.stage,
+    audio_path: round.audioPath ?? null, duration: round.duration ?? null,
+    sort_order: sortOrder, created_at: round.createdAt,
+  })
+}
+
+export async function deleteTrackRound(roundId: string) {
+  const supabase = createClient()
+  await supabase.from('track_rounds').delete().eq('id', roundId)
+}
+
+export async function upsertTrackNote(note: TrackNote, roundId: string) {
+  const supabase = createClient()
+  await supabase.from('track_notes').upsert({
+    id: note.id, round_id: roundId, timestamp: note.timestamp,
+    author: note.author, text: note.text, resolved: note.resolved,
+    created_at: note.createdAt,
+  })
+}
+
+export async function deleteTrackNote(noteId: string) {
+  const supabase = createClient()
+  await supabase.from('track_notes').delete().eq('id', noteId)
+}
+
+export async function addTrackNoteReply(reply: TrackNoteReply, noteId: string) {
+  const supabase = createClient()
+  await supabase.from('track_note_replies').insert({
+    id: reply.id, note_id: noteId, author: reply.author,
+    text: reply.text, created_at: reply.createdAt,
+  })
+}
+
+// Whole-list replace (like invoice line items) rather than per-row upsert —
+// simpler than diffing which rows were removed client-side.
+export async function replaceTrackCredits(trackId: string, credits: TrackCredit[]) {
+  const supabase = createClient()
+  await supabase.from('track_credits').delete().eq('track_id', trackId)
+  if (credits.length > 0) {
+    await supabase.from('track_credits').insert(
+      credits.map((c, i) => ({
+        id: c.id, track_id: trackId, name: c.name,
+        role: c.role, split: c.split, sort_order: i,
+      }))
+    )
+  }
+}
+
+// ── Track audio files (Supabase Storage, private bucket) ────
+// Path convention: {clientId}/{trackId}/{roundId}.{ext} — the clientId
+// segment is what the storage RLS policy checks against 'music' access.
+export async function uploadTrackAudio(file: File, clientId: string, trackId: string, roundId: string): Promise<string> {
+  const supabase = createClient()
+  const ext = file.name.split('.').pop() || 'mp3'
+  const path = `${clientId}/${trackId}/${roundId}.${ext}`
+  const { error } = await supabase.storage.from('track-audio').upload(path, file, { upsert: true })
+  if (error) throw error
+  return path
+}
+
+export async function deleteTrackAudio(path: string) {
+  const supabase = createClient()
+  await supabase.storage.from('track-audio').remove([path])
+}
+
+// Signed URL is short-lived by design — this is unreleased music, so the
+// bucket is private and every playback gets a fresh, expiring link rather
+// than a permanent public URL.
+export async function getTrackAudioUrl(path: string): Promise<string | null> {
+  const supabase = createClient()
+  const { data, error } = await supabase.storage.from('track-audio').createSignedUrl(path, 3600)
+  if (error) return null
+  return data.signedUrl
 }
 
 export async function deleteTrack(trackId: string) {
@@ -603,11 +736,17 @@ export async function upsertAlbum(album: Album, clientId: string) {
   const lc = album.labelCopy
   await supabase.from('albums').upsert({
     id: album.id, client_id: clientId, title: album.title,
+    type: album.type ?? 'album',
     release_date: album.releaseDate ?? null,
     upc: lc?.upc ?? null, label: lc?.label ?? null,
     primary_artist: lc?.primaryArtist ?? null, genre: lc?.genre ?? null,
     copyright_p: lc?.copyrightP ?? null, copyright_c: lc?.copyrightC ?? null,
   })
+}
+
+export async function deleteAlbum(albumId: string) {
+  const supabase = createClient()
+  await supabase.from('albums').delete().eq('id', albumId)
 }
 
 // ── Checklist items ──────────────────────────────────────────

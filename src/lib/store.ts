@@ -21,7 +21,8 @@ import type {
   GuestListEntry, GuestListCategory, ReleaseStakeholder, StakeholderRole,
   CrewMember, ShowAdvance, TravelItem, Person, PersonActivity, Currency,
   CatalogWork, RegStatus, Invoice, InvoiceLineItem, InvoiceStatus, RevenueStream,
-  LegalTemplate, LegalTemplateClause,
+  LegalTemplate, LegalTemplateClause, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
+  ReleaseType,
 } from '@/types'
 import { DEMO_DATA } from '@/lib/demo-data'
 import { DEFAULT_LEGAL_TEMPLATES } from '@/lib/legal-templates-demo'
@@ -37,7 +38,7 @@ import {
   type AccessGrant, type PreviewMember,
   upsertClient, deleteClient as dbDeleteClient,
   upsertTrack, deleteTrack as dbDeleteTrack,
-  upsertAlbum, upsertChecklist,
+  upsertAlbum, deleteAlbum as dbDeleteAlbum, upsertChecklist,
   upsertPerson, deletePerson as dbDeletePerson,
   upsertStakeholder, deleteStakeholder as dbDeleteStakeholder,
   upsertShow, deleteShow as dbDeleteShow,
@@ -54,6 +55,10 @@ import {
   linkBankTransaction,
   upsertInvoice, deleteInvoice as dbDeleteInvoice,
   loadLegalTemplates, upsertLegalTemplate, deleteLegalTemplate as dbDeleteLegalTemplate,
+  upsertTrackRound, deleteTrackRound as dbDeleteTrackRound,
+  upsertTrackNote, deleteTrackNote as dbDeleteTrackNote,
+  addTrackNoteReply as dbAddTrackNoteReply,
+  replaceTrackCredits, uploadTrackAudio, deleteTrackAudio,
 } from '@/lib/db'
 
 // ── Persistence helpers ─────────────────────────────────────
@@ -202,14 +207,30 @@ interface StudioState {
 
   // ── Track actions ──
   addTrack: (albumId: string, title: string, stage: Stage) => void
+
+  // ── Releases (albums) — a client can have several: singles, EPs, albums ──
+  addAlbum: (title: string, type: ReleaseType) => void
+  updateAlbumMeta: (albumId: string, patch: { title?: string; type?: ReleaseType }) => void
+  deleteAlbum: (albumId: string) => void
   advanceTrack: (trackId: string) => void
   deleteTrack: (trackId: string) => void
-  updateTrackDetails: (trackId: string, patch: { title?: string; notes?: string; priority?: TrackPriority; owner?: string; dueDate?: string; stage?: Stage }) => void
+  updateTrackDetails: (trackId: string, patch: { title?: string; notes?: string; priority?: TrackPriority; owner?: string; dueDate?: string; stage?: Stage; releaseDate?: string; lyrics?: string; mixerBrief?: string }) => void
   updateTrackLabelCopy: (trackId: string, patch: TrackLabelCopy) => void
   updateAlbumLabelCopy: (albumId: string, patch: ReleaseLabelCopy) => void
   scheduleRelease: (albumId: string, releaseDate: string) => void
   toggleChecklistItem: (albumId: string, key: ChecklistItemKey) => void
   updateChecklistNote: (albumId: string, key: ChecklistItemKey, note: string) => void
+
+  // ── Track audio rounds / review threads / credits ──
+  /** Uploads the audio file to storage and adds a new round to the track. */
+  /** Returns the new round's id (or undefined if no client is selected). */
+  addTrackRound: (trackId: string, label: string, stage: Stage, file: File, duration?: number) => Promise<string | undefined>
+  deleteTrackRound: (trackId: string, roundId: string) => void
+  addTrackNote: (trackId: string, roundId: string, timestamp: number, author: string, text: string) => void
+  toggleTrackNoteResolved: (trackId: string, roundId: string, noteId: string) => void
+  deleteTrackNote: (trackId: string, roundId: string, noteId: string) => void
+  addTrackNoteReply: (trackId: string, roundId: string, noteId: string, author: string, text: string) => void
+  updateTrackCredits: (trackId: string, credits: TrackCredit[]) => void
 
   // ── People (shared directory) ──
   addPerson: (patch: { name: string; email?: string; phone?: string; org?: string; notes?: string }) => string
@@ -563,6 +584,56 @@ export const useStore = create<StudioState>((set, get) => ({
     saveData(updated)
   },
 
+  addAlbum: (title, type) => {
+    const { data, clientId, workspaceId } = get()
+    const newAlbum: Album = { id: 'alb-' + uid(), title, type, tracks: [] }
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return { ...c, songs: { albums: [...c.songs.albums, newAlbum] } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId) upsertAlbum(newAlbum, clientId).catch(console.error)
+  },
+
+  updateAlbumMeta: (albumId, patch) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedAlbum: Album | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          songs: {
+            albums: c.songs.albums.map(a => {
+              if (a.id !== albumId) return a
+              updatedAlbum = { ...a, ...patch }
+              return updatedAlbum
+            }),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId && updatedAlbum) upsertAlbum(updatedAlbum, clientId).catch(console.error)
+  },
+
+  deleteAlbum: (albumId) => {
+    const { data, clientId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return { ...c, songs: { albums: c.songs.albums.filter(a => a.id !== albumId) } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    dbDeleteAlbum(albumId).catch(console.error)
+  },
+
   advanceTrack: (trackId) => {
     const stages: Stage[] = ['track', 'mix', 'master', 'done']
     const { data, clientId } = get()
@@ -793,6 +864,231 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     if (workspaceId && updatedItems) upsertChecklist(updatedItems, albumId).catch(console.error)
+  },
+
+  // ── Track audio rounds / review threads / credits ──
+  addTrackRound: async (trackId, label, stage, file, duration) => {
+    const { data, clientId, workspaceId } = get()
+    if (!clientId) return
+    const roundId = 'round-' + uid()
+    let audioPath: string | undefined
+    if (workspaceId) {
+      try {
+        audioPath = await uploadTrackAudio(file, clientId, trackId, roundId)
+      } catch (err) {
+        console.error(err)
+        return
+      }
+    }
+    const newRound: TrackRound = {
+      id: roundId, label, stage, audioPath, duration,
+      notes: [], createdAt: new Date().toISOString(),
+    }
+    let roundCount = 0
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          songs: {
+            albums: c.songs.albums.map(a => ({
+              ...a,
+              tracks: a.tracks.map(t => {
+                if (t.id !== trackId) return t
+                const rounds = [...(t.rounds ?? []), newRound]
+                roundCount = rounds.length
+                return { ...t, rounds }
+              }),
+            })),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId) upsertTrackRound(newRound, trackId, roundCount - 1).catch(console.error)
+    return roundId
+  },
+
+  deleteTrackRound: (trackId, roundId) => {
+    const { data, clientId } = get()
+    let removedPath: string | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          songs: {
+            albums: c.songs.albums.map(a => ({
+              ...a,
+              tracks: a.tracks.map(t => {
+                if (t.id !== trackId) return t
+                const removed = (t.rounds ?? []).find(r => r.id === roundId)
+                if (removed) removedPath = removed.audioPath
+                return { ...t, rounds: (t.rounds ?? []).filter(r => r.id !== roundId) }
+              }),
+            })),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    dbDeleteTrackRound(roundId).catch(console.error)
+    if (removedPath) deleteTrackAudio(removedPath).catch(console.error)
+  },
+
+  addTrackNote: (trackId, roundId, timestamp, author, text) => {
+    const { data, clientId, workspaceId } = get()
+    if (!text.trim()) return
+    const newNote: TrackNote = {
+      id: 'note-' + uid(), timestamp, author, text: text.trim(),
+      resolved: false, replies: [], createdAt: new Date().toISOString(),
+    }
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          songs: {
+            albums: c.songs.albums.map(a => ({
+              ...a,
+              tracks: a.tracks.map(t => {
+                if (t.id !== trackId) return t
+                return {
+                  ...t,
+                  rounds: (t.rounds ?? []).map(r => r.id !== roundId ? r : { ...r, notes: [...r.notes, newNote] }),
+                }
+              }),
+            })),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId) upsertTrackNote(newNote, roundId).catch(console.error)
+  },
+
+  toggleTrackNoteResolved: (trackId, roundId, noteId) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedNote: TrackNote | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          songs: {
+            albums: c.songs.albums.map(a => ({
+              ...a,
+              tracks: a.tracks.map(t => {
+                if (t.id !== trackId) return t
+                return {
+                  ...t,
+                  rounds: (t.rounds ?? []).map(r => {
+                    if (r.id !== roundId) return r
+                    return {
+                      ...r,
+                      notes: r.notes.map(n => {
+                        if (n.id !== noteId) return n
+                        updatedNote = { ...n, resolved: !n.resolved }
+                        return updatedNote
+                      }),
+                    }
+                  }),
+                }
+              }),
+            })),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && updatedNote) upsertTrackNote(updatedNote, roundId).catch(console.error)
+  },
+
+  deleteTrackNote: (trackId, roundId, noteId) => {
+    const { data, clientId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          songs: {
+            albums: c.songs.albums.map(a => ({
+              ...a,
+              tracks: a.tracks.map(t => {
+                if (t.id !== trackId) return t
+                return {
+                  ...t,
+                  rounds: (t.rounds ?? []).map(r => r.id !== roundId ? r : { ...r, notes: r.notes.filter(n => n.id !== noteId) }),
+                }
+              }),
+            })),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    dbDeleteTrackNote(noteId).catch(console.error)
+  },
+
+  addTrackNoteReply: (trackId, roundId, noteId, author, text) => {
+    const { data, clientId, workspaceId } = get()
+    if (!text.trim()) return
+    const newReply: TrackNoteReply = { id: 'reply-' + uid(), author, text: text.trim(), createdAt: new Date().toISOString() }
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          songs: {
+            albums: c.songs.albums.map(a => ({
+              ...a,
+              tracks: a.tracks.map(t => {
+                if (t.id !== trackId) return t
+                return {
+                  ...t,
+                  rounds: (t.rounds ?? []).map(r => {
+                    if (r.id !== roundId) return r
+                    return {
+                      ...r,
+                      notes: r.notes.map(n => n.id !== noteId ? n : { ...n, replies: [...n.replies, newReply] }),
+                    }
+                  }),
+                }
+              }),
+            })),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId) dbAddTrackNoteReply(newReply, noteId).catch(console.error)
+  },
+
+  updateTrackCredits: (trackId, credits) => {
+    const { data, clientId, workspaceId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          songs: {
+            albums: c.songs.albums.map(a => ({
+              ...a,
+              tracks: a.tracks.map(t => t.id !== trackId ? t : { ...t, credits }),
+            })),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId) replaceTrackCredits(trackId, credits).catch(console.error)
   },
 
   // ── Guest list ──

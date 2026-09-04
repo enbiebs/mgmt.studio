@@ -16,6 +16,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-plaid-link": "^5.0.0",
+    "wavesurfer.js": "^7.12.11",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

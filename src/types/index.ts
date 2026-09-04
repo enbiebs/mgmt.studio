@@ -52,11 +52,54 @@ export interface Track {
   owner?: string          // who has the ball right now, e.g. "Alex — mixing", "Awaiting artist approval"
   dueDate?: string        // ISO date the current stage is targeted to wrap by
   labelCopy?: TrackLabelCopy
+  releaseDate?: string
+  lyrics?: string
+  mixerBrief?: string
+  rounds?: TrackRound[]    // uploaded audio versions, each with its own timestamped review thread
+  credits?: TrackCredit[]
 }
+
+// ── Track audio review (rounds, timestamped notes, credits) ─────
+export interface TrackNoteReply {
+  id: string
+  author: string
+  text: string
+  createdAt: string
+}
+
+export interface TrackNote {
+  id: string
+  timestamp: number   // seconds into the round's audio
+  author: string
+  text: string
+  resolved: boolean
+  replies: TrackNoteReply[]
+  createdAt: string
+}
+
+export interface TrackRound {
+  id: string
+  label: string        // "V3", "Working V2", "mix ref"
+  stage: Stage          // pipeline stage this round belongs to, for badge coloring
+  audioPath?: string     // storage path in the 'track-audio' bucket
+  duration?: number      // seconds, cached from the audio file
+  notes: TrackNote[]
+  createdAt: string
+}
+
+export interface TrackCredit {
+  id: string
+  name: string
+  role: string          // "Producer", "Songwriter", "Mixer", etc.
+  split: number          // percentage
+}
+
+export type ReleaseType = 'single' | 'ep' | 'album'
 
 export interface Album {
   id: string
   title: string
+  type?: ReleaseType   // missing on older records — treat as 'album'
   releaseDate?: string
   tracks: Track[]
   labelCopy?: ReleaseLabelCopy
