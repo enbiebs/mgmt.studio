@@ -1,13 +1,16 @@
 'use client'
 // ──────────────────────────────────────────────────────────
-//  LegalView — Contract pipeline, deadline alerts, rights register
-//  Read-only for now — contracts.data is real (RLS-scoped to the
-//  'legal' section) but there's no add/edit UI yet.
+//  LegalView — Contract pipeline, deadline alerts, rights register,
+//  and shared document templates.
+//  Contracts are still read-only — there's no add/edit UI for them yet.
+//  Templates ARE editable (workspace-wide, gated by canEdit('legal')).
 // ──────────────────────────────────────────────────────────
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '@/lib/store'
-import type { Contract, ContractStatus, ContractType } from '@/types'
+import { Modal, FormField, inputClass } from '@/components/ui/Modal'
+import { uid } from '@/lib/utils'
+import type { Contract, ContractStatus, ContractType, LegalTemplate, LegalTemplateClause } from '@/types'
 
 const STATUS_CONFIG: Record<ContractStatus, { label: string; color: string; bg: string; dot: string }> = {
   draft:       { label: 'Draft',       color: 'text-gray-500',   bg: 'bg-gray-100',   dot: 'bg-gray-400'   },
@@ -54,7 +57,7 @@ function fmt(n: number, currency = 'USD') {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n)
 }
 
-type LawyerTab = 'pipeline' | 'alerts' | 'register'
+type LawyerTab = 'pipeline' | 'alerts' | 'register' | 'templates'
 
 const ACTIVE_STATUSES: ContractStatus[] = ['draft', 'review', 'negotiation', 'signed']
 
@@ -92,7 +95,7 @@ export function LegalView() {
           </div>
         </div>
         <div className="flex gap-0.5">
-          {([['pipeline', 'Contract Pipeline'], ['alerts', `Alerts${flagged.length + expiring.length + expired.length > 0 ? ` (${flagged.length + expiring.length + expired.length})` : ''}`], ['register', 'Rights Register']] as const).map(([t, label]) => (
+          {([['pipeline', 'Contract Pipeline'], ['alerts', `Alerts${flagged.length + expiring.length + expired.length > 0 ? ` (${flagged.length + expiring.length + expired.length})` : ''}`], ['register', 'Rights Register'], ['templates', 'Templates']] as const).map(([t, label]) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -110,6 +113,7 @@ export function LegalView() {
         {tab === 'pipeline'  && <PipelineTab contracts={contracts} />}
         {tab === 'alerts'    && <AlertsTab flagged={flagged} expiring={expiring} expired={expired} />}
         {tab === 'register'  && <RegisterTab contracts={contracts} types={types} filterType={filterType} setFilterType={setFilterType} filtered={filtered} />}
+        {tab === 'templates' && <TemplatesTab />}
       </div>
     </div>
   )
@@ -360,6 +364,223 @@ function RegisterTab({ contracts, types, filterType, setFilterType, filtered }: 
             })}
           </tbody>
         </table>
+      </div>
+    </div>
+  )
+}
+
+// ── Templates ───────────────────────────────────────────────
+function TemplatesTab() {
+  const editable = useStore(s => s.canEdit('legal'))
+  const templates = useStore(s => s.legalTemplates)
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
+
+  const open = templates.find(t => t.id === openId)
+
+  return (
+    <div className="max-w-3xl">
+      <div className="flex items-start justify-between mb-4 gap-4">
+        <div className="text-xs text-gray-400 leading-relaxed">
+          Reusable document language shared across every client — edit any clause below to match how you actually want it worded.
+        </div>
+        {editable && (
+          <button
+            onClick={() => setAddOpen(true)}
+            className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors flex-shrink-0"
+          >
+            + New template
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {templates.map(t => (
+          <div
+            key={t.id}
+            onClick={() => setOpenId(t.id)}
+            className="border border-gray-100 rounded-xl px-4 py-3 flex items-start justify-between gap-3 hover:bg-gray-50 transition-colors cursor-pointer"
+          >
+            <div className="min-w-0">
+              <div className="text-sm font-medium">{t.name}</div>
+              {t.description && <div className="text-xs text-gray-400 mt-0.5">{t.description}</div>}
+            </div>
+            <span className="text-[11px] text-gray-300 flex-shrink-0 mt-0.5">
+              {t.clauses.length} {t.clauses.length === 1 ? 'clause' : 'clauses'}
+            </span>
+          </div>
+        ))}
+        {templates.length === 0 && (
+          <div className="text-sm text-gray-300 text-center py-12">No templates yet</div>
+        )}
+      </div>
+
+      {open && <TemplateModal template={open} onClose={() => setOpenId(null)} />}
+      {addOpen && <NewTemplateModal onClose={() => setAddOpen(false)} />}
+    </div>
+  )
+}
+
+function NewTemplateModal({ onClose }: { onClose: () => void }) {
+  const { addLegalTemplate } = useStore()
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+
+  function handleCreate() {
+    if (!name.trim()) return
+    addLegalTemplate(name.trim(), description.trim() || undefined)
+    onClose()
+  }
+
+  return (
+    <Modal title="New template" onClose={onClose} footer={
+      <>
+        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+        <button onClick={handleCreate} disabled={!name.trim()} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:opacity-40">
+          Create
+        </button>
+      </>
+    }>
+      <FormField label="Name">
+        <input className={inputClass} placeholder="e.g. Merch Licensing Agreement" value={name} onChange={e => setName(e.target.value)} autoFocus />
+      </FormField>
+      <FormField label="Description">
+        <input className={inputClass} placeholder="Optional" value={description} onChange={e => setDescription(e.target.value)} />
+      </FormField>
+    </Modal>
+  )
+}
+
+// A dedicated wide, scrollable panel rather than the shared 460px Modal —
+// editing a 10+ clause document needs real room, unlike every other
+// short-form modal in the app.
+function TemplateModal({ template, onClose }: { template: LegalTemplate; onClose: () => void }) {
+  const editable = useStore(s => s.canEdit('legal'))
+  const { updateLegalTemplate, deleteLegalTemplate } = useStore()
+  const [name, setName] = useState(template.name)
+  const [description, setDescription] = useState(template.description ?? '')
+  const [clauses, setClauses] = useState<LegalTemplateClause[]>(template.clauses)
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function updateClause(id: string, patch: Partial<LegalTemplateClause>) {
+    setClauses(cs => cs.map(c => c.id === id ? { ...c, ...patch } : c))
+  }
+  function removeClause(id: string) {
+    setClauses(cs => cs.filter(c => c.id !== id))
+  }
+  function addClause() {
+    setClauses(cs => [...cs, { id: 'clause-' + uid(), title: 'New clause', body: '' }])
+  }
+  function handleSave() {
+    updateLegalTemplate(template.id, {
+      name: name.trim() || template.name,
+      description: description.trim() || undefined,
+      clauses,
+    })
+    onClose()
+  }
+  function handleDelete() {
+    if (!confirm(`Delete the "${template.name}" template? This can't be undone.`)) return
+    deleteLegalTemplate(template.id)
+    onClose()
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-in fade-in duration-150"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-canvas rounded-2xl shadow-2xl w-[720px] max-w-[92vw] max-h-[86vh] flex flex-col animate-in slide-in-from-bottom-3 duration-200">
+        <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-gray-100 flex-shrink-0">
+          <div className="flex-1 min-w-0">
+            {editable ? (
+              <input
+                className="font-serif text-lg font-medium w-full outline-none bg-transparent"
+                value={name}
+                onChange={e => setName(e.target.value)}
+              />
+            ) : (
+              <div className="font-serif text-lg font-medium">{name}</div>
+            )}
+            {editable ? (
+              <input
+                className="text-xs text-gray-400 w-full outline-none bg-transparent mt-1"
+                placeholder="Description (optional)"
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+              />
+            ) : description ? (
+              <div className="text-xs text-gray-400 mt-1">{description}</div>
+            ) : null}
+          </div>
+          <button onClick={onClose} className="text-gray-300 hover:text-gray-500 flex-shrink-0 text-lg leading-none">✕</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+          {clauses.map(c => (
+            <div key={c.id} className="group">
+              <div className="flex items-center gap-2 mb-1.5">
+                {editable ? (
+                  <input
+                    className="text-xs font-semibold text-gray-600 flex-1 outline-none bg-transparent"
+                    value={c.title}
+                    onChange={e => updateClause(c.id, { title: e.target.value })}
+                  />
+                ) : (
+                  <div className="text-xs font-semibold text-gray-600 flex-1">{c.title}</div>
+                )}
+                {editable && (
+                  <button
+                    onClick={() => removeClause(c.id)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              {editable ? (
+                <textarea
+                  className={inputClass}
+                  rows={Math.min(10, Math.max(3, Math.ceil(c.body.length / 90)))}
+                  value={c.body}
+                  onChange={e => updateClause(c.id, { body: e.target.value })}
+                />
+              ) : (
+                <div className="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed">{c.body}</div>
+              )}
+            </div>
+          ))}
+          {clauses.length === 0 && (
+            <div className="text-sm text-gray-300 text-center py-8">No clauses yet</div>
+          )}
+          {editable && (
+            <button onClick={addClause} className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors">
+              + Add clause
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 px-6 py-4 border-t border-gray-100 flex-shrink-0">
+          {editable && (
+            <button onClick={handleDelete} className="px-3 py-1.5 border border-red-200 text-red-500 rounded-lg text-sm hover:bg-red-50 mr-auto">
+              Delete template
+            </button>
+          )}
+          {editable ? (
+            <>
+              <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+              <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Save</button>
+            </>
+          ) : (
+            <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 ml-auto">Close</button>
+          )}
+        </div>
       </div>
     </div>
   )

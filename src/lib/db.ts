@@ -15,6 +15,7 @@ import type {
   ShowAdvance, AdvanceContact, AdvanceSchedule, AdvanceProduction,
   AdvanceHospitality, AdvanceLogistics,
   CrewMember, GuestListEntry, TravelItem, Currency, Person, PersonActivity, CatalogWork,
+  LegalTemplate, LegalTemplateClause,
 } from '@/types'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
 import { EMPTY_FANDOM }    from '@/lib/fandom-demo'
@@ -462,6 +463,23 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
   return { clients }
 }
 
+// Legal templates are shared workspace-wide (not per-client), so they're
+// loaded separately rather than nested in AppData.
+export async function loadLegalTemplates(workspaceId: string): Promise<LegalTemplate[]> {
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('legal_templates')
+    .select('*')
+    .eq('workspace_id', workspaceId)
+  return (data ?? []).map((t: {
+    id: string; key: string; name: string; description?: string
+    clauses: LegalTemplateClause[]; updated_at: string
+  }) => ({
+    id: t.id, key: t.key, name: t.name, description: t.description ?? undefined,
+    clauses: t.clauses ?? [], updatedAt: t.updated_at,
+  }))
+}
+
 // ── Get current user's workspace + real role ─────────────────
 // The role a signed-in user actually holds — not the client-side
 // "preview as" toggle. Only a real 'manager' should be able to
@@ -811,6 +829,23 @@ export async function upsertInvoice(invoice: Invoice, clientId: string) {
 export async function deleteInvoice(invoiceId: string) {
   const supabase = createClient()
   await supabase.from('invoices').delete().eq('id', invoiceId)
+}
+
+// ── Legal templates (workspace-wide, not per-client) ────────
+export async function upsertLegalTemplate(template: LegalTemplate, workspaceId: string) {
+  const supabase = createClient()
+  await supabase.from('legal_templates').upsert({
+    id: template.id, workspace_id: workspaceId,
+    key: template.key, name: template.name,
+    description: template.description ?? null,
+    clauses: template.clauses as unknown as LegalTemplateClause[],
+    updated_at: template.updatedAt,
+  })
+}
+
+export async function deleteLegalTemplate(templateId: string) {
+  const supabase = createClient()
+  await supabase.from('legal_templates').delete().eq('id', templateId)
 }
 
 // ── Crew ───────────────────────────────────────────────────

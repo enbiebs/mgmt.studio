@@ -731,3 +731,20 @@ export interface AgentData {
 export interface LegalData {
   contracts: Contract[]
 }
+
+// Shared across every client in the workspace — boilerplate document
+// language (NDA, split agreement, etc.) rather than a per-client record.
+export interface LegalTemplateClause {
+  id:    string
+  title: string
+  body:  string
+}
+
+export interface LegalTemplate {
+  id:          string
+  key:         string   // stable slug, e.g. 'nda' — used to re-seed defaults without duplicating
+  name:        string
+  description?: string
+  clauses:     LegalTemplateClause[]
+  updatedAt:   string
+}

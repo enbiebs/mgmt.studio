@@ -21,8 +21,10 @@ import type {
   GuestListEntry, GuestListCategory, ReleaseStakeholder, StakeholderRole,
   CrewMember, ShowAdvance, TravelItem, Person, PersonActivity, Currency,
   CatalogWork, RegStatus, Invoice, InvoiceLineItem, InvoiceStatus, RevenueStream,
+  LegalTemplate, LegalTemplateClause,
 } from '@/types'
 import { DEMO_DATA } from '@/lib/demo-data'
+import { DEFAULT_LEGAL_TEMPLATES } from '@/lib/legal-templates-demo'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
 import { EMPTY_FANDOM } from '@/lib/fandom-demo'
 import { EMPTY_AGENT } from '@/lib/agent-demo'
@@ -51,6 +53,7 @@ import {
   upsertCatalogWork, deleteCatalogWork as dbDeleteCatalogWork,
   linkBankTransaction,
   upsertInvoice, deleteInvoice as dbDeleteInvoice,
+  loadLegalTemplates, upsertLegalTemplate, deleteLegalTemplate as dbDeleteLegalTemplate,
 } from '@/lib/db'
 
 // ── Persistence helpers ─────────────────────────────────────
@@ -70,6 +73,26 @@ function saveData(data: AppData) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
 }
 
+// Legal templates are workspace-wide rather than nested in AppData (most
+// store actions rebuild `data` as `{ clients: ... }` from scratch, which
+// would silently drop any sibling field), so they get their own small
+// local-storage slot alongside the same persistence pattern.
+const LEGAL_TEMPLATES_KEY = 'studio-legal-templates-v1'
+
+function loadLegalTemplatesLocal(): LegalTemplate[] {
+  if (typeof window === 'undefined') return JSON.parse(JSON.stringify(DEFAULT_LEGAL_TEMPLATES))
+  try {
+    const saved = localStorage.getItem(LEGAL_TEMPLATES_KEY)
+    if (saved) return JSON.parse(saved)
+  } catch { /* ignore */ }
+  return JSON.parse(JSON.stringify(DEFAULT_LEGAL_TEMPLATES))
+}
+
+function saveLegalTemplatesLocal(templates: LegalTemplate[]) {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(LEGAL_TEMPLATES_KEY, JSON.stringify(templates))
+}
+
 // access_grants.section uses 'music' where the app's MainSection uses 'songs' —
 // everything else lines up 1:1.
 const SECTION_TO_GRANT_KEY: Record<MainSection, string> = {
@@ -82,6 +105,9 @@ const ALL_SECTIONS: MainSection[] = ['songs', 'tour', 'content', 'business', 'te
 interface StudioState {
   // Data
   data: AppData
+  // Shared document templates (NDA, split agreement, etc.) — workspace-wide,
+  // not per-client, so kept separate from `data`.
+  legalTemplates: LegalTemplate[]
 
   // Auth / workspace
   workspaceId: string | null
@@ -262,6 +288,11 @@ interface StudioState {
   addArtistTodo: (title: string, dueDate?: string) => void
   toggleArtistTodo: (todoId: string) => void
   deleteArtistTodo: (todoId: string) => void
+
+  // ── Legal templates (workspace-wide) ──
+  addLegalTemplate: (name: string, description?: string) => void
+  updateLegalTemplate: (templateId: string, patch: { name?: string; description?: string; clauses?: LegalTemplateClause[] }) => void
+  deleteLegalTemplate: (templateId: string) => void
 }
 
 // ── Store ───────────────────────────────────────────────────
@@ -269,6 +300,7 @@ const now = new Date()
 
 export const useStore = create<StudioState>((set, get) => ({
   data: loadData(),
+  legalTemplates: loadLegalTemplatesLocal(),
 
   workspaceId: null,
   userId:      null,
@@ -346,8 +378,19 @@ export const useStore = create<StudioState>((set, get) => ({
         return
       }
       const { workspaceId, role, clientId: memberClientId, memberId } = membership
-      const appData = await loadWorkspaceData(workspaceId)
+      const [appData, loadedTemplates] = await Promise.all([
+        loadWorkspaceData(workspaceId),
+        loadLegalTemplates(workspaceId),
+      ])
       const hasClients = appData.clients.length > 0
+
+      // First load for this workspace — seed the starter templates and
+      // persist them so they're real, editable workspace rows from here on.
+      let legalTemplates = loadedTemplates
+      if (legalTemplates.length === 0) {
+        legalTemplates = JSON.parse(JSON.stringify(DEFAULT_LEGAL_TEMPLATES))
+        legalTemplates.forEach(t => upsertLegalTemplate(t, workspaceId).catch(console.error))
+      }
 
       let grants: AccessGrant[] = []
       let previewMembers: PreviewMember[] = []
@@ -366,6 +409,7 @@ export const useStore = create<StudioState>((set, get) => ({
         grants,
         previewMembers,
         data: hasClients ? appData : { clients: [] },
+        legalTemplates,
         // Artists land straight in their own client — no roster to pick from.
         ...(role === 'artist' && memberClientId
           ? { view: 'studio' as const, clientId: memberClientId }
@@ -1589,5 +1633,43 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     dbDeleteArtistTodo(todoId).catch(console.error)
+  },
+
+  // ── Legal templates (workspace-wide) ──
+  addLegalTemplate: (name, description) => {
+    const { legalTemplates, workspaceId } = get()
+    const newTemplate: LegalTemplate = {
+      id: 'tmpl-' + uid(),
+      key: 'tmpl-' + uid(),
+      name,
+      description,
+      clauses: [],
+      updatedAt: new Date().toISOString().slice(0, 10),
+    }
+    const updated = [...legalTemplates, newTemplate]
+    set({ legalTemplates: updated })
+    saveLegalTemplatesLocal(updated)
+    if (workspaceId) upsertLegalTemplate(newTemplate, workspaceId).catch(console.error)
+  },
+
+  updateLegalTemplate: (templateId, patch) => {
+    const { legalTemplates, workspaceId } = get()
+    let updatedTemplate: LegalTemplate | undefined
+    const updated = legalTemplates.map(t => {
+      if (t.id !== templateId) return t
+      updatedTemplate = { ...t, ...patch, updatedAt: new Date().toISOString().slice(0, 10) }
+      return updatedTemplate
+    })
+    set({ legalTemplates: updated })
+    saveLegalTemplatesLocal(updated)
+    if (workspaceId && updatedTemplate) upsertLegalTemplate(updatedTemplate, workspaceId).catch(console.error)
+  },
+
+  deleteLegalTemplate: (templateId) => {
+    const { legalTemplates } = get()
+    const updated = legalTemplates.filter(t => t.id !== templateId)
+    set({ legalTemplates: updated })
+    saveLegalTemplatesLocal(updated)
+    dbDeleteLegalTemplate(templateId).catch(console.error)
   },
 }))
