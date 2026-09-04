@@ -5,7 +5,7 @@ import { stageLabel, stageBadgeClass, isStale, uid } from '@/lib/utils'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { TrackWaveform } from './TrackWaveform'
 import { getTrackAudioUrl } from '@/lib/db'
-import type { Stage, Track, TrackPriority, TrackCredit, TrackNote } from '@/types'
+import type { Stage, Track, TrackPriority, TrackCredit, TrackNote, Album, ReleaseType } from '@/types'
 
 const PRIORITY_LABEL: Record<TrackPriority, string> = {
   'lead-single': 'Lead Single',
@@ -18,37 +18,40 @@ const PRIORITY_STYLE: Record<TrackPriority, string> = {
   'album-cut':   'bg-gray-100 text-gray-500',
 }
 
+const RELEASE_TYPE_LABEL: Record<ReleaseType, string> = { single: 'Single', ep: 'EP', album: 'Album' }
+
 const STAGES: Stage[] = ['track', 'mix', 'master', 'done']
 
+// A client can have several releases — a single, an EP, a full album —
+// each grouping its own tracks. Every client always has at least one
+// (created alongside the client), so "delete release" only appears once
+// there's a second one to fall back to.
 export function SongsView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('songs'))
-  const { advanceTrack, deleteTrack, addTrack } = useStore()
-  const [addOpen, setAddOpen] = useState(false)
-  const [newTitle, setNewTitle] = useState('')
-  const [newStage, setNewStage] = useState<Stage>('track')
+  const { deleteAlbum } = useStore()
+  const [addTrackFor, setAddTrackFor] = useState<string | null>(null)
+  const [addReleaseOpen, setAddReleaseOpen] = useState(false)
   const [filter, setFilter] = useState<Stage | 'all'>('all')
   const [detailTrackId, setDetailTrackId] = useState<string | null>(null)
 
   if (!client) return null
-  const album  = client.songs.albums[0]
-  const tracks = album.tracks
-  const done   = tracks.filter(t => t.stage === 'done').length
-  const inProd = tracks.filter(t => ['mix', 'master'].includes(t.stage)).length
-  const stalled = tracks.filter(t => isStale(t.stage, t.touched)).length
+  const albums = client.songs.albums
+  const allTracks = albums.flatMap(a => a.tracks)
+  const done   = allTracks.filter(t => t.stage === 'done').length
+  const inProd = allTracks.filter(t => ['mix', 'master'].includes(t.stage)).length
+  const stalled = allTracks.filter(t => isStale(t.stage, t.touched)).length
+  const detailTrack = allTracks.find(t => t.id === detailTrackId) ?? null
 
-  const visible = filter === 'all' ? tracks : tracks.filter(t => t.stage === filter)
-  const detailTrack = tracks.find(t => t.id === detailTrackId) ?? null
-
-  function handleAdd() {
-    if (!newTitle.trim()) return
-    addTrack(album.id, newTitle.trim(), newStage)
-    setNewTitle(''); setNewStage('track'); setAddOpen(false)
+  function handleDeleteAlbum(album: Album) {
+    if (confirm(`Delete "${album.title}"? This removes all ${album.tracks.length} of its tracks too.`)) {
+      deleteAlbum(album.id)
+    }
   }
 
   return (
     <div className="flex-1 overflow-auto p-6">
-      {/* Album header */}
+      {/* Roster header — aggregate across every release */}
       <div className="flex items-start gap-4 mb-6">
         <div
           className="w-[76px] h-[76px] rounded-xl flex items-center justify-center text-white text-3xl flex-shrink-0"
@@ -57,42 +60,23 @@ export function SongsView() {
           ♪
         </div>
         <div>
-          <div className="font-serif text-2xl font-medium">{album.title}</div>
+          <div className="font-serif text-2xl font-medium">{client.name}</div>
           <div className="text-sm text-gray-400 mt-1">
-            {tracks.length} tracks · {done} done · {inProd} in mix/master
+            {albums.length} {albums.length === 1 ? 'release' : 'releases'} · {allTracks.length} tracks · {done} done · {inProd} in mix/master
             {stalled > 0 && <span className="text-amber-500"> · {stalled} stalled 10d+</span>}
           </div>
           {editable && (
             <button
-              onClick={() => setAddOpen(true)}
+              onClick={() => setAddReleaseOpen(true)}
               className="mt-2 px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
             >
-              + New track
+              + New release
             </button>
           )}
         </div>
       </div>
 
-      {/* Numbered track strip — colored by stage, click to jump straight to a track */}
-      {tracks.length > 0 && (
-        <div className="flex gap-1 mb-5">
-          {tracks.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setDetailTrackId(t.id)}
-              title={t.title}
-              className={`flex-1 h-9 rounded-md flex items-center justify-center text-[10px] font-bold transition-opacity hover:opacity-80 ${
-                t.stage === 'done'   ? 'bg-gray-800 text-canvas' :
-                t.stage === 'master' ? 'bg-blue-400 text-canvas'  :
-                t.stage === 'mix'    ? 'bg-purple-400 text-canvas' : 'bg-gray-100 text-gray-400'
-              }`}
-            >
-              {String(t.num).padStart(2, '0')}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="flex gap-4 text-[11px] text-gray-400 mb-5 -mt-3">
+      <div className="flex gap-4 text-[11px] text-gray-400 mb-4">
         {[['bg-gray-800','Done'],['bg-purple-400','Mix'],['bg-blue-400','Master'],['bg-gray-100','Track']].map(([bg, lbl]) => (
           <span key={lbl} className="flex items-center gap-1">
             <span className={`inline-block w-2 h-2 rounded-sm ${bg}`} />{lbl}
@@ -100,10 +84,10 @@ export function SongsView() {
         ))}
       </div>
 
-      {/* Stage filter chips */}
-      <div className="flex gap-1.5 mb-3">
+      {/* Stage filter chips — applies across every release below */}
+      <div className="flex gap-1.5 mb-5">
         {(['all', ...STAGES] as const).map(s => {
-          const count = s === 'all' ? tracks.length : tracks.filter(t => t.stage === s).length
+          const count = s === 'all' ? allTracks.length : allTracks.filter(t => t.stage === s).length
           return (
             <button
               key={s}
@@ -117,6 +101,90 @@ export function SongsView() {
           )
         })}
       </div>
+
+      {albums.map(album => (
+        <ReleaseSection
+          key={album.id}
+          album={album}
+          editable={editable}
+          filter={filter}
+          onOpenTrack={setDetailTrackId}
+          onAddTrack={() => setAddTrackFor(album.id)}
+          onDeleteAlbum={albums.length > 1 ? () => handleDeleteAlbum(album) : undefined}
+        />
+      ))}
+
+      {addTrackFor && (
+        <AddTrackModal albumId={addTrackFor} onClose={() => setAddTrackFor(null)} />
+      )}
+
+      {addReleaseOpen && (
+        <NewReleaseModal onClose={() => setAddReleaseOpen(false)} />
+      )}
+
+      {detailTrack && (
+        <TrackDetailModal track={detailTrack} onClose={() => setDetailTrackId(null)} />
+      )}
+    </div>
+  )
+}
+
+function ReleaseSection({ album, editable, filter, onOpenTrack, onAddTrack, onDeleteAlbum }: {
+  album: Album
+  editable: boolean
+  filter: Stage | 'all'
+  onOpenTrack: (trackId: string) => void
+  onAddTrack: () => void
+  onDeleteAlbum?: () => void
+}) {
+  const { advanceTrack, deleteTrack } = useStore()
+  const tracks = album.tracks
+  const visible = filter === 'all' ? tracks : tracks.filter(t => t.stage === filter)
+  const releaseType = album.type ?? 'album'
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-serif text-lg font-medium truncate">{album.title}</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-gray-100 text-gray-500 flex-shrink-0">
+            {RELEASE_TYPE_LABEL[releaseType]}
+          </span>
+          <span className="text-xs text-gray-400 flex-shrink-0">{tracks.length} {tracks.length === 1 ? 'track' : 'tracks'}</span>
+        </div>
+        {editable && (
+          <div className="flex gap-1.5 flex-shrink-0">
+            <button onClick={onAddTrack} className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors">
+              + New track
+            </button>
+            {onDeleteAlbum && (
+              <button onClick={onDeleteAlbum} className="px-2 py-1 text-xs text-red-400 hover:bg-red-50 rounded-lg transition-colors">
+                Delete release
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Numbered track strip — colored by stage, click to jump straight to a track */}
+      {tracks.length > 0 && (
+        <div className="flex gap-1 mb-3">
+          {tracks.map(t => (
+            <button
+              key={t.id}
+              onClick={() => onOpenTrack(t.id)}
+              title={t.title}
+              className={`flex-1 h-9 rounded-md flex items-center justify-center text-[10px] font-bold transition-opacity hover:opacity-80 ${
+                t.stage === 'done'   ? 'bg-gray-800 text-canvas' :
+                t.stage === 'master' ? 'bg-blue-400 text-canvas'  :
+                t.stage === 'mix'    ? 'bg-purple-400 text-canvas' : 'bg-gray-100 text-gray-400'
+              }`}
+            >
+              {String(t.num).padStart(2, '0')}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Track table */}
       <table className="w-full border-collapse">
@@ -135,7 +203,7 @@ export function SongsView() {
             return (
               <tr
                 key={t.id}
-                onClick={() => setDetailTrackId(t.id)}
+                onClick={() => onOpenTrack(t.id)}
                 className="group hover:bg-gray-50 transition-colors cursor-pointer"
               >
                 <td className="px-2.5 py-2.5 text-xs text-gray-400">{String(t.num).padStart(2, '0')}</td>
@@ -188,37 +256,78 @@ export function SongsView() {
           })}
           {visible.length === 0 && (
             <tr>
-              <td colSpan={7} className="text-center text-sm text-gray-300 py-8">No tracks at this stage</td>
+              <td colSpan={7} className="text-center text-sm text-gray-300 py-8">
+                {tracks.length === 0 ? 'No tracks in this release yet' : 'No tracks at this stage'}
+              </td>
             </tr>
           )}
         </tbody>
       </table>
-
-      {/* Add track modal */}
-      {addOpen && (
-        <Modal title="Add a track" onClose={() => setAddOpen(false)} footer={
-          <>
-            <button onClick={() => setAddOpen(false)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-            <button onClick={handleAdd} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Add track</button>
-          </>
-        }>
-          <FormField label="Title">
-            <input className={inputClass} placeholder="Track title" value={newTitle} onChange={e => setNewTitle(e.target.value)} autoFocus />
-          </FormField>
-          <FormField label="Starting stage">
-            <select className={selectClass} value={newStage} onChange={e => setNewStage(e.target.value as Stage)}>
-              <option value="track">Track</option>
-              <option value="mix">Mix</option>
-              <option value="master">Master</option>
-            </select>
-          </FormField>
-        </Modal>
-      )}
-
-      {detailTrack && (
-        <TrackDetailModal track={detailTrack} onClose={() => setDetailTrackId(null)} />
-      )}
     </div>
+  )
+}
+
+function AddTrackModal({ albumId, onClose }: { albumId: string; onClose: () => void }) {
+  const { addTrack } = useStore()
+  const [title, setTitle] = useState('')
+  const [stage, setStage] = useState<Stage>('track')
+
+  function handleAdd() {
+    if (!title.trim()) return
+    addTrack(albumId, title.trim(), stage)
+    onClose()
+  }
+
+  return (
+    <Modal title="Add a track" onClose={onClose} footer={
+      <>
+        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+        <button onClick={handleAdd} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Add track</button>
+      </>
+    }>
+      <FormField label="Title">
+        <input className={inputClass} placeholder="Track title" value={title} onChange={e => setTitle(e.target.value)} autoFocus />
+      </FormField>
+      <FormField label="Starting stage">
+        <select className={selectClass} value={stage} onChange={e => setStage(e.target.value as Stage)}>
+          <option value="track">Track</option>
+          <option value="mix">Mix</option>
+          <option value="master">Master</option>
+        </select>
+      </FormField>
+    </Modal>
+  )
+}
+
+function NewReleaseModal({ onClose }: { onClose: () => void }) {
+  const { addAlbum } = useStore()
+  const [title, setTitle] = useState('')
+  const [type, setType] = useState<ReleaseType>('album')
+
+  function handleCreate() {
+    if (!title.trim()) return
+    addAlbum(title.trim(), type)
+    onClose()
+  }
+
+  return (
+    <Modal title="New release" onClose={onClose} footer={
+      <>
+        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+        <button onClick={handleCreate} disabled={!title.trim()} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:opacity-40">Create</button>
+      </>
+    }>
+      <FormField label="Title">
+        <input className={inputClass} placeholder="e.g. Golden Hour" value={title} onChange={e => setTitle(e.target.value)} autoFocus />
+      </FormField>
+      <FormField label="Type">
+        <select className={selectClass} value={type} onChange={e => setType(e.target.value as ReleaseType)}>
+          <option value="single">Single</option>
+          <option value="ep">EP</option>
+          <option value="album">Album</option>
+        </select>
+      </FormField>
+    </Modal>
   )
 }
 
