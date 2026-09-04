@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { Modal, FormField, inputClass } from '@/components/ui/Modal'
 import { uid } from '@/lib/utils'
+import { extractPlaceholders, fillClauses, guessDefault, downloadRtf } from '@/lib/legal-doc-gen'
 import type { Contract, ContractStatus, ContractType, LegalTemplate, LegalTemplateClause } from '@/types'
 
 const STATUS_CONFIG: Record<ContractStatus, { label: string; color: string; bg: string; dot: string }> = {
@@ -376,13 +377,15 @@ function TemplatesTab() {
   const [openId, setOpenId] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
 
+  const [generateId, setGenerateId] = useState<string | null>(null)
   const open = templates.find(t => t.id === openId)
+  const generating = templates.find(t => t.id === generateId)
 
   return (
     <div className="max-w-3xl">
       <div className="flex items-start justify-between mb-4 gap-4">
         <div className="text-xs text-gray-400 leading-relaxed">
-          Reusable document language shared across every client — edit any clause below to match how you actually want it worded.
+          Reusable document language shared across every client — edit any clause below to match how you actually want it worded, or fill one in for a specific deal.
         </div>
         {editable && (
           <button
@@ -398,16 +401,22 @@ function TemplatesTab() {
         {templates.map(t => (
           <div
             key={t.id}
-            onClick={() => setOpenId(t.id)}
-            className="border border-gray-100 rounded-xl px-4 py-3 flex items-start justify-between gap-3 hover:bg-gray-50 transition-colors cursor-pointer"
+            className="border border-gray-100 rounded-xl px-4 py-3 flex items-start justify-between gap-3 hover:bg-gray-50 transition-colors"
           >
-            <div className="min-w-0">
+            <div className="min-w-0 cursor-pointer" onClick={() => setOpenId(t.id)}>
               <div className="text-sm font-medium">{t.name}</div>
               {t.description && <div className="text-xs text-gray-400 mt-0.5">{t.description}</div>}
+              <div className="text-[11px] text-gray-300 mt-1">
+                {t.clauses.length} {t.clauses.length === 1 ? 'clause' : 'clauses'}
+              </div>
             </div>
-            <span className="text-[11px] text-gray-300 flex-shrink-0 mt-0.5">
-              {t.clauses.length} {t.clauses.length === 1 ? 'clause' : 'clauses'}
-            </span>
+            <button
+              onClick={() => setGenerateId(t.id)}
+              disabled={t.clauses.length === 0}
+              className="px-2.5 py-1 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition-colors flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              Generate →
+            </button>
           </div>
         ))}
         {templates.length === 0 && (
@@ -417,6 +426,7 @@ function TemplatesTab() {
 
       {open && <TemplateModal template={open} onClose={() => setOpenId(null)} />}
       {addOpen && <NewTemplateModal onClose={() => setAddOpen(false)} />}
+      {generating && <GenerateDocumentModal template={generating} onClose={() => setGenerateId(null)} />}
     </div>
   )
 }
@@ -581,6 +591,113 @@ function TemplateModal({ template, onClose }: { template: LegalTemplate; onClose
             <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 ml-auto">Close</button>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+function placeholderLabel(p: string): string {
+  return p.trim().toLowerCase().replace(/\b\w/g, ch => ch.toUpperCase())
+}
+
+function assembleText(templateName: string, clauses: LegalTemplateClause[]): string {
+  return `${templateName.toUpperCase()}\n\n${clauses.map(c => `${c.title}\n\n${c.body}`).join('\n\n\n')}`
+}
+
+// Fills a template's [BRACKETED] placeholders in one pass, then shows the
+// finished document before it ever leaves the browser — Peak-End: the last
+// thing someone sees should be the actual result, not a black-box download.
+function GenerateDocumentModal({ template, onClose }: { template: LegalTemplate; onClose: () => void }) {
+  const client = useStore(s => s.getClient())
+  const [step, setStep] = useState<'fill' | 'preview'>('fill')
+  const [copied, setCopied] = useState(false)
+  const placeholders = extractPlaceholders(template.clauses)
+  const [values, setValues] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {}
+    for (const p of placeholders) initial[p] = guessDefault(p, client?.name ?? '')
+    return initial
+  })
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const filledClauses = fillClauses(template.clauses, values)
+  const blanks = placeholders.filter(p => !values[p]?.trim())
+
+  function handleCopy() {
+    navigator.clipboard.writeText(assembleText(template.name, filledClauses)).then(() => {
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  function handleDownload() {
+    downloadRtf(template.name.replace(/[^\w -]/g, ''), template.name, filledClauses)
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-in fade-in duration-150"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-canvas rounded-2xl shadow-2xl w-[720px] max-w-[92vw] max-h-[86vh] flex flex-col animate-in slide-in-from-bottom-3 duration-200">
+        <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-gray-100 flex-shrink-0">
+          <div className="min-w-0">
+            <div className="font-serif text-lg font-medium">{template.name}</div>
+            <div className="text-xs text-gray-400 mt-1">
+              {step === 'fill' ? 'Fill in the blanks, then generate the document.' : 'Ready — copy it or download a Word-compatible file.'}
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-300 hover:text-gray-500 flex-shrink-0 text-lg leading-none">✕</button>
+        </div>
+
+        {step === 'fill' ? (
+          <>
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+              {placeholders.length === 0 && (
+                <div className="text-sm text-gray-300 text-center py-8">This template has no fill-in blanks — it&apos;s ready to generate as-is.</div>
+              )}
+              {placeholders.map(p => (
+                <FormField key={p} label={placeholderLabel(p)}>
+                  <input
+                    className={inputClass}
+                    value={values[p] ?? ''}
+                    onChange={e => setValues(v => ({ ...v, [p]: e.target.value }))}
+                  />
+                </FormField>
+              ))}
+            </div>
+            <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0">
+              {blanks.length > 0 && (
+                <span className="text-[11px] text-gray-400">
+                  {blanks.length} left blank — {blanks.length === 1 ? 'it will' : 'they will'} stay as [bracketed text] in the document
+                </span>
+              )}
+              <button onClick={() => setStep('preview')} className="ml-auto px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">
+                Generate document
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans leading-relaxed">{assembleText(template.name, filledClauses)}</pre>
+            </div>
+            <div className="flex items-center gap-2 px-6 py-4 border-t border-gray-100 flex-shrink-0">
+              <button onClick={() => setStep('fill')} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">← Edit fields</button>
+              <button onClick={handleCopy} className="ml-auto px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">
+                {copied ? 'Copied ✓' : 'Copy text'}
+              </button>
+              <button onClick={handleDownload} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">
+                Download (.rtf)
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
