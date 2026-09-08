@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useStore } from '@/lib/store'
-import { stageLabel, stageBadgeClass, isStale, uid } from '@/lib/utils'
+import { stageLabel, stageBadgeClass, isStale, uid, RELEASE_TYPE_LABEL } from '@/lib/utils'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { TrackWaveform } from './TrackWaveform'
 import { getTrackAudioUrl } from '@/lib/db'
@@ -17,8 +17,6 @@ const PRIORITY_STYLE: Record<TrackPriority, string> = {
   single:        'bg-cyan-100 text-cyan-700',
   'album-cut':   'bg-gray-100 text-gray-500',
 }
-
-const RELEASE_TYPE_LABEL: Record<ReleaseType, string> = { single: 'Single', ep: 'EP', album: 'Album' }
 
 const STAGES: Stage[] = ['track', 'mix', 'master', 'done']
 

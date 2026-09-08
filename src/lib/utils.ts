@@ -2,7 +2,7 @@
 //  Studio · Utility functions
 // ──────────────────────────────────────────────────────────
 
-import type { Currency, Stage, ChecklistItem, PostType } from '@/types'
+import type { Currency, Stage, ChecklistItem, PostType, Album, ReleaseType } from '@/types'
 
 /** Format a money amount: $8K, £40K, $200K, $1.2M */
 export function fmt(amount: number, currency: Currency): string {
@@ -15,6 +15,19 @@ export function fmt(amount: number, currency: Currency): string {
 /** Human-readable stage label */
 export function stageLabel(stage: Stage): string {
   return { track: 'TRACK', mix: 'MIX', master: 'MASTER', done: 'DONE' }[stage]
+}
+
+/** Human-readable release type label — shared by every Music sub-tab */
+export const RELEASE_TYPE_LABEL: Record<ReleaseType, string> = { single: 'Single', ep: 'EP', album: 'Album' }
+
+/**
+ * A client can have several releases (single/EP/album). Every Music sub-tab
+ * that only makes sense for one release at a time (Label Copy, Checklist,
+ * Status) resolves which one via this — falling back to the first release
+ * if nothing's selected yet, or if the previously-selected one was deleted.
+ */
+export function resolveActiveAlbum(albums: Album[], selectedId: string | null): Album {
+  return albums.find(a => a.id === selectedId) ?? albums[0]
 }
 
 /** CSS class for stage badge */

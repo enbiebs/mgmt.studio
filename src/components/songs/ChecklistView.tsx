@@ -1,6 +1,7 @@
 'use client'
 import { useStore } from '@/lib/store'
-import { defaultChecklist } from '@/lib/utils'
+import { defaultChecklist, resolveActiveAlbum } from '@/lib/utils'
+import { ReleasePicker } from './ReleasePicker'
 import type { ChecklistPhase } from '@/types'
 
 const PHASE_ORDER: ChecklistPhase[] = ['Rights & Credits', 'Audio Delivery', 'Release Assets', 'Social & DSP Marketing']
@@ -8,10 +9,12 @@ const PHASE_ORDER: ChecklistPhase[] = ['Rights & Credits', 'Audio Delivery', 'Re
 export function ChecklistView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('songs'))
+  const selectedAlbumId = useStore(s => s.selectedAlbumId)
   const { toggleChecklistItem, updateChecklistNote } = useStore()
 
   if (!client) return null
-  const album = client.songs.albums[0]
+  const albums = client.songs.albums
+  const album = resolveActiveAlbum(albums, selectedAlbumId)
   const items = album.checklist && album.checklist.length ? album.checklist : defaultChecklist()
   const done = items.filter(i => i.done).length
   const pct = Math.round((done / items.length) * 100)
@@ -19,7 +22,10 @@ export function ChecklistView() {
   return (
     <div className="flex-1 overflow-auto p-6 max-w-2xl">
       <div className="mb-5">
-        <div className="font-serif text-2xl font-medium">{album.title}</div>
+        <div className="flex items-center gap-2">
+          <div className="font-serif text-2xl font-medium">{album.title}</div>
+          <ReleasePicker albums={albums} activeId={album.id} />
+        </div>
         <div className="text-sm text-gray-400 mt-1">Release checklist · {done} of {items.length} complete</div>
       </div>
 

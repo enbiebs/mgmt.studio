@@ -2,16 +2,20 @@
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { Modal, FormField, inputClass } from '@/components/ui/Modal'
+import { resolveActiveAlbum } from '@/lib/utils'
+import { ReleasePicker } from './ReleasePicker'
 import type { Track, TrackLabelCopy } from '@/types'
 
 export function LabelCopyView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('songs'))
+  const selectedAlbumId = useStore(s => s.selectedAlbumId)
   const { updateAlbumLabelCopy, updateTrackLabelCopy, scheduleRelease } = useStore()
   const [editTrack, setEditTrack] = useState<Track | null>(null)
 
   if (!client) return null
-  const album = client.songs.albums[0]
+  const albums = client.songs.albums
+  const album = resolveActiveAlbum(albums, selectedAlbumId)
   const lc = album.labelCopy ?? {}
 
   const missing = album.tracks.filter(t => !t.labelCopy?.isrc).length
@@ -20,7 +24,10 @@ export function LabelCopyView() {
     <div className="flex-1 overflow-auto p-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <div className="font-serif text-2xl font-medium">{album.title}</div>
+          <div className="flex items-center gap-2">
+            <div className="font-serif text-2xl font-medium">{album.title}</div>
+            <ReleasePicker albums={albums} activeId={album.id} />
+          </div>
           <div className="text-sm text-gray-400 mt-1">
             Label copy · {album.tracks.length - missing} of {album.tracks.length} tracks have an ISRC
           </div>

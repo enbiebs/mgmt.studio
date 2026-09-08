@@ -1,9 +1,10 @@
 'use client'
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
-import { defaultChecklist, isStale, stageLabel } from '@/lib/utils'
+import { defaultChecklist, isStale, stageLabel, resolveActiveAlbum } from '@/lib/utils'
 import { Modal, FormField, inputClass } from '@/components/ui/Modal'
 import { PersonPicker } from '@/components/people/PersonPicker'
+import { ReleasePicker } from './ReleasePicker'
 import type { Album, Client, Person, StakeholderRole } from '@/types'
 
 export const ROLE_ORDER: StakeholderRole[] = [
@@ -96,12 +97,14 @@ function buildSummary(client: Client, album: Album): string {
 export function StatusView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('songs'))
+  const selectedAlbumId = useStore(s => s.selectedAlbumId)
   const { deleteStakeholder } = useStore()
   const [addOpen, setAddOpen] = useState(false)
   const [copied, setCopied] = useState(false)
 
   if (!client) return null
-  const album = client.songs.albums[0]
+  const albums = client.songs.albums
+  const album = resolveActiveAlbum(albums, selectedAlbumId)
   const stakeholders = album.stakeholders ?? []
 
   async function handleCopy() {
@@ -115,7 +118,10 @@ export function StatusView() {
   return (
     <div className="flex-1 overflow-auto p-6 max-w-2xl">
       <div className="mb-6">
-        <div className="font-serif text-2xl font-medium">{album.title}</div>
+        <div className="flex items-center gap-2">
+          <div className="font-serif text-2xl font-medium">{album.title}</div>
+          <ReleasePicker albums={albums} activeId={album.id} />
+        </div>
         <div className="text-sm text-gray-400 mt-1">One consolidated view of the release — for sharing with everyone at once</div>
       </div>
 

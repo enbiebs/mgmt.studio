@@ -146,6 +146,9 @@ interface StudioState {
   tourSub: TourSub
   analyticsSub: AnalyticsSub
   selectedShowId: string | null
+  // Which release (single/EP/album) the Label Copy / Checklist / Status
+  // sub-tabs are showing — mirrors selectedShowId's role for Tour.
+  selectedAlbumId: string | null
   studioConcept: string | null
 
   // Calendar
@@ -190,6 +193,7 @@ interface StudioState {
   setTourSub: (sub: TourSub) => void
   setAnalyticsSub: (sub: AnalyticsSub) => void
   setSelectedShow: (id: string | null) => void
+  setSelectedAlbum: (id: string | null) => void
   setStudioConcept: (name: string) => void
   calPrev: () => void
   calNext: () => void
@@ -343,6 +347,7 @@ export const useStore = create<StudioState>((set, get) => ({
   tourSub:       'tour',
   analyticsSub:  'overview',
   selectedShowId: null,
+  selectedAlbumId: null,
   studioConcept: null,
 
   calYear:  now.getFullYear(),
@@ -471,13 +476,13 @@ export const useStore = create<StudioState>((set, get) => ({
   },
 
   // ── Navigation ──
-  goToDashboard: () => set({ view: 'dashboard', clientId: null, selectedShowId: null }),
+  goToDashboard: () => set({ view: 'dashboard', clientId: null, selectedShowId: null, selectedAlbumId: null }),
   openClient: (id) => {
     const s = get()
     const firstSection = (s.role === 'manager' || s.role === 'artist')
       ? 'songs'
       : (ALL_SECTIONS.find(sec => s.hasAccess(sec, id)) ?? 'songs')
-    set({ view: 'studio', clientId: id, section: firstSection, selectedShowId: null })
+    set({ view: 'studio', clientId: id, section: firstSection, selectedShowId: null, selectedAlbumId: null })
   },
   setSection:    (section) => set({ section, selectedShowId: null }),
   setSongsSub:   (sub) => set({ songsSub: sub }),
@@ -486,6 +491,7 @@ export const useStore = create<StudioState>((set, get) => ({
   setTourSub:      (sub) => set({ tourSub: sub }),
   setAnalyticsSub: (sub) => set({ analyticsSub: sub }),
   setSelectedShow: (id) => set({ selectedShowId: id }),
+  setSelectedAlbum: (id) => set({ selectedAlbumId: id }),
   setStudioConcept: (name) => set({ studioConcept: name }),
 
   calPrev: () => set(s => {
@@ -629,7 +635,7 @@ export const useStore = create<StudioState>((set, get) => ({
         return { ...c, songs: { albums: c.songs.albums.filter(a => a.id !== albumId) } }
       }),
     }
-    set({ data: updated })
+    set({ data: updated, selectedAlbumId: null })
     saveData(updated)
     dbDeleteAlbum(albumId).catch(console.error)
   },
