@@ -21,7 +21,9 @@ const TYPE_LABELS: Record<ProjectType, string> = {
   other:      'Other',
 }
 
-const STATUS_CONFIG: Record<ProjectStatus, { label: string; bg: string; dot: string }> = {
+// Exported so ArtistView can render matching status badges on the
+// artist's own "My Requests" list instead of duplicating this map.
+export const STATUS_CONFIG: Record<ProjectStatus, { label: string; bg: string; dot: string }> = {
   submitted:   { label: 'Submitted',   bg: 'bg-amber-50 text-amber-700',   dot: 'bg-amber-400' },
   'in-progress': { label: 'In Progress', bg: 'bg-blue-50 text-blue-600',     dot: 'bg-blue-500'  },
   review:      { label: 'In Review',   bg: 'bg-purple-50 text-purple-700', dot: 'bg-purple-500' },
@@ -30,7 +32,7 @@ const STATUS_CONFIG: Record<ProjectStatus, { label: string; bg: string; dot: str
 
 const STAKEHOLDERS: Stakeholder[] = ['GC', 'EB', 'PH', 'MS']
 
-const STAKEHOLDER_TOOLTIPS: Record<Stakeholder, string> = {
+export const STAKEHOLDER_TOOLTIPS: Record<Stakeholder, string> = {
   GC: 'GC — CEO',
   EB: 'EB — Partner',
   PH: 'PH — Day-to-Day',
@@ -197,6 +199,31 @@ export function ProjectsView() {
           )
         })}
       </div>
+
+      {/* ── Artist's To-Dos (read-only) ──────────────────────
+          Their own private checklist from the artist portal —
+          surfaced here read-only so nothing they've committed to
+          falls through the cracks, without merging the two lists. */}
+      {(client.artistTodos ?? []).length > 0 && (
+        <div className="mt-8 pt-6 border-t border-gray-100">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">
+            {client.name}&apos;s To-Dos <span className="text-gray-300 font-normal normal-case">— their own list, view only</span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {client.artistTodos!.map(todo => (
+              <div key={todo.id} className="flex items-center gap-2.5 py-1">
+                <div className={`w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+                  todo.done ? 'border-green-400 bg-green-400' : 'border-gray-300'
+                }`}>
+                  {todo.done && <span className="text-white text-[8px] leading-none">✓</span>}
+                </div>
+                <span className={`text-sm ${todo.done ? 'line-through text-gray-400' : 'text-gray-700'}`}>{todo.title}</span>
+                {todo.dueDate && <span className="text-[11px] text-gray-400 ml-auto flex-shrink-0">{todo.dueDate}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Add project modal */}
       {modal === 'add-project' && <AddProjectModal onClose={closeModal} />}

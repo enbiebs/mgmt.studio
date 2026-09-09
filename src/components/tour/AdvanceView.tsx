@@ -6,10 +6,10 @@
 //  Drives the Day Sheet and calendar sync.
 // ──────────────────────────────────────────────────────────
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
-import type { ShowAdvance, AdvanceStatus, AdvanceContact, Show } from '@/types'
-import { uid } from '@/lib/utils'
+import type { ShowAdvance, AdvanceStatus, AdvanceContact, AdvanceSchedule, Show } from '@/types'
+import { uid, shiftTime } from '@/lib/utils'
 
 // ── Status config ───────────────────────────────────────────
 const STATUS: Record<AdvanceStatus, { label: string; dot: string; badge: string }> = {
@@ -18,6 +18,24 @@ const STATUS: Record<AdvanceStatus, { label: string; dot: string; badge: string 
   'in-progress':{ label: 'In Progress',dot: 'bg-amber-400',  badge: 'bg-amber-50 text-amber-700'  },
   complete:    { label: 'Complete',    dot: 'bg-green-500',  badge: 'bg-green-50 text-green-700'  },
 }
+
+// Chronological order of the schedule's time fields — matches the Grid
+// below and is what "shift everything after this by N minutes" walks.
+const SCHEDULE_FIELD_ORDER: { key: keyof AdvanceSchedule; label: string }[] = [
+  { key: 'busCall',          label: 'Bus / Lobby Call'    },
+  { key: 'lobbyCall',        label: 'Lobby Call (Hotel)'  },
+  { key: 'loadIn',           label: 'Load In'             },
+  { key: 'lineCheck',        label: 'Line Check'          },
+  { key: 'soundcheck',       label: 'Soundcheck'          },
+  { key: 'artistSoundcheck', label: 'Artist Soundcheck'   },
+  { key: 'doorsOpen',        label: 'Doors Open'          },
+  { key: 'supportOn',        label: 'Support On'          },
+  { key: 'supportOff',       label: 'Support Off'         },
+  { key: 'headlineOn',       label: 'Headline On'         },
+  { key: 'curfew',           label: 'Curfew'              },
+  { key: 'loadOut',          label: 'Load Out'            },
+  { key: 'departureTime',    label: 'Bus Departure'       },
+]
 
 type Tab = 'schedule' | 'production' | 'hospitality' | 'logistics' | 'contacts' | 'notes'
 const TABS: { key: Tab; label: string }[] = [
@@ -88,16 +106,33 @@ export function AdvanceView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('tour'))
   const { setTourSub, saveAdvance: persistAdvance } = useStore()
+  const sharedSelectedShowId = useStore(s => s.selectedShowId)
   const [selectedShowId, setSelectedShowId] = useState<string | null>(null)
   const [advance, setAdvance] = useState<ShowAdvance | null>(null)
   const [tab, setTab] = useState<Tab>('schedule')
   const [sendOpen, setSendOpen] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [bumpFrom, setBumpFrom] = useState('')
+  const [bumpCustom, setBumpCustom] = useState('')
+  const [bumpMessage, setBumpMessage] = useState('')
+
+  // Jumping here from elsewhere (e.g. Tour's "Advance" quick link) sets the
+  // shared selectedShowId — adopt it once, without fighting this view's own
+  // sidebar clicks afterward.
+  useEffect(() => {
+    if (!client) return
+    if (sharedSelectedShowId && sharedSelectedShowId !== selectedShowId) {
+      const show = client.tour.shows.find(s => s.id === sharedSelectedShowId)
+      if (show) selectShow(show)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedSelectedShowId])
 
   if (!client) return null
 
   const shows = client.tour.shows
   const advances = client.tour.advances ?? []
+  const guestList = client.tour.guestList ?? []
 
   function getAdvance(showId: string): ShowAdvance {
     return advances.find(a => a.showId === showId) ?? {
@@ -121,6 +156,32 @@ export function AdvanceView() {
     if (!advance) return
     setAdvance({ ...advance, schedule: { ...advance.schedule, [key]: val } })
     setSaved(false)
+  }
+
+  // Shifts every parseable time from `bumpFrom` onward by `minutes` — the
+  // real-world "doors moved back 30, move everything after it" moment.
+  // Anything that isn't a clean HH:MM (blank, "TBC", freeform text) is
+  // left exactly as-is rather than erroring.
+  function bumpSchedule(minutes: number) {
+    if (!advance || !bumpFrom || !minutes) return
+    const startIdx = SCHEDULE_FIELD_ORDER.findIndex(f => f.key === bumpFrom)
+    if (startIdx === -1) return
+    const nextSchedule = { ...advance.schedule }
+    let shifted = 0
+    for (let i = startIdx; i < SCHEDULE_FIELD_ORDER.length; i++) {
+      const key = SCHEDULE_FIELD_ORDER[i].key
+      const current = nextSchedule[key]
+      if (typeof current !== 'string') continue
+      const next = shiftTime(current, minutes)
+      if (next !== null) {
+        nextSchedule[key] = next
+        shifted++
+      }
+    }
+    setAdvance({ ...advance, schedule: nextSchedule })
+    setSaved(false)
+    setBumpMessage(shifted > 0 ? `Shifted ${shifted} time${shifted === 1 ? '' : 's'} — remember to Save` : 'Nothing after there to shift')
+    setTimeout(() => setBumpMessage(''), 3500)
   }
   function updateProduction(key: string, val: string) {
     if (!advance) return
@@ -292,6 +353,47 @@ export function AdvanceView() {
           <div className="flex-1 overflow-y-auto px-6 py-5">
             {tab === 'schedule' && (
               <div className="space-y-5 max-w-2xl">
+                {editable && (
+                  <div className="flex items-center gap-2 flex-wrap bg-gray-50 rounded-xl px-3 py-2.5">
+                    <span className="text-xs font-semibold text-gray-500 flex-shrink-0">Shift schedule</span>
+                    <select
+                      value={bumpFrom}
+                      onChange={e => setBumpFrom(e.target.value)}
+                      className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-canvas"
+                    >
+                      <option value="">from…</option>
+                      {SCHEDULE_FIELD_ORDER.map(f => (
+                        <option key={f.key} value={f.key}>{f.label}</option>
+                      ))}
+                    </select>
+                    <span className="text-xs text-gray-400 flex-shrink-0">onward by</span>
+                    {[-30, -15, 15, 30, 60].map(min => (
+                      <button
+                        key={min}
+                        onClick={() => bumpSchedule(min)}
+                        disabled={!bumpFrom}
+                        className="px-2 py-1 text-xs border border-gray-200 rounded-lg hover:bg-canvas disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {min > 0 ? `+${min}` : min}m
+                      </button>
+                    ))}
+                    <input
+                      type="number"
+                      placeholder="custom"
+                      value={bumpCustom}
+                      onChange={e => setBumpCustom(e.target.value)}
+                      className="w-16 text-xs border border-gray-200 rounded-lg px-2 py-1 bg-canvas"
+                    />
+                    <button
+                      onClick={() => { bumpSchedule(Number(bumpCustom)); setBumpCustom('') }}
+                      disabled={!bumpFrom || !bumpCustom}
+                      className="px-2 py-1 text-xs border border-gray-200 rounded-lg hover:bg-canvas disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Go
+                    </button>
+                    {bumpMessage && <span className="text-xs text-green-600 ml-auto flex-shrink-0">{bumpMessage}</span>}
+                  </div>
+                )}
                 <Grid>
                   <Field label="Bus / Lobby Call"      value={advance.schedule.busCall ?? ''}        onChange={v => updateSchedule('busCall', v)}        placeholder="08:00" />
                   <Field label="Lobby Call (Hotel)"    value={advance.schedule.lobbyCall ?? ''}      onChange={v => updateSchedule('lobbyCall', v)}      placeholder="09:00" />
@@ -433,7 +535,20 @@ export function AdvanceView() {
                 <Grid>
                   <Field label="WiFi Network"        value={advance.wifi ?? ''}              onChange={v => setAdvance({ ...advance, wifi: v })}              placeholder="VENUE_ARTIST" />
                   <Field label="WiFi Password"       value={advance.wifiPassword ?? ''}      onChange={v => setAdvance({ ...advance, wifiPassword: v })}      placeholder="Pass2026!" mono />
-                  <Field label="Guest List Cap"      value={advance.guestListCap ?? ''}      onChange={v => setAdvance({ ...advance, guestListCap: v })}      placeholder="20" />
+                  <div>
+                    <Field label="Guest List Cap"      value={advance.guestListCap ?? ''}      onChange={v => setAdvance({ ...advance, guestListCap: v })}      placeholder="20" />
+                    {advance.guestListCap && (() => {
+                      const cap = parseInt(advance.guestListCap, 10)
+                      if (!cap) return null
+                      const used = guestList.filter(g => g.showId === selectedShow?.id).reduce((sum, g) => sum + g.qty, 0)
+                      const over = used > cap
+                      return (
+                        <div className={`text-[11px] mt-1 font-medium ${over ? 'text-red-500' : 'text-gray-400'}`}>
+                          {used} / {cap} used{over ? ' — over cap' : ''}
+                        </div>
+                      )
+                    })()}
+                  </div>
                 </Grid>
                 <TextArea label="Weather Notes"      value={advance.weatherNotes ?? ''}      onChange={v => setAdvance({ ...advance, weatherNotes: v })}      placeholder="Clear, 72°F. No rain expected." rows={2} />
                 <TextArea label="Guest List Notes"   value={advance.guestListNotes ?? ''}    onChange={v => setAdvance({ ...advance, guestListNotes: v })}    placeholder="Submit names by 18:00 day-of to production manager." rows={2} />

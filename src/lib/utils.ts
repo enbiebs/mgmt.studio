@@ -17,6 +17,23 @@ export function stageLabel(stage: Stage): string {
   return { track: 'TRACK', mix: 'MIX', master: 'MASTER', done: 'DONE' }[stage]
 }
 
+/**
+ * Shifts a "HH:MM" (24h) time string by ± minutes, wrapping within a day.
+ * Returns null for anything that isn't a clean HH:MM — blank, "TBC", or
+ * other freeform text — so callers can silently skip those rather than
+ * mangling them. Used by the Advance schedule's "shift everything after
+ * this by N minutes" tool.
+ */
+export function shiftTime(value: string, minutes: number): string | null {
+  const m = value.trim().match(/^(\d{1,2}):(\d{2})$/)
+  if (!m) return null
+  const h = parseInt(m[1], 10)
+  const mi = parseInt(m[2], 10)
+  if (h > 23 || mi > 59) return null
+  const total = (((h * 60 + mi + minutes) % 1440) + 1440) % 1440
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
+
 /** Human-readable release type label — shared by every Music sub-tab */
 export const RELEASE_TYPE_LABEL: Record<ReleaseType, string> = { single: 'Single', ep: 'EP', album: 'Album' }
 

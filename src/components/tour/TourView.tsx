@@ -7,7 +7,7 @@ import { MONTH_NAMES, MONTH_SHORT } from '@/lib/utils'
 export function TourView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('tour'))
-  const { selectedShowId, setSelectedShow, addShow, updateShowStatus, deleteShow } = useStore()
+  const { selectedShowId, setSelectedShow, setTourSub, addShow, updateShowStatus, deleteShow } = useStore()
   const [addOpen, setAddOpen] = useState(false)
   const [f, setF] = useState({ date: '', city: '', venue: '', time: '20:00' })
 
@@ -15,6 +15,27 @@ export function TourView() {
   const shows    = client.tour.shows
   const upcoming = shows.filter(s => new Date(s.date) >= new Date())
   const selected = shows.find(s => s.id === selectedShowId)
+
+  // "Advance Dashboard" lite — flags upcoming shows with something outstanding,
+  // computed entirely from data already in the store (no new tables).
+  const advances  = client.tour.advances ?? []
+  const travel    = client.tour.travel ?? []
+  const guestList = client.tour.guestList ?? []
+  const needsAttention = upcoming
+    .map(s => {
+      const advance = advances.find(a => a.showId === s.id)
+      const cap = parseInt(advance?.guestListCap ?? '', 10)
+      const used = guestList.filter(g => g.showId === s.id).reduce((sum, g) => sum + g.qty, 0)
+      const issues = [
+        (!advance || advance.status !== 'complete') && 'Advance incomplete',
+        travel.some(t => t.showId === s.id && (t.status === 'needed' || t.status === 'pending')) && 'Travel pending',
+        !isNaN(cap) && used > cap && 'Over guest cap',
+      ].filter((x): x is string => Boolean(x))
+      return { show: s, issues }
+    })
+    .filter(x => x.issues.length > 0)
+    .sort((a, b) => a.show.date.localeCompare(b.show.date))
+    .slice(0, 5)
 
   function handleAdd() {
     if (!f.date || !f.city || !f.venue) return
@@ -81,6 +102,28 @@ export function TourView() {
           ))}
         </div>
 
+        {/* Needs Attention */}
+        {needsAttention.length > 0 && (
+          <div className="mb-6">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Needs Attention</div>
+            <div className="flex flex-col gap-1.5">
+              {needsAttention.map(({ show, issues }) => (
+                <button
+                  key={show.id}
+                  onClick={() => { setSelectedShow(show.id); setTourSub('advance') }}
+                  className="w-full flex items-center gap-3 border border-amber-200 bg-amber-50/40 rounded-xl px-3.5 py-2 text-left hover:bg-amber-50 transition-colors"
+                >
+                  <span className="text-sm font-medium flex-shrink-0">{show.venue} · {show.city}</span>
+                  <span className="text-xs text-gray-400 flex-shrink-0">
+                    {new Date(show.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
+                  <span className="text-xs text-amber-700 ml-auto truncate">{issues.join(' · ')}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Show detail */}
         {selected ? (
           <div className="border border-gray-100 rounded-2xl p-5">
@@ -122,8 +165,20 @@ export function TourView() {
               </div>
             </div>
             <div className="flex gap-2 flex-wrap mb-4">
-              {['Maps ↗', 'Advance', 'Day Sheet', 'Stage Plot', 'Hotels', 'Flights'].map(l => (
-                <span key={l} className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium text-gray-500 cursor-pointer hover:bg-gray-50 transition-colors">{l}</span>
+              {[
+                ['Maps ↗', () => window.open(`https://maps.google.com/?q=${encodeURIComponent(`${selected.venue}, ${selected.city}`)}`, '_blank')],
+                ['Advance', () => { setSelectedShow(selected.id); setTourSub('advance') }],
+                ['Day Sheet', () => { setSelectedShow(selected.id); setTourSub('daysheet') }],
+                ['Hotels', () => { setSelectedShow(selected.id); setTourSub('travel') }],
+                ['Flights', () => { setSelectedShow(selected.id); setTourSub('travel') }],
+              ].map(([l, fn]) => (
+                <button
+                  key={l as string}
+                  onClick={fn as () => void}
+                  className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium text-gray-500 cursor-pointer hover:bg-gray-50 transition-colors"
+                >
+                  {l as string}
+                </button>
               ))}
             </div>
             {editable && (

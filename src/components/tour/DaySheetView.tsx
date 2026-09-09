@@ -6,7 +6,7 @@
 //  to crew every morning on tour.
 // ──────────────────────────────────────────────────────────
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import type { ShowAdvance, Show } from '@/types'
 
@@ -34,7 +34,22 @@ function Block({ title, children, accent }: { title: string; children: React.Rea
 export function DaySheetView() {
   const client = useStore(s => s.getClient())
   const { setTourSub } = useStore()
+  const sharedSelectedShowId = useStore(s => s.selectedShowId)
   const [selectedShowId, setSelectedShowId] = useState<string | null>(null)
+
+  // Jumping here from elsewhere (e.g. Tour's "Day Sheet" quick link) sets the
+  // shared selectedShowId — adopt it once, without disturbing this view's own
+  // "most in-progress advance" fallback when arriving directly.
+  useEffect(() => {
+    if (sharedSelectedShowId && sharedSelectedShowId !== selectedShowId) {
+      selectShow(sharedSelectedShowId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedSelectedShowId])
+
+  function selectShow(id: string) {
+    setSelectedShowId(id)
+  }
 
   if (!client) return null
 
@@ -69,7 +84,7 @@ export function DaySheetView() {
             return (
               <button
                 key={s.id}
-                onClick={() => setSelectedShowId(s.id)}
+                onClick={() => selectShow(s.id)}
                 className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${
                   show?.id === s.id ? 'bg-blue-50' : ''
                 }`}

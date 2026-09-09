@@ -30,10 +30,13 @@ export function GuestListView() {
   if (!client) return null
   const shows = client.tour.shows
   const allGuests = client.tour.guestList ?? []
+  const advances = client.tour.advances ?? []
   const show: Show | undefined = selectedShowId ? shows.find(s => s.id === selectedShowId) : shows[0]
   const guests = show ? allGuests.filter(g => g.showId === show.id) : []
   const totalQty = guests.reduce((sum, g) => sum + g.qty, 0)
   const checkedInQty = guests.filter(g => g.checkedIn).reduce((sum, g) => sum + g.qty, 0)
+  const cap = show ? parseInt(advances.find(a => a.showId === show.id)?.guestListCap ?? '', 10) : NaN
+  const overCap = !isNaN(cap) && totalQty > cap
 
   const showDate = show ? new Date(show.date) : null
   const dateStr = showDate?.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
@@ -81,6 +84,9 @@ export function GuestListView() {
                 <div className="text-sm text-gray-400">{dateStr} · {show.city}</div>
                 <div className="text-xs text-gray-400 mt-1">
                   {checkedInQty} of {totalQty} checked in · {guests.length} {guests.length === 1 ? 'entry' : 'entries'}
+                  {!isNaN(cap) && (
+                    <span className={overCap ? 'text-red-500 font-medium' : ''}> · {totalQty} / {cap} on cap{overCap ? ' — over cap' : ''}</span>
+                  )}
                 </div>
               </div>
               {editable && (

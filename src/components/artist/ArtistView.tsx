@@ -19,6 +19,7 @@ import { useStore } from '@/lib/store'
 import type { ProjectType } from '@/types'
 import { initials, fmt } from '@/lib/utils'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
+import { STATUS_CONFIG, STAKEHOLDER_TOOLTIPS } from '@/components/manager/ProjectsView'
 
 /** Compact number formatter for big at-a-glance stats: 1.8M, 220K, 940 */
 function fmtCompact(n: number): string {
@@ -73,6 +74,12 @@ export function ArtistView() {
   const todos = client.artistTodos ?? []
   const activeTodos = todos.filter(t => !t.done)
   const doneTodos   = todos.filter(t => t.done)
+
+  // Requests this artist has sent to management — newest first, so they
+  // can see what happened after they hit "Submit" instead of it vanishing.
+  const myRequests = (client.projects ?? [])
+    .filter(p => p.fromArtist)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 
   // Business snapshot (headline numbers only — no splits/percentages)
   const usd = client.business.royalties.streams.filter(s => s.currency === 'USD').reduce((a, b) => a + b.amount, 0)
@@ -361,6 +368,45 @@ export function ArtistView() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* ── My Requests — status readback on what was submitted above ── */}
+        <div className="bg-canvas rounded-2xl border border-gray-100 p-5">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">
+            My Requests
+          </div>
+          {myRequests.length === 0 ? (
+            <div className="text-sm text-gray-300 text-center py-6">No requests submitted yet</div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {myRequests.map(project => {
+                const sc = STATUS_CONFIG[project.status]
+                return (
+                  <div key={project.id} className="border border-gray-100 rounded-xl px-3 py-2.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium">{project.title}</span>
+                      <span className="text-[10px] text-gray-400 uppercase font-medium tracking-wide">
+                        {REQUEST_TYPE_LABELS[project.type]}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${sc.bg}`}>
+                        {sc.label}
+                      </span>
+                      {project.assignee && (
+                        <span className="text-[11px] text-gray-400" title={STAKEHOLDER_TOOLTIPS[project.assignee]}>
+                          → {project.assignee}
+                        </span>
+                      )}
+                      {project.dueDate && (
+                        <span className="text-[11px] text-gray-400 ml-auto">Due {project.dueDate}</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
 

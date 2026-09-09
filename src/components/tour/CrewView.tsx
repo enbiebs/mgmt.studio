@@ -17,6 +17,20 @@ export const CREW_ROLE_LABEL: Record<CrewRole, string> = {
   artist: 'Artist', other: 'Other',
 }
 
+// Passport expiry is free-typed as "YYYY-MM" or "YYYY-MM-DD" — anything else
+// (blank, "n/a", freeform text) is silently ignored rather than flagged.
+function passportWarning(passport?: string): 'expired' | 'soon' | null {
+  if (!passport) return null
+  const m = passport.trim().match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/)
+  if (!m) return null
+  const expiry = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3] ?? '1'))
+  const sixMonthsOut = new Date()
+  sixMonthsOut.setMonth(sixMonthsOut.getMonth() + 6)
+  if (expiry < new Date()) return 'expired'
+  if (expiry < sixMonthsOut) return 'soon'
+  return null
+}
+
 export function CrewView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('tour'))
@@ -60,7 +74,16 @@ export function CrewView() {
               className="group border border-gray-100 rounded-xl px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors cursor-pointer"
             >
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium">{person.name}</div>
+                <div className="flex items-center gap-1.5">
+                  <div className="text-sm font-medium">{person.name}</div>
+                  {passportWarning(cm.passport) && (
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                      passportWarning(cm.passport) === 'expired' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {passportWarning(cm.passport) === 'expired' ? 'PASSPORT EXPIRED' : 'PASSPORT EXPIRING SOON'}
+                    </span>
+                  )}
+                </div>
                 <div className="text-xs text-gray-400 mt-0.5">
                   {[person.email, person.phone, cm.notes].filter(Boolean).join(' · ')}
                 </div>

@@ -279,11 +279,32 @@ const GROUND_EMOJI: Record<string, string> = {
 }
 
 function GroundCard({ item, onRemove, onLink }: { item: TravelGround; onRemove: () => void; onLink: (personIds: string[]) => void }) {
+  const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('tour'))
+  const [copied, setCopied] = useState(false)
   const emoji = GROUND_EMOJI[item.type] ?? '🚗'
   const typeLabel = item.type === 'rental-car' ? 'Rental Car' :
                     item.type === 'transfer' ? 'Transfer' :
                     item.type === 'train' ? 'Train' : 'Bus'
+
+  // Plain-text block for pasting straight into a text to a driver.
+  async function handleCopy() {
+    const people = client?.people ?? []
+    const passengers = people.filter(p => (item.personIds ?? []).includes(p.id)).map(p => p.name)
+    const lines = [
+      `${typeLabel}${item.vehicleType ? ` · ${item.vehicleType}` : ''}`,
+      item.pickupTime && `Pickup: ${fmtDateTime(item.pickupTime)}`,
+      (item.from || item.to) && `${item.from ?? ''}${item.from && item.to ? ' → ' : ''}${item.to ?? ''}`,
+      item.provider && `Provider: ${item.provider}`,
+      item.confirmationCode && `Confirmation: ${item.confirmationCode}`,
+      passengers.length > 0 && `Passengers: ${passengers.join(', ')}`,
+      item.notes && item.notes,
+    ].filter(Boolean).join('\n')
+    await navigator.clipboard.writeText(lines)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   return (
     <div className="border border-gray-100 rounded-xl p-4 hover:border-gray-200 transition-colors">
       <div className="flex items-start justify-between mb-2">
@@ -340,6 +361,12 @@ function GroundCard({ item, onRemove, onLink }: { item: TravelGround; onRemove: 
       {item.notes && (
         <div className="mt-2 pt-2 border-t border-gray-50 text-xs text-gray-400 italic">{item.notes}</div>
       )}
+      <button
+        onClick={handleCopy}
+        className="mt-2 px-2 py-1 border border-gray-200 rounded-lg text-[11px] font-medium text-gray-500 hover:bg-gray-50 transition-colors"
+      >
+        {copied ? 'Copied!' : 'Copy transfer info'}
+      </button>
       <TravelersEditor item={item} onChange={onLink} />
     </div>
   )
