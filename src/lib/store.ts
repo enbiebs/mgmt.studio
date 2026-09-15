@@ -64,13 +64,22 @@ import {
 // ── Persistence helpers ─────────────────────────────────────
 const STORAGE_KEY = 'studio-v1'
 
-function loadData(): AppData {
-  if (typeof window === 'undefined') return JSON.parse(JSON.stringify(DEMO_DATA))
+// The store's initial state must be IDENTICAL on the server (which has no
+// localStorage) and on the client's first paint, or React's hydration
+// bails out and remounts the whole tree. So the synchronous initial value
+// is always the deterministic demo snapshot; any real localStorage content
+// (demo-mode's persisted edits) is loaded afterward, client-only, via
+// hydrateLocalData() — see AuthProvider's demo-mode branch.
+function defaultData(): AppData {
+  return JSON.parse(JSON.stringify(DEMO_DATA))
+}
+
+function loadLocalData(): AppData {
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) return JSON.parse(saved)
   } catch { /* ignore */ }
-  return JSON.parse(JSON.stringify(DEMO_DATA))
+  return defaultData()
 }
 
 function saveData(data: AppData) {
@@ -84,13 +93,16 @@ function saveData(data: AppData) {
 // local-storage slot alongside the same persistence pattern.
 const LEGAL_TEMPLATES_KEY = 'studio-legal-templates-v1'
 
-function loadLegalTemplatesLocal(): LegalTemplate[] {
-  if (typeof window === 'undefined') return JSON.parse(JSON.stringify(DEFAULT_LEGAL_TEMPLATES))
+function defaultLegalTemplates(): LegalTemplate[] {
+  return JSON.parse(JSON.stringify(DEFAULT_LEGAL_TEMPLATES))
+}
+
+function loadLocalLegalTemplates(): LegalTemplate[] {
   try {
     const saved = localStorage.getItem(LEGAL_TEMPLATES_KEY)
     if (saved) return JSON.parse(saved)
   } catch { /* ignore */ }
-  return JSON.parse(JSON.stringify(DEFAULT_LEGAL_TEMPLATES))
+  return defaultLegalTemplates()
 }
 
 function saveLegalTemplatesLocal(templates: LegalTemplate[]) {
@@ -176,6 +188,9 @@ interface StudioState {
 
   // ── Auth / Supabase init ──
   initFromSupabase: (userId: string) => Promise<void>
+  // Demo mode only (no Supabase configured): loads whatever was previously
+  // saved to localStorage, client-side, after the initial hydration pass.
+  hydrateLocalData: () => void
   signOut: () => Promise<void>
 
   // ── Role ──
@@ -324,8 +339,8 @@ interface StudioState {
 const now = new Date()
 
 export const useStore = create<StudioState>((set, get) => ({
-  data: loadData(),
-  legalTemplates: loadLegalTemplatesLocal(),
+  data: defaultData(),
+  legalTemplates: defaultLegalTemplates(),
 
   workspaceId: null,
   userId:      null,
@@ -393,6 +408,10 @@ export const useStore = create<StudioState>((set, get) => ({
   },
 
   // ── Supabase init ──
+  hydrateLocalData: () => {
+    set({ data: loadLocalData(), legalTemplates: loadLocalLegalTemplates() })
+  },
+
   initFromSupabase: async (userId) => {
     set({ isLoading: true, userId })
     try {

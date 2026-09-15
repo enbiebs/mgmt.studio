@@ -19,11 +19,16 @@ const SUPABASE_CONFIGURED =
   !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { initFromSupabase } = useStore()
+  const { initFromSupabase, hydrateLocalData } = useStore()
 
   useEffect(() => {
-    // Demo mode: no credentials — just use localStorage / demo data as-is
-    if (!SUPABASE_CONFIGURED) return
+    // Demo mode: no credentials — load whatever was saved to localStorage.
+    // Done here (client-only, post-mount) rather than in the store's
+    // initial state so the server and client render the same first frame.
+    if (!SUPABASE_CONFIGURED) {
+      hydrateLocalData()
+      return
+    }
 
     // Skip on auth routes — no session expected there
     const isAuthRoute = window.location.pathname.startsWith('/login') ||
