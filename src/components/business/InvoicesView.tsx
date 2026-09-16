@@ -42,7 +42,7 @@ type InvFilter = 'all' | InvoiceStatus
 
 export function InvoicesView() {
   const client = useStore(s => s.getClient())
-  const editable = useStore(s => s.canEdit('business'))
+  const editable = useStore(s => s.canEdit('finance'))
   const [filter, setFilter] = useState<InvFilter>('all')
   const [selected, setSelected] = useState<Invoice | null>(null)
   const [addOpen, setAddOpen] = useState(false)
@@ -249,7 +249,7 @@ function SCard({ label, value, color, count }: { label: string; value: string; c
 }
 
 function InvoiceDetail({ invoice: inv, onClose }: { invoice: Invoice; onClose: () => void }) {
-  const editable = useStore(s => s.canEdit('business'))
+  const editable = useStore(s => s.canEdit('finance'))
   const { updateInvoiceStatus, deleteInvoice } = useStore()
   const total = invTotal(inv)
   const cfg   = STATUS_CONFIG[inv.status]
@@ -368,7 +368,7 @@ function InvoiceDetail({ invoice: inv, onClose }: { invoice: Invoice; onClose: (
 
 function InvoicePaymentLinker({ invoice: inv }: { invoice: Invoice }) {
   const client = useStore(s => s.getClient())
-  const editable = useStore(s => s.canEdit('business'))
+  const editable = useStore(s => s.canEdit('finance'))
   const { linkTransactionToInvoice } = useStore()
   const [pickerOpen, setPickerOpen] = useState(false)
   if (!client) return null

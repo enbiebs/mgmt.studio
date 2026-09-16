@@ -324,10 +324,12 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
 
     const cShows = (shows.data ?? [])
       .filter((s: { client_id: string }) => s.client_id === c.id)
-      .map((s: { id: string; date: string; city: string; venue: string; time: string; status: string; notes?: string }) => ({
+      .map((s: { id: string; date: string; city: string; venue: string; time: string; status: string; notes?: string; guarantee?: number; deposit?: number; currency?: string; tour_offer_id?: string }) => ({
         id: s.id, date: s.date, city: s.city,
         venue: s.venue, time: s.time,
         status: s.status as Show['status'], notes: s.notes,
+        guarantee: s.guarantee ?? undefined, deposit: s.deposit ?? undefined,
+        currency: s.currency as Show['currency'], tourOfferId: s.tour_offer_id ?? undefined,
       }))
 
     const cShowIds = cShows.map((s: { id: string }) => s.id)
@@ -494,11 +496,12 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
 
     const cOffers = (tourOffers.data ?? [])
       .filter((o: { client_id: string }) => o.client_id === c.id)
-      .map((o: { id: string; venue: string; city: string; country: string; date: string; promoter: string; guarantee: number; door?: number; buyout?: number; status: string; notes?: string; settled_at?: string; net_payout?: number }) => ({
+      .map((o: { id: string; venue: string; city: string; country: string; date: string; promoter: string; guarantee: number; door?: number; buyout?: number; status: string; notes?: string; settled_at?: string; net_payout?: number; show_id?: string }) => ({
         id: o.id, venue: o.venue, city: o.city, country: o.country,
         date: o.date, promoter: o.promoter, guarantee: o.guarantee,
         door: o.door, buyout: o.buyout, status: o.status as TourOffer['status'],
         notes: o.notes, settledAt: o.settled_at, netPayout: o.net_payout,
+        showId: o.show_id ?? undefined,
       }))
 
     const cContracts = (contracts.data ?? [])
@@ -890,12 +893,49 @@ export async function upsertShow(show: Show, clientId: string) {
     date: show.date, city: show.city,
     venue: show.venue, time: show.time,
     status: show.status, notes: show.notes ?? null,
+    guarantee: show.guarantee ?? null, deposit: show.deposit ?? null,
+    currency: show.currency ?? null, tour_offer_id: show.tourOfferId ?? null,
   })
 }
 
 export async function deleteShow(showId: string) {
   const supabase = createClient()
   await supabase.from('shows').delete().eq('id', showId)
+}
+
+// ── Tour Offer ───────────────────────────────────────────────
+export async function upsertOffer(offer: TourOffer, clientId: string) {
+  const supabase = createClient()
+  await supabase.from('tour_offers').upsert({
+    id: offer.id, client_id: clientId,
+    venue: offer.venue, city: offer.city, country: offer.country,
+    date: offer.date, promoter: offer.promoter, guarantee: offer.guarantee,
+    door: offer.door ?? null, buyout: offer.buyout ?? null,
+    status: offer.status, notes: offer.notes ?? null,
+    settled_at: offer.settledAt ?? null, net_payout: offer.netPayout ?? null,
+    show_id: offer.showId ?? null,
+  })
+}
+
+export async function deleteOffer(offerId: string) {
+  const supabase = createClient()
+  await supabase.from('tour_offers').delete().eq('id', offerId)
+}
+
+// ── Expense ──────────────────────────────────────────────────
+export async function upsertExpense(expense: Expense, clientId: string) {
+  const supabase = createClient()
+  await supabase.from('expenses').upsert({
+    id: expense.id, client_id: clientId,
+    description: expense.description, vendor: expense.vendor,
+    amount: expense.amount, currency: expense.currency,
+    category: expense.category, date: expense.date, paid: expense.paid,
+  })
+}
+
+export async function deleteExpense(expenseId: string) {
+  const supabase = createClient()
+  await supabase.from('expenses').delete().eq('id', expenseId)
 }
 
 export async function upsertVenue(venue: Venue, clientId: string) {

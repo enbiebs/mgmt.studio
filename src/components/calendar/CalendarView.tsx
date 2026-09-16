@@ -16,7 +16,7 @@ import type { MainSection } from '@/types'
 
 const DOMAIN_SECTION: Record<CalendarEventDomain, MainSection> = {
   show: 'tour', release: 'songs', post: 'content',
-  invoice: 'business', contract: 'legal', project: 'projects',
+  invoice: 'finance', contract: 'legal', project: 'projects',
 }
 const ALL_DOMAINS: CalendarEventDomain[] = ['show', 'release', 'post', 'invoice', 'contract', 'project']
 
@@ -56,7 +56,7 @@ export function CalendarView() {
     } else if (e.domain === 'post') {
       setSection('content'); setContentSub('manage')
     } else if (e.domain === 'invoice') {
-      setSection('business'); setBizSub('invoices')
+      setSection('finance'); setBizSub('invoices')
     } else if (e.domain === 'contract') {
       setSection('legal')
     } else if (e.domain === 'project') {

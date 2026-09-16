@@ -1,8 +1,9 @@
 'use client'
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
-import { Modal, FormField, inputClass } from '@/components/ui/Modal'
+import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { MONTH_NAMES, MONTH_SHORT } from '@/lib/utils'
+import type { Currency, Show } from '@/types'
 
 export function TourView() {
   const client = useStore(s => s.getClient())
@@ -233,6 +234,9 @@ export function TourView() {
                 )}
               </div>
             </div>
+
+            <ShowFinancials key={selected.id} show={selected} editable={editable} onViewOffer={() => setTourSub('offers')} />
+
             <div className="flex gap-2 flex-wrap mb-4">
               {[
                 ['Maps ↗', () => window.open(`https://maps.google.com/?q=${encodeURIComponent(`${selected.venue}, ${selected.city}`)}`, '_blank')],
@@ -280,6 +284,63 @@ export function TourView() {
           <FormField label="Venue"><input type="text" className={inputClass} placeholder="Venue name" value={f.venue} onChange={e => setF(p => ({...p, venue: e.target.value}))} /></FormField>
           <FormField label="Set time"><input type="time" className={inputClass} value={f.time} onChange={e => setF(p => ({...p, time: e.target.value}))} /></FormField>
         </Modal>
+      )}
+    </div>
+  )
+}
+
+// ── Show financials ─────────────────────────────────────────
+function ShowFinancials({ show, editable, onViewOffer }: { show: Show; editable: boolean; onViewOffer: () => void }) {
+  const updateShowFinancials = useStore(s => s.updateShowFinancials)
+  const [guarantee, setGuarantee] = useState(String(show.guarantee ?? ''))
+  const [deposit, setDeposit] = useState(String(show.deposit ?? ''))
+  const [currency, setCurrency] = useState<Currency>(show.currency ?? 'USD')
+
+  function commit(patch: { guarantee?: number; deposit?: number; currency?: Currency }) {
+    updateShowFinancials(show.id, {
+      guarantee: guarantee ? Number(guarantee) : undefined,
+      deposit: deposit ? Number(deposit) : undefined,
+      currency,
+      ...patch,
+    })
+  }
+
+  if (!editable && !show.guarantee && !show.deposit) return null
+
+  return (
+    <div className="border-t border-gray-100 pt-4 mb-4">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Financials</div>
+      {editable ? (
+        <div className="grid grid-cols-3 gap-3 mb-2">
+          <FormField label="Guarantee">
+            <input type="number" className={inputClass} value={guarantee}
+              onChange={e => setGuarantee(e.target.value)}
+              onBlur={() => commit({ guarantee: guarantee ? Number(guarantee) : undefined })} />
+          </FormField>
+          <FormField label="Deposit">
+            <input type="number" className={inputClass} value={deposit}
+              onChange={e => setDeposit(e.target.value)}
+              onBlur={() => commit({ deposit: deposit ? Number(deposit) : undefined })} />
+          </FormField>
+          <FormField label="Currency">
+            <select className={selectClass} value={currency}
+              onChange={e => { const c = e.target.value as Currency; setCurrency(c); commit({ currency: c }) }}>
+              <option value="USD">USD</option>
+              <option value="GBP">GBP</option>
+              <option value="EUR">EUR</option>
+            </select>
+          </FormField>
+        </div>
+      ) : (
+        <div className="flex gap-4 text-sm mb-2">
+          {show.guarantee != null && <span><span className="text-gray-400">Guarantee</span> <span className="font-semibold">{show.guarantee} {show.currency ?? 'USD'}</span></span>}
+          {show.deposit != null && <span><span className="text-gray-400">Deposit</span> <span className="font-semibold">{show.deposit} {show.currency ?? 'USD'}</span></span>}
+        </div>
+      )}
+      {show.tourOfferId && (
+        <button onClick={onViewOffer} className="text-xs text-blue-500 hover:text-blue-600">
+          From offer — view in Offers →
+        </button>
       )}
     </div>
   )

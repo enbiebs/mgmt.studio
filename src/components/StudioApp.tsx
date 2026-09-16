@@ -134,7 +134,7 @@ export function StudioApp() {
                 contentSub === 'lab'    ? <LabPlaceholder /> :
                 <ManageView />
               )}
-              {section === 'business' && (
+              {section === 'finance'  && (
                 bizSub === 'banking'  ? <BankingView />   :
                 bizSub === 'catalog'  ? <CatalogView />   :
                 bizSub === 'pl'       ? <PLView />        :

@@ -6,7 +6,10 @@
 
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
+import { Modal, FormField, inputClass } from '@/components/ui/Modal'
 import type { TourOffer, OfferStatus } from '@/types'
+
+const ALL_STATUSES: OfferStatus[] = ['inquiry', 'hold', 'confirmed', 'settled', 'cancelled']
 
 const STATUS_CONFIG: Record<OfferStatus, { label: string; color: string; bg: string; dot: string }> = {
   inquiry:   { label: 'Inquiry',   color: 'text-gray-500',  bg: 'bg-gray-50',   dot: 'bg-gray-400'  },
@@ -30,7 +33,10 @@ type AgentTab = 'pipeline' | 'settled' | 'routing'
 
 export function OffersView() {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('tour'))
   const [tab, setTab] = useState<AgentTab>('pipeline')
+  const [addOpen, setAddOpen] = useState(false)
+  const [editingOffer, setEditingOffer] = useState<TourOffer | null>(null)
 
   if (!client) return null
   const offers = client.agentData?.offers ?? []
@@ -54,10 +60,20 @@ export function OffersView() {
             <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Booking</div>
             <h2 className="text-xl font-semibold">{client.name} — Tour Offers</h2>
           </div>
-          <div className="flex gap-3">
-            <StatPill label="Confirmed value" value={fmt(totalGuarantee)} color="text-green-700" />
-            <StatPill label="Pending decisions" value={String(pendingCount)} color="text-amber-700" />
-            <StatPill label="Settled YTD" value={fmt(settledTotal)} color="text-blue-700" />
+          <div className="flex items-end gap-4">
+            <div className="flex gap-3">
+              <StatPill label="Confirmed value" value={fmt(totalGuarantee)} color="text-green-700" />
+              <StatPill label="Pending decisions" value={String(pendingCount)} color="text-amber-700" />
+              <StatPill label="Settled YTD" value={fmt(settledTotal)} color="text-blue-700" />
+            </div>
+            {editable && (
+              <button
+                onClick={() => setAddOpen(true)}
+                className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+              >
+                + Add offer
+              </button>
+            )}
           </div>
         </div>
         {/* Tabs */}
@@ -77,11 +93,96 @@ export function OffersView() {
       </div>
 
       <div className="p-6">
-        {tab === 'pipeline' && <PipelineTab offers={pipeline} />}
-        {tab === 'routing'  && <RoutingTab  offers={offers.filter(o => o.status !== 'cancelled')} />}
+        {tab === 'pipeline' && <PipelineTab offers={pipeline} editable={editable} onEdit={setEditingOffer} />}
+        {tab === 'routing'  && <RoutingTab  offers={offers.filter(o => o.status !== 'cancelled')} editable={editable} onEdit={setEditingOffer} />}
         {tab === 'settled'  && <HistoryTab  settled={settled} cancelled={cancelled} />}
       </div>
+
+      {(addOpen || editingOffer) && (
+        <OfferFormModal
+          initial={editingOffer}
+          onClose={() => { setAddOpen(false); setEditingOffer(null) }}
+        />
+      )}
     </div>
+  )
+}
+
+// ── Add / Edit offer modal ──────────────────────────────────
+function OfferFormModal({ initial, onClose }: { initial: TourOffer | null; onClose: () => void }) {
+  const { addOffer, updateOffer, deleteOffer } = useStore()
+  const [f, setF] = useState({
+    venue: initial?.venue ?? '', city: initial?.city ?? '', country: initial?.country ?? '',
+    date: initial?.date ?? '', promoter: initial?.promoter ?? '',
+    guarantee: String(initial?.guarantee ?? ''), door: String(initial?.door ?? ''), buyout: String(initial?.buyout ?? ''),
+    notes: initial?.notes ?? '',
+  })
+
+  function handleSave() {
+    if (!f.venue || !f.city || !f.date || !f.promoter || !f.guarantee) return
+    const patch = {
+      venue: f.venue, city: f.city, country: f.country, date: f.date, promoter: f.promoter,
+      guarantee: Number(f.guarantee), door: f.door ? Number(f.door) : undefined, buyout: f.buyout ? Number(f.buyout) : undefined,
+      notes: f.notes || undefined,
+    }
+    if (initial) updateOffer(initial.id, patch)
+    else addOffer(patch)
+    onClose()
+  }
+
+  function handleStatusChange(status: OfferStatus) {
+    if (!initial) return
+    updateOffer(initial.id, { status })
+  }
+
+  function handleDelete() {
+    if (!initial) return
+    deleteOffer(initial.id)
+    onClose()
+  }
+
+  return (
+    <Modal title={initial ? 'Edit offer' : 'Add an offer'} onClose={onClose} footer={
+      <>
+        {initial && (
+          <button onClick={handleDelete} className="px-3 py-1.5 text-sm text-red-400 hover:text-red-500 mr-auto">Delete</button>
+        )}
+        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+        <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">
+          {initial ? 'Save' : 'Add offer'}
+        </button>
+      </>
+    }>
+      {initial && (
+        <FormField label="Status">
+          <div className="flex items-center bg-gray-100 rounded-full p-0.5 text-xs gap-0.5 w-fit flex-wrap">
+            {ALL_STATUSES.map(s => (
+              <button
+                key={s}
+                onClick={() => handleStatusChange(s)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                  initial.status === s ? `${STATUS_CONFIG[s].bg} ${STATUS_CONFIG[s].color}` : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                {STATUS_CONFIG[s].label}
+              </button>
+            ))}
+          </div>
+          {initial.status !== 'confirmed' && !initial.showId && (
+            <div className="text-[11px] text-gray-400 mt-1">Moving this to Confirmed will automatically create the Show.</div>
+          )}
+        </FormField>
+      )}
+      <FormField label="Venue"><input type="text" className={inputClass} value={f.venue} onChange={e => setF(p => ({...p, venue: e.target.value}))} /></FormField>
+      <FormField label="City"><input type="text" className={inputClass} value={f.city} onChange={e => setF(p => ({...p, city: e.target.value}))} /></FormField>
+      <FormField label="Country"><input type="text" className={inputClass} value={f.country} onChange={e => setF(p => ({...p, country: e.target.value}))} /></FormField>
+      <FormField label="Date"><input type="date" className={inputClass} value={f.date} onChange={e => setF(p => ({...p, date: e.target.value}))} /></FormField>
+      <FormField label="Promoter"><input type="text" className={inputClass} value={f.promoter} onChange={e => setF(p => ({...p, promoter: e.target.value}))} /></FormField>
+      <FormField label="Guarantee ($)"><input type="number" className={inputClass} value={f.guarantee} onChange={e => setF(p => ({...p, guarantee: e.target.value}))} /></FormField>
+      <FormField label="Door split (%)"><input type="number" className={inputClass} value={f.door} onChange={e => setF(p => ({...p, door: e.target.value}))} /></FormField>
+      <FormField label="Buyout ($)"><input type="number" className={inputClass} value={f.buyout} onChange={e => setF(p => ({...p, buyout: e.target.value}))} /></FormField>
+      <FormField label="Notes"><input type="text" className={inputClass} value={f.notes} onChange={e => setF(p => ({...p, notes: e.target.value}))} /></FormField>
+    </Modal>
   )
 }
 
@@ -95,7 +196,7 @@ function StatPill({ label, value, color }: { label: string; value: string; color
 }
 
 // ── Pipeline (kanban columns) ───────────────────────────────
-function PipelineTab({ offers }: { offers: TourOffer[] }) {
+function PipelineTab({ offers, editable, onEdit }: { offers: TourOffer[]; editable: boolean; onEdit: (o: TourOffer) => void }) {
   const byStatus = (s: OfferStatus) => offers.filter(o => o.status === s)
 
   return (
@@ -119,7 +220,7 @@ function PipelineTab({ offers }: { offers: TourOffer[] }) {
               </div>
             )}
             <div className="space-y-2">
-              {items.map(o => <OfferCard key={o.id} offer={o} />)}
+              {items.map(o => <OfferCard key={o.id} offer={o} editable={editable} onEdit={onEdit} />)}
             </div>
             {items.length > 0 && (
               <div className="mt-3 text-right text-xs text-gray-400">
@@ -133,10 +234,13 @@ function PipelineTab({ offers }: { offers: TourOffer[] }) {
   )
 }
 
-function OfferCard({ offer: o }: { offer: TourOffer }) {
+function OfferCard({ offer: o, editable, onEdit }: { offer: TourOffer; editable: boolean; onEdit: (o: TourOffer) => void }) {
   const cfg = STATUS_CONFIG[o.status]
   return (
-    <div className="border border-gray-100 rounded-xl p-4 bg-canvas hover:shadow-sm transition-shadow">
+    <div
+      onClick={editable ? () => onEdit(o) : undefined}
+      className={`border border-gray-100 rounded-xl p-4 bg-canvas hover:shadow-sm transition-shadow ${editable ? 'cursor-pointer' : ''}`}
+    >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div>
           <div className="font-semibold text-sm leading-tight">{o.venue}</div>
@@ -161,7 +265,7 @@ function OfferCard({ offer: o }: { offer: TourOffer }) {
 }
 
 // ── Routing Calendar (chronological list) ──────────────────
-function RoutingTab({ offers }: { offers: TourOffer[] }) {
+function RoutingTab({ offers, editable, onEdit }: { offers: TourOffer[]; editable: boolean; onEdit: (o: TourOffer) => void }) {
   const sorted = [...offers].sort((a, b) => a.date.localeCompare(b.date))
   const past   = sorted.filter(o => o.date < new Date().toISOString().slice(0, 10))
   const future = sorted.filter(o => o.date >= new Date().toISOString().slice(0, 10))
@@ -170,12 +274,12 @@ function RoutingTab({ offers }: { offers: TourOffer[] }) {
     <div className="max-w-2xl space-y-8">
       {future.length > 0 && (
         <Section title="Upcoming">
-          {future.map(o => <RoutingRow key={o.id} offer={o} />)}
+          {future.map(o => <RoutingRow key={o.id} offer={o} editable={editable} onEdit={onEdit} />)}
         </Section>
       )}
       {past.length > 0 && (
         <Section title="Past">
-          {past.reverse().map(o => <RoutingRow key={o.id} offer={o} />)}
+          {past.reverse().map(o => <RoutingRow key={o.id} offer={o} editable={editable} onEdit={onEdit} />)}
         </Section>
       )}
     </div>
@@ -191,11 +295,14 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-function RoutingRow({ offer: o }: { offer: TourOffer }) {
+function RoutingRow({ offer: o, editable, onEdit }: { offer: TourOffer; editable: boolean; onEdit: (o: TourOffer) => void }) {
   const cfg = STATUS_CONFIG[o.status]
   const date = new Date(o.date + 'T00:00:00')
   return (
-    <div className="flex items-center gap-4 p-3 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors">
+    <div
+      onClick={editable ? () => onEdit(o) : undefined}
+      className={`flex items-center gap-4 p-3 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors ${editable ? 'cursor-pointer' : ''}`}
+    >
       <div className="w-14 text-center flex-shrink-0">
         <div className="text-xs text-gray-400 uppercase">{date.toLocaleDateString('en-US', { month: 'short' })}</div>
         <div className="text-xl font-bold leading-none">{date.getDate()}</div>

@@ -6,7 +6,7 @@ const SUBNAV: Record<string, [string, string][]> = {
   songs:    [['Tracks', 'tracks'], ['Label Copy', 'labelcopy'], ['Checklist', 'checklist'], ['Status', 'status']],
   tour:     [['Shows', 'tour'], ['Offers', 'offers'], ['Advance', 'advance'], ['Day Sheet', 'daysheet'], ['Travel', 'travel'], ['Crew', 'crew'], ['Guests', 'guests']],
   content:  [['Manage', 'manage'], ['Studio', 'studio'], ['Lab', 'lab']],
-  business: [['Royalties', 'royalties'], ['Banking', 'banking'], ['Catalog', 'catalog'], ['P&L', 'pl'], ['Invoices', 'invoices'], ['Payments', 'payments']],
+  finance:  [['Royalties', 'royalties'], ['Banking', 'banking'], ['Catalog', 'catalog'], ['P&L', 'pl'], ['Invoices', 'invoices'], ['Payments', 'payments']],
 }
 
 export function Subnav() {
@@ -17,7 +17,7 @@ export function Subnav() {
   function isActive(key: string) {
     if (section === 'songs')    return songsSub === key
     if (section === 'content')  return contentSub === key
-    if (section === 'business') return bizSub === key
+    if (section === 'finance')  return bizSub === key
     if (section === 'tour')     return tourSub === key
     return false
   }
@@ -25,7 +25,7 @@ export function Subnav() {
   function handleClick(key: string) {
     if (section === 'songs')    setSongsSub(key as typeof songsSub)
     if (section === 'content')  setContentSub(key as typeof contentSub)
-    if (section === 'business') setBizSub(key as typeof bizSub)
+    if (section === 'finance')  setBizSub(key as typeof bizSub)
     if (section === 'tour')     setTourSub(key as typeof tourSub)
   }
 

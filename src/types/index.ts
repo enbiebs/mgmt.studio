@@ -200,6 +200,10 @@ export interface Show {
   time: string           // "20:00"
   status: ShowStatus
   notes?: string
+  guarantee?: number
+  deposit?: number
+  currency?: Currency
+  tourOfferId?: string   // → TourOffer this show was confirmed from, if any
 }
 
 export interface Post {
@@ -460,7 +464,7 @@ export interface AnalyticsData {
 }
 
 // ── Section / view routing ──────────────────────────────────
-export type MainSection  = 'calendar' | 'songs' | 'tour' | 'content' | 'business' | 'projects' | 'analytics' | 'fandom' | 'team' | 'legal'
+export type MainSection  = 'calendar' | 'songs' | 'tour' | 'content' | 'finance' | 'projects' | 'analytics' | 'fandom' | 'team' | 'legal'
 export type SongsSub     = 'tracks' | 'labelcopy' | 'checklist' | 'status'
 export type ContentSub   = 'manage' | 'studio' | 'lab'
 export type BizSub       = 'royalties' | 'banking' | 'catalog' | 'pl' | 'invoices' | 'payments'
@@ -721,6 +725,7 @@ export interface TourOffer {
   notes?:     string
   settledAt?: string
   netPayout?: number        // after splits
+  showId?:    string        // → Show created when this offer was confirmed
 }
 
 // ── Legal / Contracts ───────────────────────────────────────

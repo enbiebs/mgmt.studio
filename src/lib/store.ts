@@ -22,7 +22,7 @@ import type {
   CrewMember, ShowAdvance, TravelItem, Person, PersonActivity, Currency,
   CatalogWork, RegStatus, Invoice, InvoiceLineItem, InvoiceStatus, RevenueStream,
   LegalTemplate, LegalTemplateClause, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
-  ReleaseType, Venue,
+  ReleaseType, Venue, TourOffer, Expense, ExpenseCategory,
 } from '@/types'
 import { DEMO_DATA } from '@/lib/demo-data'
 import { DEFAULT_LEGAL_TEMPLATES } from '@/lib/legal-templates-demo'
@@ -42,6 +42,8 @@ import {
   upsertPerson, deletePerson as dbDeletePerson,
   upsertStakeholder, deleteStakeholder as dbDeleteStakeholder,
   upsertShow, deleteShow as dbDeleteShow,
+  upsertOffer, deleteOffer as dbDeleteOffer,
+  upsertExpense, deleteExpense as dbDeleteExpense,
   upsertVenue, deleteVenue as dbDeleteVenue,
   upsertPost, deletePost as dbDeletePost, replaceAutoPosts,
   upsertDeposit, deleteDeposit as dbDeleteDeposit,
@@ -116,10 +118,10 @@ function saveLegalTemplatesLocal(templates: LegalTemplate[]) {
 // hasAccess) — it's a read-only aggregate view gated per-event by the
 // underlying section's own access, not a section anyone can be granted.
 const SECTION_TO_GRANT_KEY: Record<MainSection, string> = {
-  calendar: 'calendar', songs: 'music', tour: 'tour', content: 'content', business: 'business',
+  calendar: 'calendar', songs: 'music', tour: 'tour', content: 'content', finance: 'finance',
   team: 'team', projects: 'projects', analytics: 'analytics', fandom: 'fandom', legal: 'legal',
 }
-const ALL_SECTIONS: MainSection[] = ['songs', 'tour', 'content', 'business', 'team', 'projects', 'analytics', 'fandom', 'legal']
+const ALL_SECTIONS: MainSection[] = ['songs', 'tour', 'content', 'finance', 'team', 'projects', 'analytics', 'fandom', 'legal']
 
 // ── State shape ─────────────────────────────────────────────
 interface StudioState {
@@ -309,7 +311,19 @@ interface StudioState {
   // ── Show actions ──
   addShow: (date: string, city: string, venue: string, time: string) => void
   updateShowStatus: (showId: string, status: ShowStatus) => void
+  updateShowFinancials: (showId: string, patch: { guarantee?: number; deposit?: number; currency?: Currency }) => void
   deleteShow: (showId: string) => void
+
+  // ── Tour offers ──
+  addOffer: (patch: { venue: string; city: string; country: string; date: string; promoter: string; guarantee: number; door?: number; buyout?: number; notes?: string }) => void
+  /** Editing an offer's status into 'confirmed' also creates the matching Show. */
+  updateOffer: (offerId: string, patch: Partial<Omit<TourOffer, 'id'>>) => void
+  deleteOffer: (offerId: string) => void
+
+  // ── Expenses ──
+  addExpense: (patch: { description: string; vendor: string; amount: number; currency: Currency; category: ExpenseCategory; date: string; paid: boolean }) => void
+  updateExpense: (expenseId: string, patch: Partial<Omit<Expense, 'id'>>) => void
+  deleteExpense: (expenseId: string) => void
 
   // ── Venue library (reusable across shows at the same room) ──
   addVenue: (patch: Omit<Venue, 'id' | 'createdAt'>) => string
@@ -1614,6 +1628,58 @@ export const useStore = create<StudioState>((set, get) => ({
     dbDeleteInvoice(invoiceId).catch(console.error)
   },
 
+  // ── Expenses ──
+  addExpense: (patch) => {
+    const { data, clientId, workspaceId } = get()
+    const newExpense: Expense = { id: 'exp-' + uid(), ...patch }
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId || !c.finance) return c
+        return { ...c, finance: { ...c.finance, expenses: [...c.finance.expenses, newExpense] } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId) upsertExpense(newExpense, clientId).catch(console.error)
+  },
+
+  updateExpense: (expenseId, patch) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedExpense: Expense | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId || !c.finance) return c
+        return {
+          ...c,
+          finance: {
+            ...c.finance,
+            expenses: c.finance.expenses.map(e => {
+              if (e.id !== expenseId) return e
+              updatedExpense = { ...e, ...patch }
+              return updatedExpense
+            }),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId && updatedExpense) upsertExpense(updatedExpense, clientId).catch(console.error)
+  },
+
+  deleteExpense: (expenseId) => {
+    const { data, clientId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId || !c.finance) return c
+        return { ...c, finance: { ...c.finance, expenses: c.finance.expenses.filter(e => e.id !== expenseId) } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    dbDeleteExpense(expenseId).catch(console.error)
+  },
+
   // ── Release stakeholders ──
   addStakeholder: (albumId, patch) => {
     const { data, clientId, workspaceId } = get()
@@ -1697,6 +1763,30 @@ export const useStore = create<StudioState>((set, get) => ({
     if (clientId && updatedShow) upsertShow(updatedShow, clientId).catch(console.error)
   },
 
+  updateShowFinancials: (showId, patch) => {
+    const { data, clientId } = get()
+    let updatedShow: Show | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          tour: {
+            ...c.tour,
+            shows: c.tour.shows.map(s => {
+              if (s.id !== showId) return s
+              updatedShow = { ...s, ...patch }
+              return updatedShow
+            }),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (clientId && updatedShow) upsertShow(updatedShow, clientId).catch(console.error)
+  },
+
   deleteShow: (showId) => {
     const { data, clientId } = get()
     const updated = {
@@ -1708,6 +1798,80 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated, selectedShowId: null })
     saveData(updated)
     dbDeleteShow(showId).catch(console.error)
+  },
+
+  // ── Tour offers ──
+  addOffer: (patch) => {
+    const { data, clientId, workspaceId } = get()
+    const newOffer: TourOffer = { id: 'offer-' + uid(), status: 'inquiry', ...patch }
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId || !c.agentData) return c
+        return { ...c, agentData: { ...c.agentData, offers: [...c.agentData.offers, newOffer] } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId) upsertOffer(newOffer, clientId).catch(console.error)
+  },
+
+  updateOffer: (offerId, patch) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedOffer: TourOffer | undefined
+    let newShow: Show | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId || !c.agentData) return c
+        const offers = c.agentData.offers.map(o => {
+          if (o.id !== offerId) return o
+          updatedOffer = { ...o, ...patch }
+          // Confirming an offer creates its Show automatically — only on the
+          // transition into 'confirmed', not on every edit while confirmed.
+          if (patch.status === 'confirmed' && o.status !== 'confirmed' && !updatedOffer.showId) {
+            newShow = {
+              id: 'show-' + uid(), date: updatedOffer.date, city: updatedOffer.city,
+              venue: updatedOffer.venue, time: '20:00', status: 'confirmed',
+              guarantee: updatedOffer.guarantee, currency: 'USD', tourOfferId: updatedOffer.id,
+            }
+            updatedOffer = { ...updatedOffer, showId: newShow.id }
+          }
+          return updatedOffer
+        })
+        return {
+          ...c,
+          agentData: { ...c.agentData, offers },
+          tour: newShow
+            ? { ...c.tour, shows: [...c.tour.shows, newShow].sort((a, b) => a.date.localeCompare(b.date)) }
+            : c.tour,
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (clientId && newShow) {
+      // The offer's row references the new show's id via a foreign key, so
+      // the show must land in the DB first — write them in sequence, not
+      // fire-and-forget in parallel, or the offer write can lose the race
+      // and get rejected for pointing at a show that doesn't exist yet.
+      upsertShow(newShow, clientId)
+        .then(() => { if (workspaceId && updatedOffer) return upsertOffer(updatedOffer, clientId) })
+        .catch(console.error)
+    } else if (workspaceId && clientId && updatedOffer) {
+      upsertOffer(updatedOffer, clientId).catch(console.error)
+    }
+  },
+
+  deleteOffer: (offerId) => {
+    const { data, clientId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId || !c.agentData) return c
+        return { ...c, agentData: { ...c.agentData, offers: c.agentData.offers.filter(o => o.id !== offerId) } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    dbDeleteOffer(offerId).catch(console.error)
   },
 
   // ── Venue library ──
