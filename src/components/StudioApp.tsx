@@ -13,6 +13,7 @@
 import { useStore } from '@/lib/store'
 import { AppHeader }  from '@/components/layout/AppHeader'
 import { Subnav }     from '@/components/layout/Subnav'
+import { CalendarView } from '@/components/calendar/CalendarView'
 
 // Dashboard
 import { ClientCard }      from '@/components/dashboard/ClientCard'
@@ -141,6 +142,7 @@ export function StudioApp() {
                 bizSub === 'payments' ? <PaymentsView />  :
                 <RoyaltiesView />
               )}
+              {section === 'calendar'   && <CalendarView />}
               {section === 'projects'   && <ProjectsView />}
               {section === 'analytics'  && <AnalyticsView />}
               {section === 'fandom'     && <FandomView />}

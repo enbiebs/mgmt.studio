@@ -460,7 +460,7 @@ export interface AnalyticsData {
 }
 
 // ── Section / view routing ──────────────────────────────────
-export type MainSection  = 'songs' | 'tour' | 'content' | 'business' | 'projects' | 'analytics' | 'fandom' | 'team' | 'legal'
+export type MainSection  = 'calendar' | 'songs' | 'tour' | 'content' | 'business' | 'projects' | 'analytics' | 'fandom' | 'team' | 'legal'
 export type SongsSub     = 'tracks' | 'labelcopy' | 'checklist' | 'status'
 export type ContentSub   = 'manage' | 'studio' | 'lab'
 export type BizSub       = 'royalties' | 'banking' | 'catalog' | 'pl' | 'invoices' | 'payments'

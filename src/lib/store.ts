@@ -112,9 +112,11 @@ function saveLegalTemplatesLocal(templates: LegalTemplate[]) {
 }
 
 // access_grants.section uses 'music' where the app's MainSection uses 'songs' —
-// everything else lines up 1:1.
+// everything else lines up 1:1. 'calendar' has no grant of its own (see
+// hasAccess) — it's a read-only aggregate view gated per-event by the
+// underlying section's own access, not a section anyone can be granted.
 const SECTION_TO_GRANT_KEY: Record<MainSection, string> = {
-  songs: 'music', tour: 'tour', content: 'content', business: 'business',
+  calendar: 'calendar', songs: 'music', tour: 'tour', content: 'content', business: 'business',
   team: 'team', projects: 'projects', analytics: 'analytics', fandom: 'fandom', legal: 'legal',
 }
 const ALL_SECTIONS: MainSection[] = ['songs', 'tour', 'content', 'business', 'team', 'projects', 'analytics', 'fandom', 'legal']
@@ -392,6 +394,10 @@ export const useStore = create<StudioState>((set, get) => ({
     const s = get()
     const cid = clientId ?? s.clientId
     if (!cid) return false
+    // Calendar has no grant of its own — anyone with the client open can see
+    // it; what it actually shows is filtered per-event by each event's real
+    // section access (see src/lib/calendar.ts), not gated here.
+    if (section === 'calendar') return true
     if (s.role === 'manager') return true
     if (s.role === 'artist') {
       if (s.authClientId !== cid) return false
@@ -509,7 +515,7 @@ export const useStore = create<StudioState>((set, get) => ({
   openClient: (id) => {
     const s = get()
     const firstSection = (s.role === 'manager' || s.role === 'artist')
-      ? 'songs'
+      ? 'calendar'
       : (ALL_SECTIONS.find(sec => s.hasAccess(sec, id)) ?? 'songs')
     set({ view: 'studio', clientId: id, section: firstSection, selectedShowId: null, selectedAlbumId: null })
   },
