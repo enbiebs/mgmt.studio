@@ -40,6 +40,7 @@ export function CalendarView() {
   const client = useStore(s => s.getClient())
   const hasAccess = useStore(s => s.hasAccess)
   const canEdit = useStore(s => s.canEdit)
+  const canEditAny = canEdit('tour') || canEdit('content') || canEdit('projects')
   const { calYear, calMonth, calPrev, calNext, calToday } = useStore()
   const {
     setSection, setTourSub, setContentSub, setBizSub,
@@ -119,6 +120,7 @@ export function CalendarView() {
             )
           })}
         </div>
+        {canEditAny && <GoogleCalendarPanel clientId={client.id} />}
       </div>
 
       {/* Grid */}
@@ -179,6 +181,125 @@ export function CalendarView() {
       {creating?.type === 'show'    && <AddShowModal    defaultDate={creating.date} onClose={() => setCreating(null)} />}
       {creating?.type === 'post'    && <PostModal        defaultDate={creating.date} onClose={() => setCreating(null)} />}
       {creating?.type === 'project' && <AddProjectModal defaultDueDate={creating.date} onClose={() => setCreating(null)} />}
+    </div>
+  )
+}
+
+// ── Google Calendar connection panel ────────────────────────
+// Real two-way sync (Stage 1: connect/disconnect + push Mgmt Studio →
+// Google; pulling changes back is a later stage). Mirrors the existing
+// one-way .ics feed panel in TourView.tsx, styled the same way.
+function GoogleCalendarPanel({ clientId }: { clientId: string }) {
+  const [open, setOpen] = useState(false)
+  const [connected, setConnected] = useState<boolean | null>(null)
+  const [busy, setBusy] = useState(false)
+  // Lazy initializer (runs once, during render, not as an effect) — reads
+  // the one-time redirect params Google's OAuth callback may have left on
+  // the URL, so opening this straight from a fresh page load still shows
+  // the result of that connect attempt.
+  const [message, setMessage] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('google_calendar_connected') === clientId) return 'Connected!'
+    if (params.get('google_calendar_error')) return 'Something went wrong connecting — try again.'
+    return null
+  })
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('google_calendar_connected') || params.get('google_calendar_error')) {
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+    fetch(`/api/google-calendar/status?clientId=${clientId}`)
+      .then(res => res.json())
+      .then(json => setConnected(!!json.connected))
+      .catch(() => setConnected(false))
+  }, [clientId])
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  async function connect() {
+    setBusy(true)
+    try {
+      const res = await fetch('/api/google-calendar/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Could not start connecting')
+      window.location.href = json.url
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Could not start connecting')
+      setBusy(false)
+    }
+  }
+
+  async function disconnect() {
+    setBusy(true)
+    try {
+      await fetch('/api/google-calendar/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId }),
+      })
+      setConnected(false)
+      setMessage(null)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors"
+      >
+        📆 Google Calendar
+      </button>
+      {open && (
+        <div ref={panelRef} className="absolute right-0 top-full mt-1 bg-canvas border border-gray-100 rounded-xl shadow-lg p-3 w-72 z-50 text-xs">
+          {connected === null ? (
+            <div className="text-gray-400">Checking…</div>
+          ) : connected ? (
+            <>
+              <div className="text-gray-500 mb-2">
+                Shows, Posts, and Projects sync to a dedicated Google Calendar. Editing or deleting them there updates Mgmt Studio too.
+              </div>
+              <button
+                onClick={disconnect}
+                disabled={busy}
+                className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg font-medium text-red-400 hover:bg-red-50 transition-colors disabled:opacity-50"
+              >
+                {busy ? 'Disconnecting…' : 'Disconnect'}
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="text-gray-500 mb-2">
+                Connect a Google Calendar for this client — Shows, Posts, and Projects will sync both ways.
+              </div>
+              <button
+                onClick={connect}
+                disabled={busy}
+                className="w-full px-2.5 py-1.5 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
+              >
+                {busy ? 'Connecting…' : 'Connect Google Calendar'}
+              </button>
+            </>
+          )}
+          {message && <div className="mt-2 text-gray-400">{message}</div>}
+        </div>
+      )}
     </div>
   )
 }

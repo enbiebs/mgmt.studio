@@ -895,6 +895,7 @@ export async function upsertShow(show: Show, clientId: string) {
     status: show.status, notes: show.notes ?? null,
     guarantee: show.guarantee ?? null, deposit: show.deposit ?? null,
     currency: show.currency ?? null, tour_offer_id: show.tourOfferId ?? null,
+    updated_at: new Date().toISOString(),
   })
 }
 
@@ -972,6 +973,7 @@ export async function upsertPost(post: Post, clientId: string) {
     date: post.date, title: post.title,
     time: post.time, type: post.type,
     release_id: post.releaseId ?? null, auto: post.auto ?? false,
+    updated_at: new Date().toISOString(),
   })
 }
 
@@ -1066,6 +1068,7 @@ export async function upsertProject(project: Project, clientId: string) {
     status: project.status, assignee: project.assignee ?? null,
     due_date: project.dueDate ?? null, notes: project.notes ?? null,
     created_at: project.createdAt, from_artist: project.fromArtist,
+    updated_at: new Date().toISOString(),
   })
 }
 

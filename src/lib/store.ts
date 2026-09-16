@@ -113,6 +113,27 @@ function saveLegalTemplatesLocal(templates: LegalTemplate[]) {
   localStorage.setItem(LEGAL_TEMPLATES_KEY, JSON.stringify(templates))
 }
 
+// Fire-and-forget push to a client's connected Google Calendar, if any —
+// the actual sync work happens server-side (this file runs in the
+// browser and can't hold Google credentials), see
+// src/app/api/google-calendar/push[-delete]/route.ts. A failed push never
+// blocks or fails the local save; it's already persisted regardless.
+function pushToGoogleCalendar(clientId: string, recordType: 'show' | 'post' | 'project', record: unknown) {
+  fetch('/api/google-calendar/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId, recordType, record }),
+  }).catch(console.error)
+}
+
+function pushDeleteToGoogleCalendar(clientId: string, recordType: 'show' | 'post' | 'project', recordId: string) {
+  fetch('/api/google-calendar/push-delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId, recordType, recordId }),
+  }).catch(console.error)
+}
+
 // access_grants.section uses 'music' where the app's MainSection uses 'songs' —
 // everything else lines up 1:1. 'calendar' has no grant of its own (see
 // hasAccess) — it's a read-only aggregate view gated per-event by the
@@ -1744,7 +1765,10 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
-    if (clientId) upsertShow(newShow, clientId).catch(console.error)
+    if (clientId) {
+      upsertShow(newShow, clientId).catch(console.error)
+      pushToGoogleCalendar(clientId, 'show', newShow)
+    }
   },
 
   updateShowStatus: (showId, status) => {
@@ -1768,9 +1792,13 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
+    // Status isn't part of the pushed event body (title/date/time only),
+    // so nothing Google-visible would change — no push here.
     if (clientId && updatedShow) upsertShow(updatedShow, clientId).catch(console.error)
   },
 
+  // Guarantee/deposit/currency don't appear on the pushed Google event
+  // either, for the same reason — no push here.
   updateShowFinancials: (showId, patch) => {
     const { data, clientId } = get()
     let updatedShow: Show | undefined
@@ -1806,6 +1834,7 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated, selectedShowId: null })
     saveData(updated)
     dbDeleteShow(showId).catch(console.error)
+    if (clientId) pushDeleteToGoogleCalendar(clientId, 'show', showId)
   },
 
   // ── Tour offers ──
@@ -1864,6 +1893,7 @@ export const useStore = create<StudioState>((set, get) => ({
       upsertShow(newShow, clientId)
         .then(() => { if (workspaceId && updatedOffer) return upsertOffer(updatedOffer, clientId) })
         .catch(console.error)
+      pushToGoogleCalendar(clientId, 'show', newShow)
     } else if (workspaceId && clientId && updatedOffer) {
       upsertOffer(updatedOffer, clientId).catch(console.error)
     }
@@ -1945,7 +1975,10 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
-    if (clientId) upsertPost(newPost, clientId).catch(console.error)
+    if (clientId) {
+      upsertPost(newPost, clientId).catch(console.error)
+      pushToGoogleCalendar(clientId, 'post', newPost)
+    }
   },
 
   updatePost: (postId, patch) => {
@@ -1968,7 +2001,10 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
-    if (clientId && updatedPost) upsertPost(updatedPost, clientId).catch(console.error)
+    if (clientId && updatedPost) {
+      upsertPost(updatedPost, clientId).catch(console.error)
+      pushToGoogleCalendar(clientId, 'post', updatedPost)
+    }
   },
 
   deletePost: (postId) => {
@@ -1982,6 +2018,7 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     dbDeletePost(postId).catch(console.error)
+    if (clientId) pushDeleteToGoogleCalendar(clientId, 'post', postId)
   },
 
   // ── Royalties ──
@@ -2116,9 +2153,14 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
-    if (clientId) upsertProject(newProject, clientId).catch(console.error)
+    if (clientId) {
+      upsertProject(newProject, clientId).catch(console.error)
+      pushToGoogleCalendar(clientId, 'project', newProject)
+    }
   },
 
+  // Status/assignee changes below don't touch title/dueDate — the only
+  // fields on the pushed Google event — so neither pushes.
   updateProjectStatus: (projectId, status) => {
     const { data, clientId } = get()
     const updated = {
@@ -2164,6 +2206,7 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     dbDeleteProject(projectId).catch(console.error)
+    if (clientId) pushDeleteToGoogleCalendar(clientId, 'project', projectId)
   },
 
   // ── Artist Todos ──
