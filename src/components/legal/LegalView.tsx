@@ -58,13 +58,11 @@ function fmt(n: number, currency = 'USD') {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n)
 }
 
-type LawyerTab = 'pipeline' | 'alerts' | 'register' | 'templates'
-
 const ACTIVE_STATUSES: ContractStatus[] = ['draft', 'review', 'negotiation', 'signed']
 
 export function LegalView() {
   const client = useStore(s => s.getClient())
-  const [tab, setTab] = useState<LawyerTab>('pipeline')
+  const tab = useStore(s => s.legalSub)
   const [filterType, setFilterType] = useState<ContractType | 'all'>('all')
 
   if (!client) return null
@@ -75,6 +73,7 @@ export function LegalView() {
   const expiring  = contracts.filter(c => c.expiryDate && c.status === 'signed' && daysUntil(c.expiryDate) <= 90 && daysUntil(c.expiryDate) > 0)
   const expired   = contracts.filter(c => c.expiryDate && daysUntil(c.expiryDate) < 0 && c.status !== 'terminated')
   const pending   = contracts.filter(c => c.status === 'draft' || c.status === 'review' || c.status === 'negotiation')
+  const alertCount = flagged.length + expiring.length + expired.length
 
   const types = Array.from(new Set(contracts.map(c => c.type))) as ContractType[]
 
@@ -92,21 +91,8 @@ export function LegalView() {
           <div className="flex gap-3">
             <StatPill label="Total contracts" value={String(contracts.length)} color="text-gray-700" />
             <StatPill label="Pending action" value={String(pending.length)} color="text-amber-700" />
-            {flagged.length > 0 && <StatPill label="Flagged" value={String(flagged.length)} color="text-red-600" />}
+            {alertCount > 0 && <StatPill label="Alerts" value={String(alertCount)} color="text-red-600" />}
           </div>
-        </div>
-        <div className="flex gap-0.5">
-          {([['pipeline', 'Contract Pipeline'], ['alerts', `Alerts${flagged.length + expiring.length + expired.length > 0 ? ` (${flagged.length + expiring.length + expired.length})` : ''}`], ['register', 'Rights Register'], ['templates', 'Templates']] as const).map(([t, label]) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                tab === t ? 'bg-gray-900 text-canvas' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
         </div>
       </div>
 

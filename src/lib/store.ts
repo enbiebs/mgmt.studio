@@ -15,7 +15,7 @@
 import { create } from 'zustand'
 import type {
   AppData, Client, Track, Show, ShowStatus, Post, Album,
-  MainSection, SongsSub, ContentSub, BizSub, TourSub, Stage, AnalyticsSub,
+  MainSection, SongsSub, ContentSub, BizSub, TourSub, Stage, AnalyticsSub, FandomSub, LegalSub,
   UserRole, ProjectStatus, ProjectType, Stakeholder, Project, ArtistTodo,
   TrackLabelCopy, ReleaseLabelCopy, ChecklistItemKey, ChecklistItem, TrackPriority,
   GuestListEntry, GuestListCategory, ReleaseStakeholder, StakeholderRole,
@@ -162,6 +162,8 @@ interface StudioState {
   bizSub: BizSub
   tourSub: TourSub
   analyticsSub: AnalyticsSub
+  fandomSub: FandomSub
+  legalSub: LegalSub
   selectedShowId: string | null
   // Which release (single/EP/album) the Label Copy / Checklist / Status
   // sub-tabs are showing — mirrors selectedShowId's role for Tour.
@@ -212,6 +214,8 @@ interface StudioState {
   setBizSub: (sub: BizSub) => void
   setTourSub: (sub: TourSub) => void
   setAnalyticsSub: (sub: AnalyticsSub) => void
+  setFandomSub: (sub: FandomSub) => void
+  setLegalSub: (sub: LegalSub) => void
   setSelectedShow: (id: string | null) => void
   setSelectedAlbum: (id: string | null) => void
   setStudioConcept: (name: string) => void
@@ -387,6 +391,8 @@ export const useStore = create<StudioState>((set, get) => ({
   bizSub:        'royalties',
   tourSub:       'tour',
   analyticsSub:  'overview',
+  fandomSub:     'overview',
+  legalSub:      'pipeline',
   selectedShowId: null,
   selectedAlbumId: null,
   studioConcept: null,
@@ -539,6 +545,8 @@ export const useStore = create<StudioState>((set, get) => ({
   setBizSub:       (sub) => set({ bizSub: sub }),
   setTourSub:      (sub) => set({ tourSub: sub }),
   setAnalyticsSub: (sub) => set({ analyticsSub: sub }),
+  setFandomSub:    (sub) => set({ fandomSub: sub }),
+  setLegalSub:     (sub) => set({ legalSub: sub }),
   setSelectedShow: (id) => set({ selectedShowId: id }),
   setSelectedAlbum: (id) => set({ selectedAlbumId: id }),
   setStudioConcept: (name) => set({ studioConcept: name }),

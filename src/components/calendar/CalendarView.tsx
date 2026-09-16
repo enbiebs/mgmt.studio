@@ -7,12 +7,15 @@
 //  Content's ManageView grid; the aggregation is new, the grid isn't.
 // ──────────────────────────────────────────────────────────
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { calendarDays, toDateStr, today, MONTH_NAMES, DOW_SHORT } from '@/lib/utils'
 import { getCalendarEvents, CALENDAR_DOMAIN_LABEL, CALENDAR_DOMAIN_STYLE } from '@/lib/calendar'
 import type { CalendarEvent, CalendarEventDomain } from '@/lib/calendar'
 import type { MainSection } from '@/types'
+import { AddShowModal } from '@/components/tour/TourView'
+import { PostModal } from '@/components/content/ManageView'
+import { AddProjectModal } from '@/components/manager/ProjectsView'
 
 const DOMAIN_SECTION: Record<CalendarEventDomain, MainSection> = {
   show: 'tour', release: 'songs', post: 'content',
@@ -20,19 +23,46 @@ const DOMAIN_SECTION: Record<CalendarEventDomain, MainSection> = {
 }
 const ALL_DOMAINS: CalendarEventDomain[] = ['show', 'release', 'post', 'invoice', 'contract', 'project']
 
+// Quick-add on the calendar grid itself only covers the three record types
+// that have few enough required fields to create with a single lightweight
+// form (venue/date/time; title/date/type; title/type) — Invoices and
+// Contracts need real structured data (line items, counterparty) and keep
+// going through their own section's full creation flow.
+type QuickAddType = 'show' | 'post' | 'project'
+const QUICK_ADD_CONFIG: Record<QuickAddType, { label: string; section: MainSection }> = {
+  show:    { label: 'Show',    section: 'tour' },
+  post:    { label: 'Post',    section: 'content' },
+  project: { label: 'Project', section: 'projects' },
+}
+const QUICK_ADD_TYPES: QuickAddType[] = ['show', 'post', 'project']
+
 export function CalendarView() {
   const client = useStore(s => s.getClient())
   const hasAccess = useStore(s => s.hasAccess)
+  const canEdit = useStore(s => s.canEdit)
   const { calYear, calMonth, calPrev, calNext, calToday } = useStore()
   const {
     setSection, setTourSub, setContentSub, setBizSub,
     setSelectedShow, setSelectedAlbum,
   } = useStore()
   const [activeDomains, setActiveDomains] = useState<Set<CalendarEventDomain>>(new Set(ALL_DOMAINS))
+  const [quickAddDay, setQuickAddDay] = useState<string | null>(null)
+  const [creating, setCreating] = useState<{ type: QuickAddType; date: string } | null>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!quickAddDay) return
+    const handler = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) setQuickAddDay(null)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [quickAddDay])
 
   if (!client) return null
 
   const canSee = (domain: CalendarEventDomain) => hasAccess(DOMAIN_SECTION[domain], client.id)
+  const creatableTypes = QUICK_ADD_TYPES.filter(t => canEdit(QUICK_ADD_CONFIG[t].section))
   const events = getCalendarEvents(client, canSee).filter(e => activeDomains.has(e.domain))
   const days = calendarDays(calYear, calMonth)
   const todayStr = today()
@@ -104,7 +134,7 @@ export function CalendarView() {
             return (
               <div
                 key={i}
-                className={`relative min-h-[88px] p-1.5 ${
+                className={`relative min-h-[88px] p-1.5 group ${
                   !current ? 'bg-gray-50' : isToday ? 'bg-blue-50' : 'bg-canvas'
                 }`}
               >
@@ -119,11 +149,36 @@ export function CalendarView() {
                     {e.title}
                   </div>
                 ))}
+                {creatableTypes.length > 0 && (
+                  <button
+                    onClick={() => setQuickAddDay(v => v === dStr ? null : dStr)}
+                    className="absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center text-gray-300 opacity-0 group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-500 transition-all text-sm"
+                  >
+                    +
+                  </button>
+                )}
+                {quickAddDay === dStr && (
+                  <div ref={popoverRef} className="absolute right-1 top-7 bg-canvas border border-gray-100 rounded-lg shadow-lg min-w-[120px] overflow-hidden z-50">
+                    {creatableTypes.map(t => (
+                      <button
+                        key={t}
+                        onClick={() => { setCreating({ type: t, date: dStr }); setQuickAddDay(null) }}
+                        className={`block w-full text-left px-3 py-1.5 text-xs font-medium hover:bg-gray-50 transition-colors ${CALENDAR_DOMAIN_STYLE[t].split(' ').find(c => c.startsWith('text-'))}`}
+                      >
+                        + {QUICK_ADD_CONFIG[t].label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )
           })}
         </div>
       </div>
+
+      {creating?.type === 'show'    && <AddShowModal    defaultDate={creating.date} onClose={() => setCreating(null)} />}
+      {creating?.type === 'post'    && <PostModal        defaultDate={creating.date} onClose={() => setCreating(null)} />}
+      {creating?.type === 'project' && <AddProjectModal defaultDueDate={creating.date} onClose={() => setCreating(null)} />}
     </div>
   )
 }

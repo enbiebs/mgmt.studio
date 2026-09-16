@@ -9,11 +9,10 @@ export function TourView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('tour'))
   const {
-    selectedShowId, setSelectedShow, setTourSub, addShow, updateShowStatus, deleteShow,
+    selectedShowId, setSelectedShow, setTourSub, updateShowStatus, deleteShow,
     enableCalendarFeed, disableCalendarFeed,
   } = useStore()
   const [addOpen, setAddOpen] = useState(false)
-  const [f, setF] = useState({ date: '', city: '', venue: '', time: '20:00' })
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -42,13 +41,6 @@ export function TourView() {
     .filter(x => x.issues.length > 0)
     .sort((a, b) => a.show.date.localeCompare(b.show.date))
     .slice(0, 5)
-
-  function handleAdd() {
-    if (!f.date || !f.city || !f.venue) return
-    addShow(f.date, f.city, f.venue, f.time)
-    setF({ date: '', city: '', venue: '', time: '20:00' })
-    setAddOpen(false)
-  }
 
   async function copyFeedLink() {
     if (!client?.calendarToken) return
@@ -272,20 +264,34 @@ export function TourView() {
       </div>
 
       {/* Add show modal */}
-      {addOpen && (
-        <Modal title="Add a show" onClose={() => setAddOpen(false)} footer={
-          <>
-            <button onClick={() => setAddOpen(false)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-            <button onClick={handleAdd} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Add show</button>
-          </>
-        }>
-          <FormField label="Date"><input type="date" className={inputClass} value={f.date} onChange={e => setF(p => ({...p, date: e.target.value}))} /></FormField>
-          <FormField label="City"><input type="text" className={inputClass} placeholder="City" value={f.city} onChange={e => setF(p => ({...p, city: e.target.value}))} /></FormField>
-          <FormField label="Venue"><input type="text" className={inputClass} placeholder="Venue name" value={f.venue} onChange={e => setF(p => ({...p, venue: e.target.value}))} /></FormField>
-          <FormField label="Set time"><input type="time" className={inputClass} value={f.time} onChange={e => setF(p => ({...p, time: e.target.value}))} /></FormField>
-        </Modal>
-      )}
+      {addOpen && <AddShowModal onClose={() => setAddOpen(false)} />}
     </div>
+  )
+}
+
+// ── Add Show Modal ──────────────────────────────────────────
+export function AddShowModal({ defaultDate, onClose }: { defaultDate?: string; onClose: () => void }) {
+  const addShow = useStore(s => s.addShow)
+  const [f, setF] = useState({ date: defaultDate ?? '', city: '', venue: '', time: '20:00' })
+
+  function handleAdd() {
+    if (!f.date || !f.city || !f.venue) return
+    addShow(f.date, f.city, f.venue, f.time)
+    onClose()
+  }
+
+  return (
+    <Modal title="Add a show" onClose={onClose} footer={
+      <>
+        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+        <button onClick={handleAdd} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Add show</button>
+      </>
+    }>
+      <FormField label="Date"><input type="date" className={inputClass} value={f.date} onChange={e => setF(p => ({...p, date: e.target.value}))} /></FormField>
+      <FormField label="City"><input type="text" className={inputClass} placeholder="City" value={f.city} onChange={e => setF(p => ({...p, city: e.target.value}))} /></FormField>
+      <FormField label="Venue"><input type="text" className={inputClass} placeholder="Venue name" value={f.venue} onChange={e => setF(p => ({...p, venue: e.target.value}))} /></FormField>
+      <FormField label="Set time"><input type="time" className={inputClass} value={f.time} onChange={e => setF(p => ({...p, time: e.target.value}))} /></FormField>
+    </Modal>
   )
 }
 

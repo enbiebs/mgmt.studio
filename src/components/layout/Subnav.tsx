@@ -3,30 +3,42 @@ import { useStore } from '@/lib/store'
 import { initials } from '@/lib/utils'
 
 const SUBNAV: Record<string, [string, string][]> = {
-  songs:    [['Tracks', 'tracks'], ['Label Copy', 'labelcopy'], ['Checklist', 'checklist'], ['Status', 'status']],
-  tour:     [['Shows', 'tour'], ['Offers', 'offers'], ['Advance', 'advance'], ['Day Sheet', 'daysheet'], ['Travel', 'travel'], ['Crew', 'crew'], ['Guests', 'guests']],
-  content:  [['Manage', 'manage'], ['Studio', 'studio'], ['Lab', 'lab']],
-  finance:  [['Royalties', 'royalties'], ['Banking', 'banking'], ['Catalog', 'catalog'], ['P&L', 'pl'], ['Invoices', 'invoices'], ['Payments', 'payments']],
+  songs:     [['Tracks', 'tracks'], ['Label Copy', 'labelcopy'], ['Checklist', 'checklist'], ['Status', 'status']],
+  tour:      [['Shows', 'tour'], ['Offers', 'offers'], ['Advance', 'advance'], ['Day Sheet', 'daysheet'], ['Travel', 'travel'], ['Crew', 'crew'], ['Guests', 'guests']],
+  content:   [['Manage', 'manage'], ['Studio', 'studio'], ['Lab', 'lab']],
+  finance:   [['Royalties', 'royalties'], ['Banking', 'banking'], ['Catalog', 'catalog'], ['P&L', 'pl'], ['Invoices', 'invoices'], ['Payments', 'payments']],
+  analytics: [['Overview', 'overview'], ['Streaming', 'streaming'], ['Playlists', 'playlists'], ['Social', 'social'], ['TikTok', 'tiktok'], ['Audience', 'audience'], ['Charts', 'charts']],
+  fandom:    [['Overview', 'overview'], ['Fans', 'fans'], ['Referrals', 'referrals'], ['Messaging', 'messaging']],
+  legal:     [['Contract Pipeline', 'pipeline'], ['Alerts', 'alerts'], ['Rights Register', 'register'], ['Templates', 'templates']],
 }
 
 export function Subnav() {
-  const { section, songsSub, contentSub, bizSub, tourSub, setSongsSub, setContentSub, setBizSub, setTourSub } = useStore()
+  const {
+    section, songsSub, contentSub, bizSub, tourSub, analyticsSub, fandomSub, legalSub,
+    setSongsSub, setContentSub, setBizSub, setTourSub, setAnalyticsSub, setFandomSub, setLegalSub,
+  } = useStore()
   const client = useStore(s => s.getClient())
   const subs = SUBNAV[section] ?? []
 
   function isActive(key: string) {
-    if (section === 'songs')    return songsSub === key
-    if (section === 'content')  return contentSub === key
-    if (section === 'finance')  return bizSub === key
-    if (section === 'tour')     return tourSub === key
+    if (section === 'songs')     return songsSub === key
+    if (section === 'content')   return contentSub === key
+    if (section === 'finance')   return bizSub === key
+    if (section === 'tour')      return tourSub === key
+    if (section === 'analytics') return analyticsSub === key
+    if (section === 'fandom')    return fandomSub === key
+    if (section === 'legal')     return legalSub === key
     return false
   }
 
   function handleClick(key: string) {
-    if (section === 'songs')    setSongsSub(key as typeof songsSub)
-    if (section === 'content')  setContentSub(key as typeof contentSub)
-    if (section === 'finance')  setBizSub(key as typeof bizSub)
-    if (section === 'tour')     setTourSub(key as typeof tourSub)
+    if (section === 'songs')     setSongsSub(key as typeof songsSub)
+    if (section === 'content')   setContentSub(key as typeof contentSub)
+    if (section === 'finance')   setBizSub(key as typeof bizSub)
+    if (section === 'tour')      setTourSub(key as typeof tourSub)
+    if (section === 'analytics') setAnalyticsSub(key as typeof analyticsSub)
+    if (section === 'fandom')    setFandomSub(key as typeof fandomSub)
+    if (section === 'legal')     setLegalSub(key as typeof legalSub)
   }
 
   if (subs.length === 0) return null

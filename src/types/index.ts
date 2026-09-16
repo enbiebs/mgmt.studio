@@ -470,6 +470,8 @@ export type ContentSub   = 'manage' | 'studio' | 'lab'
 export type BizSub       = 'royalties' | 'banking' | 'catalog' | 'pl' | 'invoices' | 'payments'
 export type TourSub      = 'tour' | 'stage-plot' | 'advance' | 'daysheet' | 'crew' | 'guests' | 'travel' | 'offers'
 export type AnalyticsSub = 'overview' | 'streaming' | 'playlists' | 'social' | 'tiktok' | 'audience' | 'charts'
+export type FandomSub    = 'overview' | 'fans' | 'referrals' | 'messaging'
+export type LegalSub     = 'pipeline' | 'alerts' | 'register' | 'templates'
 
 // ── Tour Management — Advance System ────────────────────────
 export type AdvanceStatus = 'draft' | 'sent' | 'in-progress' | 'complete'
