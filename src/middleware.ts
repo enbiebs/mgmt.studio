@@ -10,6 +10,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request })
   }
 
+  // Calendar feed links are polled by Google/Apple Calendar, which has no
+  // browser session — the route itself checks the token, so skip the
+  // login-redirect gate entirely rather than bouncing it to /login.
+  if (request.nextUrl.pathname.startsWith('/api/calendar/')) {
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(

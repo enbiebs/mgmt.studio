@@ -22,7 +22,7 @@ import type {
   CrewMember, ShowAdvance, TravelItem, Person, PersonActivity, Currency,
   CatalogWork, RegStatus, Invoice, InvoiceLineItem, InvoiceStatus, RevenueStream,
   LegalTemplate, LegalTemplateClause, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
-  ReleaseType,
+  ReleaseType, Venue,
 } from '@/types'
 import { DEMO_DATA } from '@/lib/demo-data'
 import { DEFAULT_LEGAL_TEMPLATES } from '@/lib/legal-templates-demo'
@@ -36,12 +36,13 @@ import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE } from '@/lib/utils'
 import {
   loadWorkspaceData, getMyMembership, getGrantsForMember, getPreviewableMembers,
   type AccessGrant, type PreviewMember,
-  upsertClient, deleteClient as dbDeleteClient,
+  upsertClient, deleteClient as dbDeleteClient, setCalendarToken,
   upsertTrack, deleteTrack as dbDeleteTrack,
   upsertAlbum, deleteAlbum as dbDeleteAlbum, upsertChecklist,
   upsertPerson, deletePerson as dbDeletePerson,
   upsertStakeholder, deleteStakeholder as dbDeleteStakeholder,
   upsertShow, deleteShow as dbDeleteShow,
+  upsertVenue, deleteVenue as dbDeleteVenue,
   upsertPost, deletePost as dbDeletePost, replaceAutoPosts,
   upsertDeposit, deleteDeposit as dbDeleteDeposit,
   upsertRoyaltyStream, deleteRoyaltyStream as dbDeleteRoyaltyStream,
@@ -224,6 +225,10 @@ interface StudioState {
   updateClient: (id: string, name: string, genre: string, color: string) => void
   deleteClient: (id: string) => void
 
+  // ── Calendar feed (per-client .ics subscription link) ──
+  enableCalendarFeed: (clientId: string) => void
+  disableCalendarFeed: (clientId: string) => void
+
   // ── Track actions ──
   addTrack: (albumId: string, title: string, stage: Stage) => void
 
@@ -303,6 +308,11 @@ interface StudioState {
   addShow: (date: string, city: string, venue: string, time: string) => void
   updateShowStatus: (showId: string, status: ShowStatus) => void
   deleteShow: (showId: string) => void
+
+  // ── Venue library (reusable across shows at the same room) ──
+  addVenue: (patch: Omit<Venue, 'id' | 'createdAt'>) => string
+  updateVenue: (venueId: string, patch: Partial<Omit<Venue, 'id' | 'createdAt'>>) => void
+  deleteVenue: (venueId: string) => void
 
   // ── Post actions ──
   addPost: (date: string, title: string, time: string, type: string) => void
@@ -583,6 +593,25 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     dbDeleteClient(id).catch(console.error)
+  },
+
+  // Regenerating (calling this again while already enabled) invalidates
+  // the old link — useful if it ever leaked.
+  enableCalendarFeed: (clientId) => {
+    const { data, workspaceId } = get()
+    const token = crypto.randomUUID()
+    const updated = { clients: data.clients.map(c => c.id === clientId ? { ...c, calendarToken: token } : c) }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId) setCalendarToken(clientId, token).catch(console.error)
+  },
+
+  disableCalendarFeed: (clientId) => {
+    const { data, workspaceId } = get()
+    const updated = { clients: data.clients.map(c => c.id === clientId ? { ...c, calendarToken: undefined } : c) }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId) setCalendarToken(clientId, null).catch(console.error)
   },
 
   // ── Track actions ──
@@ -1673,6 +1702,57 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated, selectedShowId: null })
     saveData(updated)
     dbDeleteShow(showId).catch(console.error)
+  },
+
+  // ── Venue library ──
+  addVenue: (patch) => {
+    const { data, clientId, workspaceId } = get()
+    const newVenue: Venue = { id: 'venue-' + uid(), createdAt: new Date().toISOString(), ...patch }
+    const updated = {
+      clients: data.clients.map(c => c.id !== clientId ? c : { ...c, tour: { ...c.tour, venues: [...(c.tour.venues ?? []), newVenue] } }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId) upsertVenue(newVenue, clientId).catch(console.error)
+    return newVenue.id
+  },
+
+  updateVenue: (venueId, patch) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedVenue: Venue | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          tour: {
+            ...c.tour,
+            venues: (c.tour.venues ?? []).map(v => {
+              if (v.id !== venueId) return v
+              const next = { ...v, ...patch }
+              updatedVenue = next
+              return next
+            }),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId && updatedVenue) upsertVenue(updatedVenue, clientId).catch(console.error)
+  },
+
+  deleteVenue: (venueId) => {
+    const { data, clientId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return { ...c, tour: { ...c.tour, venues: (c.tour.venues ?? []).filter(v => v.id !== venueId) } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    dbDeleteVenue(venueId).catch(console.error)
   },
 
   // ── Post actions ──

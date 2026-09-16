@@ -11,7 +11,7 @@ import { useStore } from '@/lib/store'
 import { uid } from '@/lib/utils'
 import type {
   Show, TravelItem, TravelFlight, TravelHotel, TravelGround,
-  TravelStatus, Currency, Person,
+  TravelStatus, Currency, Person, FlightLeg,
 } from '@/types'
 
 // ── Travelers editor — links a booking to Team members ────────
@@ -118,10 +118,25 @@ function fmtCost(cost: number | undefined, currency: Currency | undefined) {
   const sym = currency === 'GBP' ? '£' : currency === 'EUR' ? '€' : '$'
   return `${sym}${cost.toLocaleString()}`
 }
+// Time between one leg's arrival and the next leg's departure — the
+// layover a connecting itinerary spends on the ground between flights.
+function fmtLayover(arrival: string | undefined, nextDeparture: string | undefined): string | null {
+  if (!arrival || !nextDeparture) return null
+  const ms = new Date(nextDeparture).getTime() - new Date(arrival).getTime()
+  if (!(ms > 0)) return null
+  const mins = Math.round(ms / 60000)
+  return `${Math.floor(mins / 60)}h ${mins % 60}m layover`
+}
 
 // ── Flight card ──────────────────────────────────────────────
-function FlightCard({ item, onRemove, onLink }: { item: TravelFlight; onRemove: () => void; onLink: (personIds: string[]) => void }) {
+function FlightCard({ item, onRemove, onLink, onAddLeg }: {
+  item: TravelFlight; onRemove: () => void
+  onLink: (personIds: string[]) => void; onAddLeg: (leg: FlightLeg) => void
+}) {
   const editable = useStore(s => s.canEdit('tour'))
+  const [addingLeg, setAddingLeg] = useState(false)
+  const first = item.legs[0]
+  const last = item.legs[item.legs.length - 1]
   return (
     <div className="border border-gray-100 rounded-xl p-4 hover:border-gray-200 transition-colors">
       <div className="flex items-start justify-between mb-2">
@@ -129,17 +144,15 @@ function FlightCard({ item, onRemove, onLink }: { item: TravelFlight; onRemove: 
           <span className="text-base">✈️</span>
           <div>
             <div className="text-sm font-semibold text-gray-900">
-              {item.from ?? '—'} → {item.to ?? '—'}
-              {item.fromCity && item.toCity && (
+              {first?.from ?? '—'} → {last?.to ?? '—'}
+              {first?.fromCity && last?.toCity && (
                 <span className="text-xs font-normal text-gray-400 ml-1">
-                  ({item.fromCity} → {item.toCity})
+                  ({first.fromCity} → {last.toCity})
                 </span>
               )}
-            </div>
-            <div className="text-xs text-gray-500 mt-0.5">
-              {item.airline} {item.flightNumber && `· ${item.flightNumber}`}
-              {item.cabin && ` · ${item.cabin}`}
-              {item.duration && ` · ${item.duration}`}
+              {item.legs.length > 1 && (
+                <span className="text-xs font-normal text-amber-600 ml-1">· {item.legs.length - 1} connection{item.legs.length > 2 ? 's' : ''}</span>
+              )}
             </div>
           </div>
         </div>
@@ -154,19 +167,59 @@ function FlightCard({ item, onRemove, onLink }: { item: TravelFlight; onRemove: 
         </div>
       </div>
 
+      <div className="flex flex-col gap-2 mt-3">
+        {item.legs.map((leg, i) => (
+          <div key={leg.id}>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              <div className="col-span-2 text-xs text-gray-500">
+                {leg.from ?? '—'} → {leg.to ?? '—'}
+                {leg.fromCity && leg.toCity && <span className="text-gray-400"> ({leg.fromCity} → {leg.toCity})</span>}
+                {' · '}{leg.airline} {leg.flightNumber && `· ${leg.flightNumber}`}
+                {leg.cabin && ` · ${leg.cabin}`}
+                {leg.duration && ` · ${leg.duration}`}
+              </div>
+              {leg.departure && (
+                <div>
+                  <div className="text-[10px] text-gray-400 uppercase tracking-wide">Departs</div>
+                  <div className="text-xs font-medium text-gray-700">{fmtDateTime(leg.departure)}</div>
+                </div>
+              )}
+              {leg.arrival && (
+                <div>
+                  <div className="text-[10px] text-gray-400 uppercase tracking-wide">Arrives</div>
+                  <div className="text-xs font-medium text-gray-700">{fmtDateTime(leg.arrival)}</div>
+                </div>
+              )}
+            </div>
+            {i < item.legs.length - 1 && (() => {
+              const layover = fmtLayover(leg.arrival, item.legs[i + 1].departure)
+              return layover && (
+                <div className="text-[11px] text-amber-600 font-medium pl-3 border-l-2 border-amber-200 ml-1 mt-1.5">
+                  {layover}{leg.to ? ` in ${leg.to}` : ''}
+                </div>
+              )
+            })()}
+          </div>
+        ))}
+      </div>
+
+      {editable && (
+        addingLeg ? (
+          <AddLegForm
+            onSave={leg => { onAddLeg(leg); setAddingLeg(false) }}
+            onCancel={() => setAddingLeg(false)}
+          />
+        ) : (
+          <button
+            onClick={() => setAddingLeg(true)}
+            className="mt-2 text-[11px] text-blue-500 hover:text-blue-600 font-medium"
+          >
+            + Add connecting flight
+          </button>
+        )
+      )}
+
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-3">
-        {item.departure && (
-          <div>
-            <div className="text-[10px] text-gray-400 uppercase tracking-wide">Departs</div>
-            <div className="text-xs font-medium text-gray-700">{fmtDateTime(item.departure)}</div>
-          </div>
-        )}
-        {item.arrival && (
-          <div>
-            <div className="text-[10px] text-gray-400 uppercase tracking-wide">Arrives</div>
-            <div className="text-xs font-medium text-gray-700">{fmtDateTime(item.arrival)}</div>
-          </div>
-        )}
         {item.traveler && (
           <div>
             <div className="text-[10px] text-gray-400 uppercase tracking-wide">Travelers</div>
@@ -196,6 +249,42 @@ function FlightCard({ item, onRemove, onLink }: { item: TravelFlight; onRemove: 
         <div className="mt-2 pt-2 border-t border-gray-50 text-xs text-gray-400 italic">{item.notes}</div>
       )}
       <TravelersEditor item={item} onChange={onLink} />
+    </div>
+  )
+}
+
+// Manual entry for a connecting leg — added after the first leg already
+// came from the mock search flow above, so this just takes what the
+// manager already has (the connecting flight confirmation) at face value.
+function AddLegForm({ onSave, onCancel }: { onSave: (leg: FlightLeg) => void; onCancel: () => void }) {
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [airline, setAirline] = useState('')
+  const [flightNumber, setFlightNumber] = useState('')
+  const [departure, setDeparture] = useState('')
+  const [arrival, setArrival] = useState('')
+
+  function handleSave() {
+    if (!from || !to) return
+    onSave({
+      id: uid(), from: from.toUpperCase(), to: to.toUpperCase(),
+      airline: airline || undefined, flightNumber: flightNumber || undefined,
+      departure: departure || undefined, arrival: arrival || undefined,
+    })
+  }
+
+  return (
+    <div className="mt-2 p-2.5 border border-blue-100 rounded-lg bg-blue-50/30 grid grid-cols-2 gap-1.5">
+      <input value={from} onChange={e => setFrom(e.target.value)} placeholder="From (e.g. DEN)" className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-canvas uppercase" />
+      <input value={to} onChange={e => setTo(e.target.value)} placeholder="To (e.g. LAX)" className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-canvas uppercase" />
+      <input value={airline} onChange={e => setAirline(e.target.value)} placeholder="Airline" className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-canvas" />
+      <input value={flightNumber} onChange={e => setFlightNumber(e.target.value)} placeholder="Flight #" className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-canvas" />
+      <input type="datetime-local" value={departure} onChange={e => setDeparture(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-canvas" />
+      <input type="datetime-local" value={arrival} onChange={e => setArrival(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-canvas" />
+      <div className="col-span-2 flex gap-1.5 mt-0.5">
+        <button onClick={handleSave} disabled={!from || !to} className="flex-1 px-2 py-1 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 disabled:opacity-40 transition-colors">Add leg</button>
+        <button onClick={onCancel} className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+      </div>
     </div>
   )
 }
@@ -466,11 +555,13 @@ function AddFlightForm({
     onSave({
       id: uid(), showId, kind: 'flight', status: 'booked',
       traveler: 'Full Party',
-      airline: r.airline, flightNumber: r.number,
-      from: from.toUpperCase(), to: to.toUpperCase(),
-      departure: `${dateStr}T${r.departure}`,
-      arrival: `${dateStr}T${r.arrival}`,
-      duration: r.duration, cabin: r.cabin,
+      legs: [{
+        id: uid(), airline: r.airline, flightNumber: r.number,
+        from: from.toUpperCase(), to: to.toUpperCase(),
+        departure: `${dateStr}T${r.departure}`,
+        arrival: `${dateStr}T${r.arrival}`,
+        duration: r.duration, cabin: r.cabin,
+      }],
       cost: r.price, currency: 'USD',
     })
   }
@@ -775,10 +866,12 @@ export function TravelView() {
       schedule: {}, production: {}, hospitality: {}, logistics: {}, contacts: [],
     }
 
-    const flightsText = flights.map(f => {
-      const route = [f.from, f.to].filter(Boolean).join(' → ')
-      return [f.airline, f.flightNumber, route, f.departure].filter(Boolean).join(' · ')
-    }).join('\n')
+    const flightsText = flights.map(f =>
+      f.legs.map(leg => {
+        const route = [leg.from, leg.to].filter(Boolean).join(' → ')
+        return [leg.airline, leg.flightNumber, route, leg.departure].filter(Boolean).join(' · ')
+      }).join(' / ')
+    ).join('\n')
 
     const groundText = ground.map(g => {
       const route = [g.from, g.to].filter(Boolean).join(' → ')
@@ -894,7 +987,12 @@ export function TravelView() {
               />
               <div className="space-y-2">
                 {flights.map(f => (
-                  <FlightCard key={f.id} item={f} onRemove={() => removeTravelItem(f.id)} onLink={ids => linkTravelers(f, ids)} />
+                  <FlightCard
+                    key={f.id} item={f}
+                    onRemove={() => removeTravelItem(f.id)}
+                    onLink={ids => linkTravelers(f, ids)}
+                    onAddLeg={leg => saveTravel({ ...f, legs: [...f.legs, leg] })}
+                  />
                 ))}
                 {flights.length === 0 && addMode !== 'flight' && (
                   <EmptySlot kind="flight" onAdd={() => setAddMode('flight')} />

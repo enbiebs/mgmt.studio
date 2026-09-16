@@ -9,7 +9,10 @@ import { AccessPanel } from '@/components/team/AccessPanel'
 import type { Person, TravelItem } from '@/types'
 
 function travelLabel(item: TravelItem): string {
-  if (item.kind === 'flight') return `Flight ${item.from ?? ''}→${item.to ?? ''}`.trim()
+  if (item.kind === 'flight') {
+    const first = item.legs[0], last = item.legs[item.legs.length - 1]
+    return `Flight ${first?.from ?? ''}→${last?.to ?? ''}`.trim()
+  }
   if (item.kind === 'hotel') return `Hotel${item.name ? ` — ${item.name}` : ''}`
   return `Ground${item.provider ? ` — ${item.provider}` : ''}`
 }

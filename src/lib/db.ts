@@ -16,6 +16,7 @@ import type {
   AdvanceHospitality, AdvanceLogistics,
   CrewMember, GuestListEntry, TravelItem, Currency, Person, PersonActivity, CatalogWork,
   LegalTemplate, LegalTemplateClause, Stage, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
+  Venue, FlightLeg,
 } from '@/types'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
 import { EMPTY_FANDOM }    from '@/lib/fandom-demo'
@@ -30,7 +31,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
   // Fetch clients
   const { data: clientRows, error } = await supabase
     .from('clients')
-    .select('id, name, genre, color, analytics, fandom')
+    .select('id, name, genre, color, calendar_token, analytics, fandom')
     .eq('workspace_id', workspaceId)
 
   if (error) throw error
@@ -47,9 +48,9 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     tourOffers, contracts,
     invoices, lineItems, expenses, plMonths,
     checklistItems, stakeholders,
-    crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems,
+    crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems, flightLegs,
     people, bankAccounts, bankTransactions,
-    trackRounds, trackNotes, trackNoteReplies, trackCredits,
+    trackRounds, trackNotes, trackNoteReplies, trackCredits, venues,
   ] = await Promise.all([
     supabase.from('albums').select('*').in('client_id', clientIds),
     supabase.from('tracks').select('*'),
@@ -73,6 +74,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     supabase.from('advance_contacts').select('*'),
     supabase.from('guest_list_entries').select('*'),
     supabase.from('travel_items').select('*'),
+    supabase.from('flight_legs').select('*'),
     supabase.from('people').select('*').in('client_id', clientIds),
     supabase.from('bank_accounts').select('*').in('client_id', clientIds),
     supabase.from('bank_transactions').select('*').in('client_id', clientIds).order('date', { ascending: false }),
@@ -80,6 +82,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     supabase.from('track_notes').select('*').order('timestamp'),
     supabase.from('track_note_replies').select('*').order('created_at'),
     supabase.from('track_credits').select('*').order('sort_order'),
+    supabase.from('venues').select('*').in('client_id', clientIds),
   ])
 
   const albumRows     = albums.data       ?? []
@@ -113,6 +116,27 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     ground_type?: string; provider?: string; pickup_time?: string; vehicle_type?: string
   }
 
+  // Flights are the one travel kind with a real one-to-many child table —
+  // one row per leg, ordered so a connection renders in the right order.
+  type FlightLegRow = {
+    id: string; travel_item_id: string; leg_order: number
+    airline?: string; flight_number?: string
+    from_loc?: string; from_city?: string; to_loc?: string; to_city?: string
+    departure?: string; arrival?: string; duration?: string; cabin?: string
+  }
+  const legsByTravelItem = ((flightLegs.data ?? []) as FlightLegRow[])
+    .sort((a, b) => a.leg_order - b.leg_order)
+    .reduce((acc, l) => {
+      (acc[l.travel_item_id] ??= []).push({
+        id: l.id, airline: l.airline ?? undefined, flightNumber: l.flight_number ?? undefined,
+        from: l.from_loc ?? undefined, fromCity: l.from_city ?? undefined,
+        to: l.to_loc ?? undefined, toCity: l.to_city ?? undefined,
+        departure: l.departure ?? undefined, arrival: l.arrival ?? undefined,
+        duration: l.duration ?? undefined, cabin: l.cabin ?? undefined,
+      })
+      return acc
+    }, {} as Record<string, FlightLeg[]>)
+
   const toTravelItem = (t: TravelRow): TravelItem => {
     const base = {
       id: t.id, showId: t.show_id,
@@ -142,14 +166,24 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
         vehicleType: t.vehicle_type ?? undefined,
       }
     }
+    // Fallback for a row with no flight_legs yet (shouldn't happen post-
+    // backfill, but cheap insurance) — builds one leg from the old flat
+    // columns rather than showing an empty itinerary.
+    const legs = legsByTravelItem[t.id] ?? (
+      (t.airline || t.from_loc || t.departure)
+        ? [{
+            id: 'leg-' + t.id, airline: t.airline ?? undefined, flightNumber: t.flight_number ?? undefined,
+            from: t.from_loc ?? undefined, fromCity: t.from_city ?? undefined,
+            to: t.to_loc ?? undefined, toCity: t.to_city ?? undefined,
+            departure: t.departure ?? undefined, arrival: t.arrival ?? undefined,
+            duration: t.duration ?? undefined, cabin: t.cabin ?? undefined,
+          }]
+        : []
+    )
     return {
       ...base, kind: 'flight',
       traveler: t.traveler ?? '',
-      airline: t.airline ?? undefined, flightNumber: t.flight_number ?? undefined,
-      from: t.from_loc ?? undefined, fromCity: t.from_city ?? undefined,
-      to: t.to_loc ?? undefined, toCity: t.to_city ?? undefined,
-      departure: t.departure ?? undefined, arrival: t.arrival ?? undefined,
-      duration: t.duration ?? undefined, cabin: t.cabin ?? undefined,
+      legs,
       seats: t.seats ?? undefined,
     }
   }
@@ -345,6 +379,36 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       .filter((t: { show_id: string }) => cShowIds.includes(t.show_id))
       .map(toTravelItem)
 
+    const cVenues: Venue[] = (venues.data ?? [])
+      .filter((v: { client_id: string }) => v.client_id === c.id)
+      .map((v: {
+        id: string; name: string; city: string; address?: string
+        wifi?: string; wifi_password?: string
+        stage_width?: string; stage_depth?: string; roof_height?: string
+        foh_position?: string; mon_position?: string; power_supply?: string
+        riser_count?: string; merchandise_location?: string
+        dressing_rooms?: string; dressing_room_notes?: string; catering_company?: string
+        parking_instructions?: string; bus_parking?: string
+        loading_dock_address?: string; loading_dock_notes?: string
+        nearest_airport?: string; distance_to_airport?: string
+        notes?: string; contacts?: AdvanceContact[]; created_at: string
+      }) => ({
+        id: v.id, name: v.name, city: v.city, address: v.address ?? undefined,
+        wifi: v.wifi ?? undefined, wifiPassword: v.wifi_password ?? undefined,
+        stageWidth: v.stage_width ?? undefined, stageDepth: v.stage_depth ?? undefined,
+        roofHeight: v.roof_height ?? undefined,
+        fohPosition: v.foh_position ?? undefined, monPosition: v.mon_position ?? undefined,
+        powerSupply: v.power_supply ?? undefined,
+        riserCount: v.riser_count ?? undefined, merchandiseLocation: v.merchandise_location ?? undefined,
+        dressingRooms: v.dressing_rooms ?? undefined, dressingRoomNotes: v.dressing_room_notes ?? undefined,
+        cateringCompany: v.catering_company ?? undefined,
+        parkingInstructions: v.parking_instructions ?? undefined, busParking: v.bus_parking ?? undefined,
+        loadingDockAddress: v.loading_dock_address ?? undefined, loadingDockNotes: v.loading_dock_notes ?? undefined,
+        nearestAirport: v.nearest_airport ?? undefined, distanceToAirport: v.distance_to_airport ?? undefined,
+        notes: v.notes ?? undefined, contacts: v.contacts ?? [],
+        createdAt: v.created_at,
+      }))
+
     const cPosts = (posts.data ?? [])
       .filter((p: { client_id: string }) => p.client_id === c.id)
       .map((p: { id: string; date: string; title: string; time: string; type: string; release_id?: string; auto?: boolean }) => ({
@@ -481,6 +545,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       name: c.name,
       genre: c.genre,
       color: c.color,
+      calendarToken: c.calendar_token ?? undefined,
       people: cPeople,
       songs:    { albums: cAlbums.length ? cAlbums : [{ id: 'alb-default', title: c.name, tracks: [] }] },
       tour:     {
@@ -489,6 +554,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
         crew:      cCrew,
         guestList: cGuestList,
         travel:    cTravel,
+        venues:    cVenues,
       },
       content:  { posts: cPosts },
       business: {
@@ -622,6 +688,12 @@ export async function upsertClient(client: Client, workspaceId: string) {
 export async function deleteClient(clientId: string) {
   const supabase = createClient()
   await supabase.from('clients').delete().eq('id', clientId)
+}
+
+// Pass null to disable/invalidate an existing feed (e.g. if the link leaks).
+export async function setCalendarToken(clientId: string, token: string | null) {
+  const supabase = createClient()
+  await supabase.from('clients').update({ calendar_token: token }).eq('id', clientId)
 }
 
 // ── Track ──────────────────────────────────────────────────
@@ -811,6 +883,32 @@ export async function upsertShow(show: Show, clientId: string) {
 export async function deleteShow(showId: string) {
   const supabase = createClient()
   await supabase.from('shows').delete().eq('id', showId)
+}
+
+export async function upsertVenue(venue: Venue, clientId: string) {
+  const supabase = createClient()
+  await supabase.from('venues').upsert({
+    id: venue.id, client_id: clientId,
+    name: venue.name, city: venue.city, address: venue.address ?? null,
+    wifi: venue.wifi ?? null, wifi_password: venue.wifiPassword ?? null,
+    stage_width: venue.stageWidth ?? null, stage_depth: venue.stageDepth ?? null,
+    roof_height: venue.roofHeight ?? null,
+    foh_position: venue.fohPosition ?? null, mon_position: venue.monPosition ?? null,
+    power_supply: venue.powerSupply ?? null,
+    riser_count: venue.riserCount ?? null, merchandise_location: venue.merchandiseLocation ?? null,
+    dressing_rooms: venue.dressingRooms ?? null, dressing_room_notes: venue.dressingRoomNotes ?? null,
+    catering_company: venue.cateringCompany ?? null,
+    parking_instructions: venue.parkingInstructions ?? null, bus_parking: venue.busParking ?? null,
+    loading_dock_address: venue.loadingDockAddress ?? null, loading_dock_notes: venue.loadingDockNotes ?? null,
+    nearest_airport: venue.nearestAirport ?? null, distance_to_airport: venue.distanceToAirport ?? null,
+    notes: venue.notes ?? null, contacts: venue.contacts ?? [],
+    created_at: venue.createdAt,
+  })
+}
+
+export async function deleteVenue(venueId: string) {
+  const supabase = createClient()
+  await supabase.from('venues').delete().eq('id', venueId)
 }
 
 // ── Post ───────────────────────────────────────────────────
@@ -1092,15 +1190,12 @@ function travelItemToRow(item: TravelItem) {
   }
 
   if (item.kind === 'flight') {
+    // Per-leg airline/route/times now live in flight_legs (see
+    // upsertTravelItem) — the flat columns on this row stay null for
+    // flights going forward, left in place only for old rows/rollback.
     return {
       ...base,
       traveler: item.traveler,           // NOT NULL for flights (migration 003)
-      airline: item.airline ?? null,
-      flight_number: item.flightNumber ?? null,
-      from_loc: item.from ?? null, from_city: item.fromCity ?? null,
-      to_loc: item.to ?? null, to_city: item.toCity ?? null,
-      departure: item.departure ?? null, arrival: item.arrival ?? null,
-      duration: item.duration ?? null, cabin: item.cabin ?? null,
       seats: item.seats ?? null,
     }
   }
@@ -1126,6 +1221,23 @@ function travelItemToRow(item: TravelItem) {
 export async function upsertTravelItem(item: TravelItem) {
   const supabase = createClient()
   await supabase.from('travel_items').upsert(travelItemToRow(item))
+  // Flights are the one kind with real one-to-many children — same
+  // delete-then-reinsert pattern as invoice_line_items/advance_contacts.
+  if (item.kind === 'flight') {
+    await supabase.from('flight_legs').delete().eq('travel_item_id', item.id)
+    if (item.legs.length > 0) {
+      await supabase.from('flight_legs').insert(
+        item.legs.map((leg, i) => ({
+          id: leg.id, travel_item_id: item.id, leg_order: i,
+          airline: leg.airline ?? null, flight_number: leg.flightNumber ?? null,
+          from_loc: leg.from ?? null, from_city: leg.fromCity ?? null,
+          to_loc: leg.to ?? null, to_city: leg.toCity ?? null,
+          departure: leg.departure ?? null, arrival: leg.arrival ?? null,
+          duration: leg.duration ?? null, cabin: leg.cabin ?? null,
+        }))
+      )
+    }
+  }
 }
 
 export async function deleteTravelItem(itemId: string) {

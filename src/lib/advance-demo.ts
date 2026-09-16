@@ -188,11 +188,13 @@ const MASCOLO_TRAVEL: TravelItem[] = [
   {
     id: 'trv-m4', showId: 'show-mas-002', kind: 'flight', status: 'booked',
     traveler: 'Full Party (8)',
-    airline: 'British Airways', flightNumber: 'BA 178',
-    from: 'JFK', fromCity: 'New York',
-    to: 'LHR', toCity: 'London',
-    departure: '2026-08-21T21:05', arrival: '2026-08-22T09:30',
-    duration: '6h 55m', cabin: 'Business',
+    legs: [{
+      id: 'leg-m4a', airline: 'British Airways', flightNumber: 'BA 178',
+      from: 'JFK', fromCity: 'New York',
+      to: 'LHR', toCity: 'London',
+      departure: '2026-08-21T21:05', arrival: '2026-08-22T09:30',
+      duration: '6h 55m', cabin: 'Business',
+    }],
     seats: '2A, 2C, 4A, 4C, 6A, 6C, 8A, 8C',
     confirmationCode: 'BA-GHX9201', cost: 18400, currency: 'USD',
   },
@@ -214,11 +216,13 @@ const MASCOLO_TRAVEL: TravelItem[] = [
   {
     id: 'trv-m7', showId: 'show-mas-002', kind: 'flight', status: 'booked',
     traveler: 'Full Party (8)',
-    airline: 'Lufthansa', flightNumber: 'LH 911',
-    from: 'LHR', fromCity: 'London',
-    to: 'TXL', toCity: 'Berlin',
-    departure: '2026-08-24T13:15', arrival: '2026-08-24T16:20',
-    duration: '2h 05m', cabin: 'Economy',
+    legs: [{
+      id: 'leg-m7a', airline: 'Lufthansa', flightNumber: 'LH 911',
+      from: 'LHR', fromCity: 'London',
+      to: 'TXL', toCity: 'Berlin',
+      departure: '2026-08-24T13:15', arrival: '2026-08-24T16:20',
+      duration: '2h 05m', cabin: 'Economy',
+    }],
     confirmationCode: 'LH-7XC992', cost: 2100, currency: 'EUR',
     notes: 'Connecting to Berghain show Sep 5 — staying in Berlin for 2 weeks.',
   },
@@ -243,11 +247,13 @@ const MASCOLO_TRAVEL: TravelItem[] = [
   {
     id: 'trv-m10', showId: 'show-mas-004', kind: 'flight', status: 'booked',
     traveler: 'Full Party (8)',
-    airline: 'easyJet', flightNumber: 'U2 2163',
-    from: 'BER', fromCity: 'Berlin',
-    to: 'AMS', toCity: 'Amsterdam',
-    departure: '2026-09-19T08:30', arrival: '2026-09-19T10:15',
-    duration: '1h 45m', cabin: 'Economy',
+    legs: [{
+      id: 'leg-m10a', airline: 'easyJet', flightNumber: 'U2 2163',
+      from: 'BER', fromCity: 'Berlin',
+      to: 'AMS', toCity: 'Amsterdam',
+      departure: '2026-09-19T08:30', arrival: '2026-09-19T10:15',
+      duration: '1h 45m', cabin: 'Economy',
+    }],
     confirmationCode: 'EZY-AMS-4410', cost: 1800, currency: 'EUR',
   },
   {
@@ -277,6 +283,7 @@ export const MASCOLO_TOUR: TourData = {
   crew:      MASCOLO_CREW,
   guestList: MASCOLO_GUESTS,
   travel:    MASCOLO_TRAVEL,
+  venues:    [],
 }
 
 // ── Nimino ─────────────────────────────────────────────────
@@ -309,11 +316,13 @@ export const NIMINO_TOUR: TourData = {
     {
       id: 'trv-n1', showId: 'show-nim-001', kind: 'flight', status: 'booked',
       traveler: 'Full Party (3)',
-      airline: 'United', flightNumber: 'UA 521',
-      from: 'JFK', fromCity: 'New York',
-      to: 'ORD', toCity: 'Chicago',
-      departure: '2026-08-20T09:00', arrival: '2026-08-20T11:05',
-      duration: '3h 05m', cabin: 'Economy',
+      legs: [{
+        id: 'leg-n1a', airline: 'United', flightNumber: 'UA 521',
+        from: 'JFK', fromCity: 'New York',
+        to: 'ORD', toCity: 'Chicago',
+        departure: '2026-08-20T09:00', arrival: '2026-08-20T11:05',
+        duration: '3h 05m', cabin: 'Economy',
+      }],
       confirmationCode: 'UA-CHI2201', cost: 1200, currency: 'USD',
     },
     {
@@ -323,6 +332,7 @@ export const NIMINO_TOUR: TourData = {
       roomCount: 2, confirmationCode: 'LOEWS-CHI-5512', cost: 800, currency: 'USD',
     },
   ],
+  venues: [],
 }
 
 // ── Sierra Bloom ───────────────────────────────────────────
@@ -407,11 +417,13 @@ export const SIERRA_TOUR: TourData = {
     {
       id: 'trv-s1', showId: 'show-sie-001', kind: 'flight', status: 'booked',
       traveler: 'Full Band (6)',
-      airline: 'Southwest', flightNumber: 'WN 1844',
-      from: 'LAX', fromCity: 'Los Angeles',
-      to: 'BNA', toCity: 'Nashville',
-      departure: '2026-08-27T11:30', arrival: '2026-08-27T17:45',
-      duration: '3h 15m', cabin: 'Economy',
+      legs: [{
+        id: 'leg-s1a', airline: 'Southwest', flightNumber: 'WN 1844',
+        from: 'LAX', fromCity: 'Los Angeles',
+        to: 'BNA', toCity: 'Nashville',
+        departure: '2026-08-27T11:30', arrival: '2026-08-27T17:45',
+        duration: '3h 15m', cabin: 'Economy',
+      }],
       confirmationCode: 'SW-BNA-3310', cost: 3600, currency: 'USD',
     },
     {
@@ -422,6 +434,7 @@ export const SIERRA_TOUR: TourData = {
       notes: 'Sierra – Suite 701. Band + crew in rooms 501–507.',
     },
   ],
+  venues: [],
 }
 
 // ── Empty default (new clients) ────────────────────────────
@@ -431,4 +444,5 @@ export const EMPTY_TOUR: TourData = {
   crew:      [],
   guestList: [],
   travel:    [],
+  venues:    [],
 }

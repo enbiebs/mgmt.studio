@@ -7,9 +7,14 @@ import { MONTH_NAMES, MONTH_SHORT } from '@/lib/utils'
 export function TourView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('tour'))
-  const { selectedShowId, setSelectedShow, setTourSub, addShow, updateShowStatus, deleteShow } = useStore()
+  const {
+    selectedShowId, setSelectedShow, setTourSub, addShow, updateShowStatus, deleteShow,
+    enableCalendarFeed, disableCalendarFeed,
+  } = useStore()
   const [addOpen, setAddOpen] = useState(false)
   const [f, setF] = useState({ date: '', city: '', venue: '', time: '20:00' })
+  const [calendarOpen, setCalendarOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   if (!client) return null
   const shows    = client.tour.shows
@@ -42,6 +47,13 @@ export function TourView() {
     addShow(f.date, f.city, f.venue, f.time)
     setF({ date: '', city: '', venue: '', time: '20:00' })
     setAddOpen(false)
+  }
+
+  async function copyFeedLink() {
+    if (!client?.calendarToken) return
+    await navigator.clipboard.writeText(`${window.location.origin}/api/calendar/${client.calendarToken}`)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   return (
@@ -92,6 +104,63 @@ export function TourView() {
 
       {/* Main */}
       <div className="flex-1 overflow-auto p-6">
+        {editable && (
+          <div className="flex justify-end mb-3 relative">
+            <button
+              onClick={() => setCalendarOpen(v => !v)}
+              className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors"
+            >
+              📅 Calendar feed
+            </button>
+            {calendarOpen && (
+              <div className="absolute right-0 top-full mt-1 bg-canvas border border-gray-100 rounded-xl shadow-lg p-3 w-80 z-50 text-xs">
+                {!client.calendarToken ? (
+                  <>
+                    <div className="text-gray-500 mb-2">
+                      Get a private link to subscribe to {client.name}&apos;s show dates in Google or Apple Calendar. It updates automatically whenever a show changes.
+                    </div>
+                    <button
+                      onClick={() => enableCalendarFeed(client.id)}
+                      className="w-full px-2.5 py-1.5 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors"
+                    >
+                      Enable calendar feed
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-gray-500 mb-2">
+                      Treat this link like a password — anyone who has it can see {client.name}&apos;s show dates.
+                    </div>
+                    <div className="font-mono text-[11px] bg-gray-50 rounded-lg px-2 py-1.5 mb-2 break-all text-gray-600">
+                      {typeof window !== 'undefined' ? `${window.location.origin}/api/calendar/${client.calendarToken}` : ''}
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={copyFeedLink}
+                        className="flex-1 px-2.5 py-1.5 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors"
+                      >
+                        {copied ? 'Copied!' : 'Copy link'}
+                      </button>
+                      <button
+                        onClick={() => enableCalendarFeed(client.id)}
+                        className="px-2.5 py-1.5 border border-gray-200 rounded-lg font-medium text-gray-500 hover:bg-gray-50 transition-colors"
+                      >
+                        Regenerate
+                      </button>
+                      <button
+                        onClick={() => disableCalendarFeed(client.id)}
+                        className="px-2.5 py-1.5 border border-gray-200 rounded-lg font-medium text-red-400 hover:bg-red-50 transition-colors"
+                      >
+                        Turn off
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Stats */}
         <div className="flex gap-3.5 mb-6">
           {[[String(shows.length), 'Shows'],[String(upcoming.length), 'Upcoming'],[String(shows.filter(s => s.status === 'confirmed').length), 'Confirmed']].map(([n, l]) => (

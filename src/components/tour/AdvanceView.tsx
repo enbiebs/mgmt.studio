@@ -8,8 +8,30 @@
 
 import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
-import type { ShowAdvance, AdvanceStatus, AdvanceContact, AdvanceSchedule, Show } from '@/types'
+import type { ShowAdvance, AdvanceStatus, AdvanceContact, AdvanceSchedule, Show, Venue } from '@/types'
 import { uid, shiftTime } from '@/lib/utils'
+
+// Fields shared between a Venue and a ShowAdvance — copied straight across
+// in both directions when saving to or loading from the venue library.
+const VENUE_FIELD_MAP: { advanceSection: 'production' | 'hospitality' | 'logistics'; key: string; venueKey: keyof Venue }[] = [
+  { advanceSection: 'production',  key: 'stageWidth',           venueKey: 'stageWidth' },
+  { advanceSection: 'production',  key: 'stageDepth',           venueKey: 'stageDepth' },
+  { advanceSection: 'production',  key: 'roofHeight',           venueKey: 'roofHeight' },
+  { advanceSection: 'production',  key: 'fohPosition',          venueKey: 'fohPosition' },
+  { advanceSection: 'production',  key: 'monPosition',          venueKey: 'monPosition' },
+  { advanceSection: 'production',  key: 'powerSupply',          venueKey: 'powerSupply' },
+  { advanceSection: 'production',  key: 'riserCount',           venueKey: 'riserCount' },
+  { advanceSection: 'production',  key: 'merchandiseLocation',  venueKey: 'merchandiseLocation' },
+  { advanceSection: 'hospitality',  key: 'dressingRooms',        venueKey: 'dressingRooms' },
+  { advanceSection: 'hospitality',  key: 'dressingRoomNotes',    venueKey: 'dressingRoomNotes' },
+  { advanceSection: 'hospitality',  key: 'cateringCompany',      venueKey: 'cateringCompany' },
+  { advanceSection: 'logistics',    key: 'parkingInstructions',  venueKey: 'parkingInstructions' },
+  { advanceSection: 'logistics',    key: 'busParking',           venueKey: 'busParking' },
+  { advanceSection: 'logistics',    key: 'loadingDockAddress',   venueKey: 'loadingDockAddress' },
+  { advanceSection: 'logistics',    key: 'loadingDockNotes',     venueKey: 'loadingDockNotes' },
+  { advanceSection: 'logistics',    key: 'nearestAirport',       venueKey: 'nearestAirport' },
+  { advanceSection: 'logistics',    key: 'distanceToAirport',    venueKey: 'distanceToAirport' },
+]
 
 // ── Status config ───────────────────────────────────────────
 const STATUS: Record<AdvanceStatus, { label: string; dot: string; badge: string }> = {
@@ -105,7 +127,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export function AdvanceView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('tour'))
-  const { setTourSub, saveAdvance: persistAdvance } = useStore()
+  const { setTourSub, saveAdvance: persistAdvance, addVenue, updateVenue } = useStore()
   const sharedSelectedShowId = useStore(s => s.selectedShowId)
   const [selectedShowId, setSelectedShowId] = useState<string | null>(null)
   const [advance, setAdvance] = useState<ShowAdvance | null>(null)
@@ -115,6 +137,7 @@ export function AdvanceView() {
   const [bumpFrom, setBumpFrom] = useState('')
   const [bumpCustom, setBumpCustom] = useState('')
   const [bumpMessage, setBumpMessage] = useState('')
+  const [venueMessage, setVenueMessage] = useState('')
 
   // Jumping here from elsewhere (e.g. Tour's "Advance" quick link) sets the
   // shared selectedShowId — adopt it once, without fighting this view's own
@@ -133,6 +156,7 @@ export function AdvanceView() {
   const shows = client.tour.shows
   const advances = client.tour.advances ?? []
   const guestList = client.tour.guestList ?? []
+  const venues = client.tour.venues ?? []
 
   function getAdvance(showId: string): ShowAdvance {
     return advances.find(a => a.showId === showId) ?? {
@@ -235,6 +259,51 @@ export function AdvanceView() {
   }
 
   const selectedShow = shows.find(s => s.id === selectedShowId)
+  const matchingVenue = selectedShow
+    ? venues.find(v => v.name.trim().toLowerCase() === selectedShow.venue.trim().toLowerCase())
+    : undefined
+
+  // Copies this venue's saved details into the current (unsaved) advance
+  // draft — the "we've played here before" shortcut.
+  function loadVenueDetails() {
+    if (!advance || !matchingVenue) return
+    let next = { ...advance }
+    for (const f of VENUE_FIELD_MAP) {
+      const value = matchingVenue[f.venueKey]
+      if (typeof value === 'string' && value) {
+        next = { ...next, [f.advanceSection]: { ...next[f.advanceSection], [f.key]: value } }
+      }
+    }
+    if (matchingVenue.wifi) next.wifi = matchingVenue.wifi
+    if (matchingVenue.wifiPassword) next.wifiPassword = matchingVenue.wifiPassword
+    if (matchingVenue.contacts?.length) next.contacts = [...next.contacts, ...matchingVenue.contacts.map(c => ({ ...c, id: 'ct-' + uid() }))]
+    setAdvance(next)
+    setSaved(false)
+    setVenueMessage('Venue details loaded — remember to Save')
+    setTimeout(() => setVenueMessage(''), 3500)
+  }
+
+  // Captures the venue-specific fields on this advance into the venue
+  // library, so the next show booked here starts from real data instead
+  // of a blank form. Matches an existing venue by name, else creates one.
+  function saveToVenueLibrary() {
+    if (!advance || !selectedShow) return
+    const patch: Omit<Venue, 'id' | 'createdAt'> = {
+      name: selectedShow.venue, city: selectedShow.city,
+      wifi: advance.wifi, wifiPassword: advance.wifiPassword,
+      contacts: advance.contacts,
+    }
+    for (const f of VENUE_FIELD_MAP) {
+      const value = advance[f.advanceSection][f.key as keyof typeof advance[typeof f.advanceSection]]
+      if (typeof value === 'string' && value) {
+        (patch as Record<string, unknown>)[f.venueKey] = value
+      }
+    }
+    if (matchingVenue) updateVenue(matchingVenue.id, patch)
+    else addVenue(patch)
+    setVenueMessage('Saved to venue library!')
+    setTimeout(() => setVenueMessage(''), 2000)
+  }
 
   return (
     <div className="flex-1 flex overflow-hidden">
@@ -328,6 +397,27 @@ export function AdvanceView() {
               </button>
             </div>
           </div>
+
+          {/* ── Venue library banner ── */}
+          {editable && (
+            <div className="flex items-center gap-2 px-6 py-2 border-b border-gray-100 bg-gray-50 text-xs">
+              {matchingVenue && (
+                <button
+                  onClick={loadVenueDetails}
+                  className="px-2.5 py-1 border border-gray-200 rounded-lg font-medium text-gray-600 hover:bg-canvas transition-colors"
+                >
+                  📍 We have this venue on file — Load venue details
+                </button>
+              )}
+              <button
+                onClick={saveToVenueLibrary}
+                className="px-2.5 py-1 border border-gray-200 rounded-lg font-medium text-gray-500 hover:bg-canvas transition-colors ml-auto"
+              >
+                Save to venue library
+              </button>
+              {venueMessage && <span className="text-green-600 font-medium">{venueMessage}</span>}
+            </div>
+          )}
 
           {/* Tabs */}
           <div className="flex gap-0.5 px-6 py-2 border-b border-gray-100">
