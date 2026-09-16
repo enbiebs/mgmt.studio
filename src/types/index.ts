@@ -610,7 +610,7 @@ export interface FlightLeg {
 
 export interface TravelFlight {
   id:                string
-  showId:            string
+  showIds?:          string[]       // → Show — zero (a promo trip/day off), one, or several (one flight covering a festival weekend)
   kind:              'flight'
   status:            TravelStatus
   traveler:          string         // "Full Party" | individual name
@@ -625,7 +625,7 @@ export interface TravelFlight {
 
 export interface TravelHotel {
   id:                string
-  showId:            string
+  showIds?:          string[]       // → Show — zero, one, or several (see TravelFlight)
   kind:              'hotel'
   status:            TravelStatus
   personIds?:        string[]       // → Person — who from Team this booking actually covers
@@ -644,7 +644,7 @@ export interface TravelHotel {
 
 export interface TravelGround {
   id:                string
-  showId:            string
+  showIds?:          string[]       // → Show — zero, one, or several (see TravelFlight)
   kind:              'ground'
   status:            TravelStatus
   personIds?:        string[]       // → Person — who from Team this booking actually covers

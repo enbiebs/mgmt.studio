@@ -33,7 +33,7 @@ export function TourView() {
       const used = guestList.filter(g => g.showId === s.id).reduce((sum, g) => sum + g.qty, 0)
       const issues = [
         (!advance || advance.status !== 'complete') && 'Advance incomplete',
-        travel.some(t => t.showId === s.id && (t.status === 'needed' || t.status === 'pending')) && 'Travel pending',
+        travel.some(t => t.showIds?.includes(s.id) && (t.status === 'needed' || t.status === 'pending')) && 'Travel pending',
         !isNaN(cap) && used > cap && 'Over guest cap',
       ].filter((x): x is string => Boolean(x))
       return { show: s, issues }

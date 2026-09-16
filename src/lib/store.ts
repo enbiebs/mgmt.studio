@@ -1316,7 +1316,7 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
-    if (workspaceId) upsertTravelItem(item).catch(console.error)
+    if (workspaceId && clientId) upsertTravelItem(item, clientId).catch(console.error)
   },
 
   deleteTravelItem: (itemId) => {

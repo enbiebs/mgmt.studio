@@ -48,7 +48,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     tourOffers, contracts,
     invoices, lineItems, expenses, plMonths,
     checklistItems, stakeholders,
-    crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems, flightLegs,
+    crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems, flightLegs, travelItemShows,
     people, bankAccounts, bankTransactions,
     trackRounds, trackNotes, trackNoteReplies, trackCredits, venues,
   ] = await Promise.all([
@@ -75,6 +75,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     supabase.from('guest_list_entries').select('*'),
     supabase.from('travel_items').select('*'),
     supabase.from('flight_legs').select('*'),
+    supabase.from('travel_item_shows').select('*'),
     supabase.from('people').select('*').in('client_id', clientIds),
     supabase.from('bank_accounts').select('*').in('client_id', clientIds),
     supabase.from('bank_transactions').select('*').in('client_id', clientIds).order('date', { ascending: false }),
@@ -100,12 +101,14 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
   const advanceIds     = advanceRows.map((a: { id: string }) => a.id)
   const contactRows    = (advanceContacts.data ?? []).filter((ct: { advance_id: string }) => advanceIds.includes(ct.advance_id))
   const guestRows      = (guestListEntries.data ?? []).filter((g: { show_id: string }) => showIdsAll.includes(g.show_id))
-  const travelRows     = (travelItems.data ?? []).filter((t: { show_id: string }) => showIdsAll.includes(t.show_id))
+  // Travel has its own client_id (migration 016) — no longer show-scoped,
+  // so it's narrowed the same direct way crew is, not through shows.
+  const travelRows     = (travelItems.data ?? []).filter((t: { client_id: string }) => clientIds.includes(t.client_id))
 
   // travel_items is a single table with a `kind` discriminator, so every
   // per-variant column is nullable and gets narrowed back out below.
   type TravelRow = {
-    id: string; show_id: string; kind: string; status: string
+    id: string; client_id: string; show_id?: string; kind: string; status: string
     confirmation_code?: string; cost?: number; currency?: string; notes?: string
     person_ids?: string[]
     traveler?: string; airline?: string; flight_number?: string
@@ -137,9 +140,19 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       return acc
     }, {} as Record<string, FlightLeg[]>)
 
+  // Every travel item's show links now live in a join table (migration
+  // 016) rather than a single show_id column — zero, one, or several rows
+  // per travel item.
+  type TravelItemShowRow = { travel_item_id: string; show_id: string }
+  const showIdsByTravelItem = ((travelItemShows.data ?? []) as TravelItemShowRow[])
+    .reduce((acc, row) => {
+      (acc[row.travel_item_id] ??= []).push(row.show_id)
+      return acc
+    }, {} as Record<string, string[]>)
+
   const toTravelItem = (t: TravelRow): TravelItem => {
     const base = {
-      id: t.id, showId: t.show_id,
+      id: t.id, showIds: showIdsByTravelItem[t.id] ?? [],
       status: t.status as TravelItem['status'],
       confirmationCode: t.confirmation_code ?? undefined,
       cost: t.cost ?? undefined,
@@ -376,7 +389,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       }))
 
     const cTravel: TravelItem[] = travelRows
-      .filter((t: { show_id: string }) => cShowIds.includes(t.show_id))
+      .filter((t: { client_id: string }) => t.client_id === c.id)
       .map(toTravelItem)
 
     const cVenues: Venue[] = (venues.data ?? [])
@@ -1164,9 +1177,12 @@ export async function deleteGuestListEntry(entryId: string) {
  * Columns belonging to the other two variants are explicitly nulled so
  * changing an item's `kind` doesn't leave stale values behind.
  */
-function travelItemToRow(item: TravelItem) {
+function travelItemToRow(item: TravelItem, clientId: string) {
   const base = {
-    id: item.id, show_id: item.showId,
+    id: item.id, client_id: clientId,
+    // show_id is nullable and unused going forward (migration 016) —
+    // real show links live in travel_item_shows, written separately
+    // in upsertTravelItem.
     kind: item.kind, status: item.status,
     confirmation_code: item.confirmationCode ?? null,
     cost: item.cost ?? null,
@@ -1218,9 +1234,9 @@ function travelItemToRow(item: TravelItem) {
   }
 }
 
-export async function upsertTravelItem(item: TravelItem) {
+export async function upsertTravelItem(item: TravelItem, clientId: string) {
   const supabase = createClient()
-  await supabase.from('travel_items').upsert(travelItemToRow(item))
+  await supabase.from('travel_items').upsert(travelItemToRow(item, clientId))
   // Flights are the one kind with real one-to-many children — same
   // delete-then-reinsert pattern as invoice_line_items/advance_contacts.
   if (item.kind === 'flight') {
@@ -1237,6 +1253,14 @@ export async function upsertTravelItem(item: TravelItem) {
         }))
       )
     }
+  }
+  // Show links — zero, one, or several — same delete-then-reinsert pattern.
+  await supabase.from('travel_item_shows').delete().eq('travel_item_id', item.id)
+  const showIds = item.showIds ?? []
+  if (showIds.length > 0) {
+    await supabase.from('travel_item_shows').insert(
+      showIds.map(showId => ({ id: `${item.id}-${showId}`, travel_item_id: item.id, show_id: showId }))
+    )
   }
 }
 
