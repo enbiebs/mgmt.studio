@@ -127,3 +127,40 @@ export async function deleteEvent(accessToken: string, calendarId: string, event
     if (status !== 404 && status !== 410) throw e
   }
 }
+
+export class SyncTokenInvalidError extends Error {}
+
+export type ListEventsResult = {
+  events: calendar_v3.Schema$Event[]
+  nextPageToken?: string
+  // Only present on the last page of a listing — persist it once the whole
+  // page sequence has been consumed, per Google's incremental sync contract.
+  nextSyncToken?: string
+}
+
+// Wraps events.list for incremental sync: pass `syncToken` (from a prior
+// call's `nextSyncToken`) to get only what changed since then, or omit it
+// for a full listing (e.g. the first sync, or after a SyncTokenInvalidError).
+// `showDeleted: true` is required so cancelled events surface at all during
+// incremental sync — Google omits them by default.
+export async function listEvents(accessToken: string, calendarId: string, syncToken?: string, pageToken?: string): Promise<ListEventsResult> {
+  const calendar = clientFor(accessToken)
+  try {
+    const res = await calendar.events.list({
+      calendarId,
+      syncToken,
+      pageToken,
+      showDeleted: true,
+      singleEvents: true,
+    })
+    return {
+      events: res.data.items ?? [],
+      nextPageToken: res.data.nextPageToken ?? undefined,
+      nextSyncToken: res.data.nextSyncToken ?? undefined,
+    }
+  } catch (e) {
+    const status = (e as { code?: number; response?: { status?: number } })?.response?.status ?? (e as { code?: number })?.code
+    if (status === 410) throw new SyncTokenInvalidError('Google sync token expired or invalid — a full resync is required')
+    throw e
+  }
+}

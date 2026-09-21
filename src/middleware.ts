@@ -17,6 +17,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request })
   }
 
+  // Vercel Cron triggers this with no browser session either — it checks
+  // its own CRON_SECRET (see src/app/api/google-calendar/sync/route.ts),
+  // same reasoning as the calendar feed bypass above.
+  if (request.nextUrl.pathname === '/api/google-calendar/sync') {
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(

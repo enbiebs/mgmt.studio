@@ -27,7 +27,9 @@ async function getConnection(clientId: string) {
 
 // Refreshes the access token if it's expired (or about to, within a
 // minute), persisting the new token back so the next call doesn't have to.
-async function ensureFreshAccessToken(connection: NonNullable<Awaited<ReturnType<typeof getConnection>>>): Promise<string> {
+// Exported for src/lib/google-calendar-pull.ts, which needs a fresh token
+// per connection the same way the push path does.
+export async function ensureFreshAccessToken(connection: NonNullable<Awaited<ReturnType<typeof getConnection>>>): Promise<string> {
   const expiresAt = connection.token_expiry ? new Date(connection.token_expiry).getTime() : 0
   if (expiresAt > Date.now() + 60_000) return connection.access_token
 
@@ -98,6 +100,18 @@ function to24h(t: string): string {
   if (/pm/i.test(m[3]) && h !== 12) h += 12
   if (/am/i.test(m[3]) && h === 12) h = 0
   return `${String(h).padStart(2, '0')}:${m[2]}`
+}
+
+// "22:00" -> "10:00pm" style 12h time — the inverse of to24h, for pulling a
+// Post's time back from Google (whose events only ever carry 24h time).
+// Exported for src/lib/google-calendar-pull.ts.
+export function to12h(t: string): string {
+  const m = t.match(/^(\d{1,2}):(\d{2})$/)
+  if (!m) return t
+  let h = parseInt(m[1], 10)
+  const suffix = h >= 12 ? 'pm' : 'am'
+  h = h % 12 || 12
+  return `${h}:${m[2]}${suffix}`
 }
 
 export async function pushShowToGoogle(show: Show, clientId: string) {
