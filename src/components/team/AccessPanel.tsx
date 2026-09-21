@@ -9,7 +9,7 @@ const SECTIONS: { key: string; label: string }[] = [
   { key: 'music', label: 'Music' },
   { key: 'tour', label: 'Tour' },
   { key: 'content', label: 'Content' },
-  { key: 'business', label: 'Business' },
+  { key: 'finance', label: 'Finance' },
   { key: 'team', label: 'Team' },
   { key: 'projects', label: 'Projects' },
   { key: 'analytics', label: 'Analytics' },

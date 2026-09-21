@@ -10,6 +10,20 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request })
   }
 
+  // Calendar feed links are polled by Google/Apple Calendar, which has no
+  // browser session — the route itself checks the token, so skip the
+  // login-redirect gate entirely rather than bouncing it to /login.
+  if (request.nextUrl.pathname.startsWith('/api/calendar/')) {
+    return NextResponse.next({ request })
+  }
+
+  // Vercel Cron triggers this with no browser session either — it checks
+  // its own CRON_SECRET (see src/app/api/google-calendar/sync/route.ts),
+  // same reasoning as the calendar feed bypass above.
+  if (request.nextUrl.pathname === '/api/google-calendar/sync') {
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(

@@ -6,13 +6,69 @@
 //  and mock search results (real API integration ready).
 // ──────────────────────────────────────────────────────────
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import { uid } from '@/lib/utils'
 import type {
   Show, TravelItem, TravelFlight, TravelHotel, TravelGround,
-  TravelStatus, Currency, Person,
+  TravelStatus, Currency, Person, FlightLeg,
 } from '@/types'
+
+// ── Shows editor — links a booking to zero, one, or several Shows ──
+// Structural copy of TravelersEditor below, same chip-list + "+ Link"
+// picker pattern, just linking Shows instead of People.
+function ShowsEditor({ item, onChange }: { item: TravelItem; onChange: (showIds: string[]) => void }) {
+  const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('tour'))
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const shows = client?.tour.shows ?? []
+  const linkedIds = item.showIds ?? []
+  const linked = shows.filter(s => linkedIds.includes(s.id))
+  const available = shows.filter(s => !linkedIds.includes(s.id))
+
+  return (
+    <div className="mt-2 pt-2 border-t border-gray-50">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-[10px] text-gray-400 uppercase tracking-wide mr-0.5">Shows</span>
+        {linked.map(s => (
+          <span key={s.id} className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-700">
+            {s.venue}
+            {editable && (
+              <button
+                onClick={() => onChange(linkedIds.filter(id => id !== s.id))}
+                className="text-purple-400 hover:text-red-400"
+              >✕</button>
+            )}
+          </span>
+        ))}
+        {linked.length === 0 && <span className="text-[11px] text-gray-300">Not linked to a show — general travel</span>}
+        {editable && (
+        <div className="relative">
+          <button
+            onClick={() => setPickerOpen(v => !v)}
+            className="text-[10px] text-gray-400 hover:text-blue-500 font-medium px-1"
+          >+ Link show</button>
+          {pickerOpen && (
+            <div className="absolute left-0 top-full mt-1 bg-canvas border border-gray-100 rounded-lg shadow-lg min-w-[160px] max-h-40 overflow-auto z-50">
+              {available.length === 0 ? (
+                <div className="px-3 py-2 text-[11px] text-gray-300">All shows linked</div>
+              ) : available.map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => { onChange([...linkedIds, s.id]); setPickerOpen(false) }}
+                  className="block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors"
+                >
+                  {s.venue} <span className="text-gray-400">· {s.city}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 // ── Travelers editor — links a booking to Team members ────────
 function TravelersEditor({ item, onChange }: { item: TravelItem; onChange: (personIds: string[]) => void }) {
@@ -118,10 +174,26 @@ function fmtCost(cost: number | undefined, currency: Currency | undefined) {
   const sym = currency === 'GBP' ? '£' : currency === 'EUR' ? '€' : '$'
   return `${sym}${cost.toLocaleString()}`
 }
+// Time between one leg's arrival and the next leg's departure — the
+// layover a connecting itinerary spends on the ground between flights.
+function fmtLayover(arrival: string | undefined, nextDeparture: string | undefined): string | null {
+  if (!arrival || !nextDeparture) return null
+  const ms = new Date(nextDeparture).getTime() - new Date(arrival).getTime()
+  if (!(ms > 0)) return null
+  const mins = Math.round(ms / 60000)
+  return `${Math.floor(mins / 60)}h ${mins % 60}m layover`
+}
 
 // ── Flight card ──────────────────────────────────────────────
-function FlightCard({ item, onRemove, onLink }: { item: TravelFlight; onRemove: () => void; onLink: (personIds: string[]) => void }) {
+function FlightCard({ item, onRemove, onLink, onLinkShows, onAddLeg }: {
+  item: TravelFlight; onRemove: () => void
+  onLink: (personIds: string[]) => void; onLinkShows: (showIds: string[]) => void
+  onAddLeg: (leg: FlightLeg) => void
+}) {
   const editable = useStore(s => s.canEdit('tour'))
+  const [addingLeg, setAddingLeg] = useState(false)
+  const first = item.legs[0]
+  const last = item.legs[item.legs.length - 1]
   return (
     <div className="border border-gray-100 rounded-xl p-4 hover:border-gray-200 transition-colors">
       <div className="flex items-start justify-between mb-2">
@@ -129,17 +201,15 @@ function FlightCard({ item, onRemove, onLink }: { item: TravelFlight; onRemove: 
           <span className="text-base">✈️</span>
           <div>
             <div className="text-sm font-semibold text-gray-900">
-              {item.from ?? '—'} → {item.to ?? '—'}
-              {item.fromCity && item.toCity && (
+              {first?.from ?? '—'} → {last?.to ?? '—'}
+              {first?.fromCity && last?.toCity && (
                 <span className="text-xs font-normal text-gray-400 ml-1">
-                  ({item.fromCity} → {item.toCity})
+                  ({first.fromCity} → {last.toCity})
                 </span>
               )}
-            </div>
-            <div className="text-xs text-gray-500 mt-0.5">
-              {item.airline} {item.flightNumber && `· ${item.flightNumber}`}
-              {item.cabin && ` · ${item.cabin}`}
-              {item.duration && ` · ${item.duration}`}
+              {item.legs.length > 1 && (
+                <span className="text-xs font-normal text-amber-600 ml-1">· {item.legs.length - 1} connection{item.legs.length > 2 ? 's' : ''}</span>
+              )}
             </div>
           </div>
         </div>
@@ -154,19 +224,59 @@ function FlightCard({ item, onRemove, onLink }: { item: TravelFlight; onRemove: 
         </div>
       </div>
 
+      <div className="flex flex-col gap-2 mt-3">
+        {item.legs.map((leg, i) => (
+          <div key={leg.id}>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              <div className="col-span-2 text-xs text-gray-500">
+                {leg.from ?? '—'} → {leg.to ?? '—'}
+                {leg.fromCity && leg.toCity && <span className="text-gray-400"> ({leg.fromCity} → {leg.toCity})</span>}
+                {' · '}{leg.airline} {leg.flightNumber && `· ${leg.flightNumber}`}
+                {leg.cabin && ` · ${leg.cabin}`}
+                {leg.duration && ` · ${leg.duration}`}
+              </div>
+              {leg.departure && (
+                <div>
+                  <div className="text-[10px] text-gray-400 uppercase tracking-wide">Departs</div>
+                  <div className="text-xs font-medium text-gray-700">{fmtDateTime(leg.departure)}</div>
+                </div>
+              )}
+              {leg.arrival && (
+                <div>
+                  <div className="text-[10px] text-gray-400 uppercase tracking-wide">Arrives</div>
+                  <div className="text-xs font-medium text-gray-700">{fmtDateTime(leg.arrival)}</div>
+                </div>
+              )}
+            </div>
+            {i < item.legs.length - 1 && (() => {
+              const layover = fmtLayover(leg.arrival, item.legs[i + 1].departure)
+              return layover && (
+                <div className="text-[11px] text-amber-600 font-medium pl-3 border-l-2 border-amber-200 ml-1 mt-1.5">
+                  {layover}{leg.to ? ` in ${leg.to}` : ''}
+                </div>
+              )
+            })()}
+          </div>
+        ))}
+      </div>
+
+      {editable && (
+        addingLeg ? (
+          <AddLegForm
+            onSave={leg => { onAddLeg(leg); setAddingLeg(false) }}
+            onCancel={() => setAddingLeg(false)}
+          />
+        ) : (
+          <button
+            onClick={() => setAddingLeg(true)}
+            className="mt-2 text-[11px] text-blue-500 hover:text-blue-600 font-medium"
+          >
+            + Add connecting flight
+          </button>
+        )
+      )}
+
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-3">
-        {item.departure && (
-          <div>
-            <div className="text-[10px] text-gray-400 uppercase tracking-wide">Departs</div>
-            <div className="text-xs font-medium text-gray-700">{fmtDateTime(item.departure)}</div>
-          </div>
-        )}
-        {item.arrival && (
-          <div>
-            <div className="text-[10px] text-gray-400 uppercase tracking-wide">Arrives</div>
-            <div className="text-xs font-medium text-gray-700">{fmtDateTime(item.arrival)}</div>
-          </div>
-        )}
         {item.traveler && (
           <div>
             <div className="text-[10px] text-gray-400 uppercase tracking-wide">Travelers</div>
@@ -196,12 +306,52 @@ function FlightCard({ item, onRemove, onLink }: { item: TravelFlight; onRemove: 
         <div className="mt-2 pt-2 border-t border-gray-50 text-xs text-gray-400 italic">{item.notes}</div>
       )}
       <TravelersEditor item={item} onChange={onLink} />
+      <ShowsEditor item={item} onChange={onLinkShows} />
+    </div>
+  )
+}
+
+// Manual entry for a connecting leg — added after the first leg already
+// came from the mock search flow above, so this just takes what the
+// manager already has (the connecting flight confirmation) at face value.
+function AddLegForm({ onSave, onCancel }: { onSave: (leg: FlightLeg) => void; onCancel: () => void }) {
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [airline, setAirline] = useState('')
+  const [flightNumber, setFlightNumber] = useState('')
+  const [departure, setDeparture] = useState('')
+  const [arrival, setArrival] = useState('')
+
+  function handleSave() {
+    if (!from || !to) return
+    onSave({
+      id: uid(), from: from.toUpperCase(), to: to.toUpperCase(),
+      airline: airline || undefined, flightNumber: flightNumber || undefined,
+      departure: departure || undefined, arrival: arrival || undefined,
+    })
+  }
+
+  return (
+    <div className="mt-2 p-2.5 border border-blue-100 rounded-lg bg-blue-50/30 grid grid-cols-2 gap-1.5">
+      <input value={from} onChange={e => setFrom(e.target.value)} placeholder="From (e.g. DEN)" className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-canvas uppercase" />
+      <input value={to} onChange={e => setTo(e.target.value)} placeholder="To (e.g. LAX)" className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-canvas uppercase" />
+      <input value={airline} onChange={e => setAirline(e.target.value)} placeholder="Airline" className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-canvas" />
+      <input value={flightNumber} onChange={e => setFlightNumber(e.target.value)} placeholder="Flight #" className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-canvas" />
+      <input type="datetime-local" value={departure} onChange={e => setDeparture(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-canvas" />
+      <input type="datetime-local" value={arrival} onChange={e => setArrival(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-canvas" />
+      <div className="col-span-2 flex gap-1.5 mt-0.5">
+        <button onClick={handleSave} disabled={!from || !to} className="flex-1 px-2 py-1 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 disabled:opacity-40 transition-colors">Add leg</button>
+        <button onClick={onCancel} className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+      </div>
     </div>
   )
 }
 
 // ── Hotel card ───────────────────────────────────────────────
-function HotelCard({ item, onRemove, onLink }: { item: TravelHotel; onRemove: () => void; onLink: (personIds: string[]) => void }) {
+function HotelCard({ item, onRemove, onLink, onLinkShows }: {
+  item: TravelHotel; onRemove: () => void
+  onLink: (personIds: string[]) => void; onLinkShows: (showIds: string[]) => void
+}) {
   const editable = useStore(s => s.canEdit('tour'))
   return (
     <div className="border border-gray-100 rounded-xl p-4 hover:border-gray-200 transition-colors">
@@ -266,6 +416,7 @@ function HotelCard({ item, onRemove, onLink }: { item: TravelHotel; onRemove: ()
         <div className="mt-2 pt-2 border-t border-gray-50 text-xs text-gray-400 italic">{item.notes}</div>
       )}
       <TravelersEditor item={item} onChange={onLink} />
+      <ShowsEditor item={item} onChange={onLinkShows} />
     </div>
   )
 }
@@ -278,7 +429,10 @@ const GROUND_EMOJI: Record<string, string> = {
   'bus':        '🚌',
 }
 
-function GroundCard({ item, onRemove, onLink }: { item: TravelGround; onRemove: () => void; onLink: (personIds: string[]) => void }) {
+function GroundCard({ item, onRemove, onLink, onLinkShows }: {
+  item: TravelGround; onRemove: () => void
+  onLink: (personIds: string[]) => void; onLinkShows: (showIds: string[]) => void
+}) {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('tour'))
   const [copied, setCopied] = useState(false)
@@ -368,6 +522,7 @@ function GroundCard({ item, onRemove, onLink }: { item: TravelGround; onRemove: 
         {copied ? 'Copied!' : 'Copy transfer info'}
       </button>
       <TravelersEditor item={item} onChange={onLink} />
+      <ShowsEditor item={item} onChange={onLinkShows} />
     </div>
   )
 }
@@ -443,9 +598,9 @@ function EmptySlot({ kind, onAdd }: { kind: string; onAdd: () => void }) {
 
 // ── Quick add form ───────────────────────────────────────────
 function AddFlightForm({
-  showId, onSave, onCancel,
+  initialShowId, onSave, onCancel,
 }: {
-  showId: string;
+  initialShowId?: string;
   onSave: (item: TravelFlight) => void;
   onCancel: () => void;
 }) {
@@ -464,13 +619,15 @@ function AddFlightForm({
   function pickResult(r: typeof MOCK_FLIGHTS[0]) {
     const dateStr = departure || new Date().toISOString().slice(0, 10)
     onSave({
-      id: uid(), showId, kind: 'flight', status: 'booked',
+      id: uid(), showIds: initialShowId ? [initialShowId] : [], kind: 'flight', status: 'booked',
       traveler: 'Full Party',
-      airline: r.airline, flightNumber: r.number,
-      from: from.toUpperCase(), to: to.toUpperCase(),
-      departure: `${dateStr}T${r.departure}`,
-      arrival: `${dateStr}T${r.arrival}`,
-      duration: r.duration, cabin: r.cabin,
+      legs: [{
+        id: uid(), airline: r.airline, flightNumber: r.number,
+        from: from.toUpperCase(), to: to.toUpperCase(),
+        departure: `${dateStr}T${r.departure}`,
+        arrival: `${dateStr}T${r.arrival}`,
+        duration: r.duration, cabin: r.cabin,
+      }],
       cost: r.price, currency: 'USD',
     })
   }
@@ -544,9 +701,9 @@ function AddFlightForm({
 }
 
 function AddHotelForm({
-  showId, onSave, onCancel,
+  initialShowId, onSave, onCancel,
 }: {
-  showId: string;
+  initialShowId?: string;
   onSave: (item: TravelHotel) => void;
   onCancel: () => void;
 }) {
@@ -564,7 +721,7 @@ function AddHotelForm({
 
   function pickResult(r: typeof MOCK_HOTELS[0]) {
     onSave({
-      id: uid(), showId, kind: 'hotel', status: 'pending',
+      id: uid(), showIds: initialShowId ? [initialShowId] : [], kind: 'hotel', status: 'pending',
       name: r.name, checkIn, checkOut,
       cost: r.price, currency: 'USD',
       notes: r.distance,
@@ -631,9 +788,9 @@ function AddHotelForm({
 }
 
 function AddGroundForm({
-  showId, onSave, onCancel,
+  initialShowId, onSave, onCancel,
 }: {
-  showId: string;
+  initialShowId?: string;
   onSave: (item: TravelGround) => void;
   onCancel: () => void;
 }) {
@@ -650,7 +807,7 @@ function AddGroundForm({
 
   function pickResult(r: typeof MOCK_GROUND[0]) {
     onSave({
-      id: uid(), showId, kind: 'ground', status: 'pending',
+      id: uid(), showIds: initialShowId ? [initialShowId] : [], kind: 'ground', status: 'pending',
       type: r.type === 'Sprinter Van' ? 'transfer' : r.type === 'Sedan' ? 'transfer' : 'rental-car',
       vehicleType: r.type,
       provider: r.provider,
@@ -735,20 +892,45 @@ export function TravelView() {
   const saveTravel   = useStore(s => s.saveTravelItem)
   const deleteTravel = useStore(s => s.deleteTravelItem)
   const saveAdvance  = useStore(s => s.saveAdvance)
+  const sharedSelectedShowId = useStore(s => s.selectedShowId)
   const [selectedShowId, setSelectedShowId] = useState<string | null>(null)
+  const [viewingGeneral, setViewingGeneral] = useState(false)
   const [addMode, setAddMode] = useState<AddMode>(null)
   const [synced, setSynced] = useState(false)
+
+  // Jumping here from elsewhere (e.g. Tour's "Flights"/"Hotels" quick
+  // links) sets the shared selectedShowId — adopt it once, without
+  // fighting this view's own sidebar clicks afterward. Mirrors the same
+  // fix already in AdvanceView.tsx/DaySheetView.tsx.
+  useEffect(() => {
+    if (sharedSelectedShowId && sharedSelectedShowId !== selectedShowId) {
+      selectShow(sharedSelectedShowId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sharedSelectedShowId])
+
+  function selectShow(showId: string) {
+    setSelectedShowId(showId)
+    setViewingGeneral(false)
+  }
 
   if (!client) return null
 
   const shows = client.tour.shows
   const allTravel = client.tour.travel ?? []
+  const generalTravel = allTravel.filter(t => !(t.showIds && t.showIds.length > 0))
 
-  const show: Show | undefined = selectedShowId
-    ? shows.find(s => s.id === selectedShowId)
-    : shows[0]
+  // A brand-new client with zero shows still needs somewhere to book
+  // travel, so "General" is the effective view whenever there's nothing
+  // else to select, not just when explicitly clicked.
+  const effectiveGeneral = viewingGeneral || (selectedShowId === null && shows.length === 0)
+  const show: Show | undefined = effectiveGeneral
+    ? undefined
+    : (selectedShowId ? shows.find(s => s.id === selectedShowId) : shows[0])
 
-  const showTravel = show ? allTravel.filter(t => t.showId === show.id) : []
+  const showTravel = effectiveGeneral
+    ? generalTravel
+    : (show ? allTravel.filter(t => t.showIds?.includes(show.id)) : [])
   const flights = showTravel.filter((t): t is TravelFlight => t.kind === 'flight')
   const hotels  = showTravel.filter((t): t is TravelHotel  => t.kind === 'hotel')
   const ground  = showTravel.filter((t): t is TravelGround => t.kind === 'ground')
@@ -766,6 +948,10 @@ export function TravelView() {
     saveTravel({ ...item, personIds })
   }
 
+  function linkShows(item: TravelItem, showIds: string[]) {
+    saveTravel({ ...item, showIds })
+  }
+
   function syncToAdvance() {
     if (!show) return
     const advances = client!.tour.advances ?? []
@@ -775,10 +961,12 @@ export function TravelView() {
       schedule: {}, production: {}, hospitality: {}, logistics: {}, contacts: [],
     }
 
-    const flightsText = flights.map(f => {
-      const route = [f.from, f.to].filter(Boolean).join(' → ')
-      return [f.airline, f.flightNumber, route, f.departure].filter(Boolean).join(' · ')
-    }).join('\n')
+    const flightsText = flights.map(f =>
+      f.legs.map(leg => {
+        const route = [leg.from, leg.to].filter(Boolean).join(' → ')
+        return [leg.airline, leg.flightNumber, route, leg.departure].filter(Boolean).join(' · ')
+      }).join(' / ')
+    ).join('\n')
 
     const groundText = ground.map(g => {
       const route = [g.from, g.to].filter(Boolean).join(' → ')
@@ -810,6 +998,7 @@ export function TravelView() {
 
   const showDate = show ? new Date(show.date) : null
   const dateStr = showDate?.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  const generalStatus = showTravelStatus(generalTravel)
 
   return (
     <div className="flex-1 flex overflow-hidden">
@@ -819,8 +1008,23 @@ export function TravelView() {
           <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Shows</span>
         </div>
         <div className="flex-1 overflow-y-auto">
+          <button
+            onClick={() => { setViewingGeneral(true); setSelectedShowId(null); setAddMode(null) }}
+            className={`w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors ${effectiveGeneral ? 'bg-blue-50' : ''}`}
+          >
+            <div className="flex items-start gap-2">
+              <div className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${SHOW_DOT[generalStatus]}`} />
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-gray-800">General</div>
+                <div className="text-[11px] text-gray-400">Not tied to a show</div>
+                <div className="text-[10px] mt-0.5 text-gray-400">
+                  {generalTravel.length > 0 ? `${generalTravel.length} item${generalTravel.length !== 1 ? 's' : ''}` : 'No travel added'}
+                </div>
+              </div>
+            </div>
+          </button>
           {shows.map(s => {
-            const items = allTravel.filter(t => t.showId === s.id)
+            const items = allTravel.filter(t => t.showIds?.includes(s.id))
             const tStatus = showTravelStatus(items)
             const d = new Date(s.date)
             const needed = items.filter(i => i.status === 'needed').length
@@ -828,8 +1032,8 @@ export function TravelView() {
             return (
               <button
                 key={s.id}
-                onClick={() => { setSelectedShowId(s.id); setAddMode(null) }}
-                className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${show?.id === s.id ? 'bg-blue-50' : ''}`}
+                onClick={() => { selectShow(s.id); setAddMode(null) }}
+                className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${!effectiveGeneral && show?.id === s.id ? 'bg-blue-50' : ''}`}
               >
                 <div className="flex items-start gap-2">
                   <div className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${SHOW_DOT[tStatus]}`} />
@@ -863,15 +1067,24 @@ export function TravelView() {
 
       {/* ── Main panel ── */}
       <div className="flex-1 overflow-y-auto">
-        {!show ? (
+        {!show && !effectiveGeneral ? (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm">No shows available</div>
         ) : (
           <div className="max-w-2xl mx-auto py-6 px-6">
             {/* Show header */}
             <div className="flex items-start justify-between mb-6">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">{show.venue}</h2>
-                <div className="text-sm text-gray-400">{dateStr} · {show.city}</div>
+                {effectiveGeneral ? (
+                  <>
+                    <h2 className="text-lg font-semibold text-gray-900">General Travel</h2>
+                    <div className="text-sm text-gray-400">Not tied to a specific show — promo trips, days off, or bookings covering several shows</div>
+                  </>
+                ) : show && (
+                  <>
+                    <h2 className="text-lg font-semibold text-gray-900">{show.venue}</h2>
+                    <div className="text-sm text-gray-400">{dateStr} · {show.city}</div>
+                  </>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {flights.length + hotels.length + ground.length > 0 && (
@@ -894,14 +1107,20 @@ export function TravelView() {
               />
               <div className="space-y-2">
                 {flights.map(f => (
-                  <FlightCard key={f.id} item={f} onRemove={() => removeTravelItem(f.id)} onLink={ids => linkTravelers(f, ids)} />
+                  <FlightCard
+                    key={f.id} item={f}
+                    onRemove={() => removeTravelItem(f.id)}
+                    onLink={ids => linkTravelers(f, ids)}
+                    onLinkShows={ids => linkShows(f, ids)}
+                    onAddLeg={leg => saveTravel({ ...f, legs: [...f.legs, leg] })}
+                  />
                 ))}
                 {flights.length === 0 && addMode !== 'flight' && (
                   <EmptySlot kind="flight" onAdd={() => setAddMode('flight')} />
                 )}
                 {addMode === 'flight' && (
                   <AddFlightForm
-                    showId={show.id}
+                    initialShowId={show?.id}
                     onSave={item => saveTravelItem(item)}
                     onCancel={() => setAddMode(null)}
                   />
@@ -917,14 +1136,14 @@ export function TravelView() {
               />
               <div className="space-y-2">
                 {hotels.map(h => (
-                  <HotelCard key={h.id} item={h} onRemove={() => removeTravelItem(h.id)} onLink={ids => linkTravelers(h, ids)} />
+                  <HotelCard key={h.id} item={h} onRemove={() => removeTravelItem(h.id)} onLink={ids => linkTravelers(h, ids)} onLinkShows={ids => linkShows(h, ids)} />
                 ))}
                 {hotels.length === 0 && addMode !== 'hotel' && (
                   <EmptySlot kind="hotel" onAdd={() => setAddMode('hotel')} />
                 )}
                 {addMode === 'hotel' && (
                   <AddHotelForm
-                    showId={show.id}
+                    initialShowId={show?.id}
                     onSave={item => saveTravelItem(item)}
                     onCancel={() => setAddMode(null)}
                   />
@@ -940,14 +1159,14 @@ export function TravelView() {
               />
               <div className="space-y-2">
                 {ground.map(g => (
-                  <GroundCard key={g.id} item={g} onRemove={() => removeTravelItem(g.id)} onLink={ids => linkTravelers(g, ids)} />
+                  <GroundCard key={g.id} item={g} onRemove={() => removeTravelItem(g.id)} onLink={ids => linkTravelers(g, ids)} onLinkShows={ids => linkShows(g, ids)} />
                 ))}
                 {ground.length === 0 && addMode !== 'ground' && (
                   <EmptySlot kind="ground transport" onAdd={() => setAddMode('ground')} />
                 )}
                 {addMode === 'ground' && (
                   <AddGroundForm
-                    showId={show.id}
+                    initialShowId={show?.id}
                     onSave={item => saveTravelItem(item)}
                     onCancel={() => setAddMode(null)}
                   />
@@ -957,8 +1176,8 @@ export function TravelView() {
 
             <CostSummary items={showTravel} />
 
-            {/* Push to advance banner */}
-            {editable && (
+            {/* Push to advance banner — only makes sense for a real show */}
+            {editable && show && (
               <div className="mt-6 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 flex items-center justify-between">
                 <div>
                   <div className="text-xs font-semibold text-gray-700">Push to Advance</div>

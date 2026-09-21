@@ -63,8 +63,9 @@ export function AppHeader() {
       {view === 'studio' && role !== 'artist' && (
         <nav className="flex gap-0.5 flex-1 overflow-x-auto">
           {([
+            ['Calendar', 'calendar'],
             ['Music', 'songs'], ['Tour', 'tour'], ['Content', 'content'],
-            ['Business', 'business'], ['Team', 'team'], ['Projects', 'projects'], ['Analytics', 'analytics'], ['Fandom', 'fandom'], ['Legal', 'legal'],
+            ['Finance', 'finance'], ['Team', 'team'], ['Projects', 'projects'], ['Analytics', 'analytics'], ['Fandom', 'fandom'], ['Legal', 'legal'],
           ] as [string, MainSection][])
             .filter(([, key]) => hasAccess(key, clientId ?? undefined))
             .map(([label, key]) => (

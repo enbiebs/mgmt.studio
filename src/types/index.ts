@@ -200,6 +200,15 @@ export interface Show {
   time: string           // "20:00"
   status: ShowStatus
   notes?: string
+  guarantee?: number
+  deposit?: number
+  currency?: Currency
+  tourOfferId?: string   // → TourOffer this show was confirmed from, if any
+  viaAgency?: boolean               // booked through a booking agency, not directly
+  agencyName?: string
+  agencyCommissionPct?: number      // agency's cut, only deducted when viaAgency
+  managementCommissionPct?: number  // management's cut, only deducted when viaAgency
+  invoiceId?: string      // → Invoice generated to track this show's receivable, if any
 }
 
 export interface Post {
@@ -251,6 +260,7 @@ export interface Client {
   name: string
   genre: string
   color: string          // hex color for avatar
+  calendarToken?: string  // private, unguessable — enables /api/calendar/[token] ICS subscription
   people: Person[]        // shared directory — everyone linked from Crew, Stakeholders, etc.
   songs: {
     albums: Album[]
@@ -459,12 +469,14 @@ export interface AnalyticsData {
 }
 
 // ── Section / view routing ──────────────────────────────────
-export type MainSection  = 'songs' | 'tour' | 'content' | 'business' | 'projects' | 'analytics' | 'fandom' | 'team' | 'legal'
+export type MainSection  = 'calendar' | 'songs' | 'tour' | 'content' | 'finance' | 'projects' | 'analytics' | 'fandom' | 'team' | 'legal'
 export type SongsSub     = 'tracks' | 'labelcopy' | 'checklist' | 'status'
 export type ContentSub   = 'manage' | 'studio' | 'lab'
 export type BizSub       = 'royalties' | 'banking' | 'catalog' | 'pl' | 'invoices' | 'payments'
 export type TourSub      = 'tour' | 'stage-plot' | 'advance' | 'daysheet' | 'crew' | 'guests' | 'travel' | 'offers'
 export type AnalyticsSub = 'overview' | 'streaming' | 'playlists' | 'social' | 'tiktok' | 'audience' | 'charts'
+export type FandomSub    = 'overview' | 'fans' | 'referrals' | 'messaging'
+export type LegalSub     = 'pipeline' | 'alerts' | 'register' | 'templates'
 
 // ── Tour Management — Advance System ────────────────────────
 export type AdvanceStatus = 'draft' | 'sent' | 'in-progress' | 'complete'
@@ -591,23 +603,30 @@ export interface GuestListEntry {
 // ── Travel Booking ───────────────────────────────────────────
 export type TravelStatus = 'needed' | 'pending' | 'booked' | 'cancelled'
 
+// One segment of a flight booking — a nonstop hop between two airports.
+// A connecting itinerary is 2+ legs on the same TravelFlight, in order.
+export interface FlightLeg {
+  id:            string
+  airline?:      string
+  flightNumber?: string
+  from?:         string         // "JFK"
+  fromCity?:     string         // "New York"
+  to?:           string         // "LHR"
+  toCity?:       string         // "London"
+  departure?:    string         // "2026-08-22T07:30"
+  arrival?:      string         // "2026-08-23T07:15"
+  duration?:     string         // "7h 15m"
+  cabin?:        string         // "Economy" | "Business" | "First"
+}
+
 export interface TravelFlight {
   id:                string
-  showId:            string
+  showIds?:          string[]       // → Show — zero (a promo trip/day off), one, or several (one flight covering a festival weekend)
   kind:              'flight'
   status:            TravelStatus
   traveler:          string         // "Full Party" | individual name
   personIds?:        string[]       // → Person — who from Team this booking actually covers
-  airline?:          string
-  flightNumber?:     string
-  from?:             string         // "JFK"
-  fromCity?:         string         // "New York"
-  to?:               string         // "LHR"
-  toCity?:           string         // "London"
-  departure?:        string         // "2026-08-22T07:30"
-  arrival?:          string         // "2026-08-23T07:15"
-  duration?:         string         // "7h 15m"
-  cabin?:            string         // "Economy" | "Business" | "First"
+  legs:              FlightLeg[]    // always >= 1; 2+ means a connection
   seats?:            string         // seat numbers or count
   confirmationCode?: string
   cost?:             number
@@ -617,7 +636,7 @@ export interface TravelFlight {
 
 export interface TravelHotel {
   id:                string
-  showId:            string
+  showIds?:          string[]       // → Show — zero, one, or several (see TravelFlight)
   kind:              'hotel'
   status:            TravelStatus
   personIds?:        string[]       // → Person — who from Team this booking actually covers
@@ -636,7 +655,7 @@ export interface TravelHotel {
 
 export interface TravelGround {
   id:                string
-  showId:            string
+  showIds?:          string[]       // → Show — zero, one, or several (see TravelFlight)
   kind:              'ground'
   status:            TravelStatus
   personIds?:        string[]       // → Person — who from Team this booking actually covers
@@ -654,6 +673,38 @@ export interface TravelGround {
 
 export type TravelItem = TravelFlight | TravelHotel | TravelGround
 
+// ── Venue (reusable across shows at the same room) ──────────
+// Field names deliberately mirror AdvanceProduction/Hospitality/Logistics
+// above so saving/loading a venue is a straight field-by-field copy.
+export interface Venue {
+  id:                   string
+  name:                 string
+  city:                 string
+  address?:             string
+  wifi?:                string
+  wifiPassword?:        string
+  stageWidth?:          string
+  stageDepth?:          string
+  roofHeight?:          string
+  fohPosition?:         string
+  monPosition?:         string
+  powerSupply?:         string
+  riserCount?:          string
+  merchandiseLocation?: string
+  dressingRooms?:       string
+  dressingRoomNotes?:   string
+  cateringCompany?:     string
+  parkingInstructions?: string
+  busParking?:          string
+  loadingDockAddress?:  string
+  loadingDockNotes?:    string
+  nearestAirport?:      string
+  distanceToAirport?:   string
+  contacts?:            AdvanceContact[]
+  notes?:               string
+  createdAt:            string
+}
+
 // ── Tour Data (extended) ─────────────────────────────────────
 export interface TourData {
   shows:      Show[]
@@ -661,6 +712,7 @@ export interface TourData {
   crew:       CrewMember[]
   guestList:  GuestListEntry[]
   travel:     TravelItem[]
+  venues:     Venue[]
 }
 
 // ── Agent / Booking ─────────────────────────────────────────
@@ -680,6 +732,11 @@ export interface TourOffer {
   notes?:     string
   settledAt?: string
   netPayout?: number        // after splits
+  showId?:    string        // → Show created when this offer was confirmed
+  viaAgency?: boolean               // booked through a booking agency, not directly
+  agencyName?: string
+  agencyCommissionPct?: number      // agency's cut, only deducted when viaAgency
+  managementCommissionPct?: number  // management's cut, only deducted when viaAgency
 }
 
 // ── Legal / Contracts ───────────────────────────────────────

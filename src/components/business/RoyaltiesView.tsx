@@ -7,7 +7,7 @@ import type { Currency } from '@/types'
 
 export function RoyaltiesView() {
   const client = useStore(s => s.getClient())
-  const editable = useStore(s => s.canEdit('business'))
+  const editable = useStore(s => s.canEdit('finance'))
   const { deleteRoyaltyStream } = useStore()
   const [addOpen, setAddOpen] = useState(false)
 

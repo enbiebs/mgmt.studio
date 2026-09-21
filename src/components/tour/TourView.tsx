@@ -1,15 +1,21 @@
 'use client'
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
-import { Modal, FormField, inputClass } from '@/components/ui/Modal'
+import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { MONTH_NAMES, MONTH_SHORT } from '@/lib/utils'
+import { STATUS_CONFIG as INVOICE_STATUS_CONFIG, isOverdue } from '@/components/business/InvoicesView'
+import type { Currency, Show } from '@/types'
 
 export function TourView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('tour'))
-  const { selectedShowId, setSelectedShow, setTourSub, addShow, updateShowStatus, deleteShow } = useStore()
+  const {
+    selectedShowId, setSelectedShow, setTourSub, updateShowStatus, deleteShow,
+    enableCalendarFeed, disableCalendarFeed,
+  } = useStore()
   const [addOpen, setAddOpen] = useState(false)
-  const [f, setF] = useState({ date: '', city: '', venue: '', time: '20:00' })
+  const [calendarOpen, setCalendarOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   if (!client) return null
   const shows    = client.tour.shows
@@ -28,7 +34,7 @@ export function TourView() {
       const used = guestList.filter(g => g.showId === s.id).reduce((sum, g) => sum + g.qty, 0)
       const issues = [
         (!advance || advance.status !== 'complete') && 'Advance incomplete',
-        travel.some(t => t.showId === s.id && (t.status === 'needed' || t.status === 'pending')) && 'Travel pending',
+        travel.some(t => t.showIds?.includes(s.id) && (t.status === 'needed' || t.status === 'pending')) && 'Travel pending',
         !isNaN(cap) && used > cap && 'Over guest cap',
       ].filter((x): x is string => Boolean(x))
       return { show: s, issues }
@@ -37,11 +43,11 @@ export function TourView() {
     .sort((a, b) => a.show.date.localeCompare(b.show.date))
     .slice(0, 5)
 
-  function handleAdd() {
-    if (!f.date || !f.city || !f.venue) return
-    addShow(f.date, f.city, f.venue, f.time)
-    setF({ date: '', city: '', venue: '', time: '20:00' })
-    setAddOpen(false)
+  async function copyFeedLink() {
+    if (!client?.calendarToken) return
+    await navigator.clipboard.writeText(`${window.location.origin}/api/calendar/${client.calendarToken}`)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   return (
@@ -92,6 +98,63 @@ export function TourView() {
 
       {/* Main */}
       <div className="flex-1 overflow-auto p-6">
+        {editable && (
+          <div className="flex justify-end mb-3 relative">
+            <button
+              onClick={() => setCalendarOpen(v => !v)}
+              className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors"
+            >
+              📅 Calendar feed
+            </button>
+            {calendarOpen && (
+              <div className="absolute right-0 top-full mt-1 bg-canvas border border-gray-100 rounded-xl shadow-lg p-3 w-80 z-50 text-xs">
+                {!client.calendarToken ? (
+                  <>
+                    <div className="text-gray-500 mb-2">
+                      Get a private link to subscribe to {client.name}&apos;s show dates in Google or Apple Calendar. It updates automatically whenever a show changes.
+                    </div>
+                    <button
+                      onClick={() => enableCalendarFeed(client.id)}
+                      className="w-full px-2.5 py-1.5 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors"
+                    >
+                      Enable calendar feed
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-gray-500 mb-2">
+                      Treat this link like a password — anyone who has it can see {client.name}&apos;s show dates.
+                    </div>
+                    <div className="font-mono text-[11px] bg-gray-50 rounded-lg px-2 py-1.5 mb-2 break-all text-gray-600">
+                      {typeof window !== 'undefined' ? `${window.location.origin}/api/calendar/${client.calendarToken}` : ''}
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={copyFeedLink}
+                        className="flex-1 px-2.5 py-1.5 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors"
+                      >
+                        {copied ? 'Copied!' : 'Copy link'}
+                      </button>
+                      <button
+                        onClick={() => enableCalendarFeed(client.id)}
+                        className="px-2.5 py-1.5 border border-gray-200 rounded-lg font-medium text-gray-500 hover:bg-gray-50 transition-colors"
+                      >
+                        Regenerate
+                      </button>
+                      <button
+                        onClick={() => disableCalendarFeed(client.id)}
+                        className="px-2.5 py-1.5 border border-gray-200 rounded-lg font-medium text-red-400 hover:bg-red-50 transition-colors"
+                      >
+                        Turn off
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Stats */}
         <div className="flex gap-3.5 mb-6">
           {[[String(shows.length), 'Shows'],[String(upcoming.length), 'Upcoming'],[String(shows.filter(s => s.status === 'confirmed').length), 'Confirmed']].map(([n, l]) => (
@@ -164,6 +227,9 @@ export function TourView() {
                 )}
               </div>
             </div>
+
+            <ShowFinancials key={selected.id} show={selected} editable={editable} onViewOffer={() => setTourSub('offers')} />
+
             <div className="flex gap-2 flex-wrap mb-4">
               {[
                 ['Maps ↗', () => window.open(`https://maps.google.com/?q=${encodeURIComponent(`${selected.venue}, ${selected.city}`)}`, '_blank')],
@@ -199,18 +265,160 @@ export function TourView() {
       </div>
 
       {/* Add show modal */}
-      {addOpen && (
-        <Modal title="Add a show" onClose={() => setAddOpen(false)} footer={
-          <>
-            <button onClick={() => setAddOpen(false)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-            <button onClick={handleAdd} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Add show</button>
-          </>
-        }>
-          <FormField label="Date"><input type="date" className={inputClass} value={f.date} onChange={e => setF(p => ({...p, date: e.target.value}))} /></FormField>
-          <FormField label="City"><input type="text" className={inputClass} placeholder="City" value={f.city} onChange={e => setF(p => ({...p, city: e.target.value}))} /></FormField>
-          <FormField label="Venue"><input type="text" className={inputClass} placeholder="Venue name" value={f.venue} onChange={e => setF(p => ({...p, venue: e.target.value}))} /></FormField>
-          <FormField label="Set time"><input type="time" className={inputClass} value={f.time} onChange={e => setF(p => ({...p, time: e.target.value}))} /></FormField>
-        </Modal>
+      {addOpen && <AddShowModal onClose={() => setAddOpen(false)} />}
+    </div>
+  )
+}
+
+// ── Add Show Modal ──────────────────────────────────────────
+export function AddShowModal({ defaultDate, onClose }: { defaultDate?: string; onClose: () => void }) {
+  const addShow = useStore(s => s.addShow)
+  const [f, setF] = useState({ date: defaultDate ?? '', city: '', venue: '', time: '20:00' })
+
+  function handleAdd() {
+    if (!f.date || !f.city || !f.venue) return
+    addShow(f.date, f.city, f.venue, f.time)
+    onClose()
+  }
+
+  return (
+    <Modal title="Add a show" onClose={onClose} footer={
+      <>
+        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+        <button onClick={handleAdd} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Add show</button>
+      </>
+    }>
+      <FormField label="Date"><input type="date" className={inputClass} value={f.date} onChange={e => setF(p => ({...p, date: e.target.value}))} /></FormField>
+      <FormField label="City"><input type="text" className={inputClass} placeholder="City" value={f.city} onChange={e => setF(p => ({...p, city: e.target.value}))} /></FormField>
+      <FormField label="Venue"><input type="text" className={inputClass} placeholder="Venue name" value={f.venue} onChange={e => setF(p => ({...p, venue: e.target.value}))} /></FormField>
+      <FormField label="Set time"><input type="time" className={inputClass} value={f.time} onChange={e => setF(p => ({...p, time: e.target.value}))} /></FormField>
+    </Modal>
+  )
+}
+
+// ── Show financials ─────────────────────────────────────────
+function ShowFinancials({ show, editable, onViewOffer }: { show: Show; editable: boolean; onViewOffer: () => void }) {
+  const updateShowFinancials = useStore(s => s.updateShowFinancials)
+  const generateInvoiceFromShow = useStore(s => s.generateInvoiceFromShow)
+  const invoices = useStore(s => s.getClient()?.finance?.invoices ?? [])
+  const setSection = useStore(s => s.setSection)
+  const setBizSub = useStore(s => s.setBizSub)
+  const [guarantee, setGuarantee] = useState(String(show.guarantee ?? ''))
+  const [deposit, setDeposit] = useState(String(show.deposit ?? ''))
+  const [currency, setCurrency] = useState<Currency>(show.currency ?? 'USD')
+  const [viaAgency, setViaAgency] = useState(show.viaAgency ?? false)
+  const [agencyName, setAgencyName] = useState(show.agencyName ?? '')
+  const [agencyPct, setAgencyPct] = useState(String(show.agencyCommissionPct ?? ''))
+  const [mgmtPct, setMgmtPct] = useState(String(show.managementCommissionPct ?? ''))
+
+  function commit(patch: Parameters<typeof updateShowFinancials>[1]) {
+    updateShowFinancials(show.id, {
+      guarantee: guarantee ? Number(guarantee) : undefined,
+      deposit: deposit ? Number(deposit) : undefined,
+      currency, viaAgency,
+      agencyName: viaAgency ? (agencyName || undefined) : undefined,
+      agencyCommissionPct: viaAgency && agencyPct ? Number(agencyPct) : undefined,
+      managementCommissionPct: viaAgency && mgmtPct ? Number(mgmtPct) : undefined,
+      ...patch,
+    })
+  }
+
+  if (!editable && !show.guarantee && !show.deposit) return null
+
+  const linkedInvoice = show.invoiceId ? invoices.find(i => i.id === show.invoiceId) : undefined
+  const netExpected = show.guarantee != null
+    ? show.guarantee * (1 - (show.viaAgency ? (show.agencyCommissionPct ?? 0) : 0) / 100 - (show.viaAgency ? (show.managementCommissionPct ?? 0) : 0) / 100)
+    : undefined
+
+  function viewInvoice() {
+    setSection('finance')
+    setBizSub('invoices')
+  }
+
+  return (
+    <div className="border-t border-gray-100 pt-4 mb-4">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Financials</div>
+      {editable ? (
+        <>
+          <div className="grid grid-cols-3 gap-3 mb-2">
+            <FormField label="Guarantee">
+              <input type="number" className={inputClass} value={guarantee}
+                onChange={e => setGuarantee(e.target.value)}
+                onBlur={() => commit({ guarantee: guarantee ? Number(guarantee) : undefined })} />
+            </FormField>
+            <FormField label="Deposit">
+              <input type="number" className={inputClass} value={deposit}
+                onChange={e => setDeposit(e.target.value)}
+                onBlur={() => commit({ deposit: deposit ? Number(deposit) : undefined })} />
+            </FormField>
+            <FormField label="Currency">
+              <select className={selectClass} value={currency}
+                onChange={e => { const c = e.target.value as Currency; setCurrency(c); commit({ currency: c }) }}>
+                <option value="USD">USD</option>
+                <option value="GBP">GBP</option>
+                <option value="EUR">EUR</option>
+              </select>
+            </FormField>
+          </div>
+          <label className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+            <input type="checkbox" checked={viaAgency} className="rounded"
+              onChange={e => { const v = e.target.checked; setViaAgency(v); commit({ viaAgency: v }) }} />
+            Booked via agency
+          </label>
+          {viaAgency && (
+            <div className="grid grid-cols-3 gap-3 mb-2">
+              <FormField label="Agency name">
+                <input type="text" className={inputClass} value={agencyName}
+                  onChange={e => setAgencyName(e.target.value)}
+                  onBlur={() => commit({ agencyName: agencyName || undefined })} />
+              </FormField>
+              <FormField label="Agency commission (%)">
+                <input type="number" className={inputClass} value={agencyPct}
+                  onChange={e => setAgencyPct(e.target.value)}
+                  onBlur={() => commit({ agencyCommissionPct: agencyPct ? Number(agencyPct) : undefined })} />
+              </FormField>
+              <FormField label="Mgmt commission (%)">
+                <input type="number" className={inputClass} value={mgmtPct}
+                  onChange={e => setMgmtPct(e.target.value)}
+                  onBlur={() => commit({ managementCommissionPct: mgmtPct ? Number(mgmtPct) : undefined })} />
+              </FormField>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="flex gap-4 text-sm mb-2">
+          {show.guarantee != null && <span><span className="text-gray-400">Guarantee</span> <span className="font-semibold">{show.guarantee} {show.currency ?? 'USD'}</span></span>}
+          {show.deposit != null && <span><span className="text-gray-400">Deposit</span> <span className="font-semibold">{show.deposit} {show.currency ?? 'USD'}</span></span>}
+        </div>
+      )}
+
+      {netExpected != null && (
+        <div className="text-sm mb-2">
+          <span className="text-gray-400">Net expected</span>{' '}
+          <span className="font-semibold">{netExpected.toFixed(2)} {show.currency ?? 'USD'}</span>
+          {show.viaAgency && <span className="text-gray-400"> — via {show.agencyName || 'agency'}, after commission</span>}
+        </div>
+      )}
+
+      {show.guarantee != null && (
+        linkedInvoice ? (
+          <button onClick={viewInvoice} className="flex items-center gap-1.5 text-xs text-blue-500 hover:text-blue-600 mb-1">
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${INVOICE_STATUS_CONFIG[isOverdue(linkedInvoice) ? 'overdue' : linkedInvoice.status].bg} ${INVOICE_STATUS_CONFIG[isOverdue(linkedInvoice) ? 'overdue' : linkedInvoice.status].color}`}>
+              {INVOICE_STATUS_CONFIG[isOverdue(linkedInvoice) ? 'overdue' : linkedInvoice.status].label}
+            </span>
+            View invoice →
+          </button>
+        ) : editable && (
+          <button onClick={() => generateInvoiceFromShow(show.id)} className="text-xs text-blue-500 hover:text-blue-600 mb-1">
+            Generate invoice
+          </button>
+        )
+      )}
+
+      {show.tourOfferId && (
+        <button onClick={onViewOffer} className="text-xs text-blue-500 hover:text-blue-600 block">
+          From offer — view in Offers →
+        </button>
       )}
     </div>
   )

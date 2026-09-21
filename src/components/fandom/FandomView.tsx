@@ -12,8 +12,6 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import type { FanTier } from '@/types'
 
-type FandomTab = 'overview' | 'fans' | 'referrals' | 'messaging'
-
 // ── Tier config ────────────────────────────────────────────
 const TIER_CONFIG: Record<FanTier, { label: string; color: string; bg: string; min: number; perks: string[] }> = {
   listener:  { label: 'Listener',  color: '#94a3b8', bg: 'bg-slate-100',   min: 0,     perks: ['Access to fan feed'] },
@@ -34,7 +32,7 @@ const ACTIVITY_ICON: Record<string, string> = {
 export function FandomView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('fandom'))
-  const [tab, setTab] = useState<FandomTab>('overview')
+  const tab = useStore(s => s.fandomSub)
   const [msgCompose, setMsgCompose] = useState(false)
   const [msgSegment, setMsgSegment] = useState('all')
   const [msgSubject, setMsgSubject] = useState('')
@@ -48,35 +46,8 @@ export function FandomView() {
     ? f.topFans
     : f.topFans.filter(fan => fan.tier === tierFilter)
 
-  const tabs: { key: FandomTab; label: string }[] = [
-    { key: 'overview',   label: 'Overview'   },
-    { key: 'fans',       label: 'Fans'       },
-    { key: 'referrals',  label: 'Referrals'  },
-    { key: 'messaging',  label: 'Messaging'  },
-  ]
-
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-      {/* Sub-nav */}
-      <div className="flex-shrink-0 border-b border-gray-100 px-5 flex items-center gap-1">
-        {tabs.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-3 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-              tab === t.key
-                ? 'border-[#f59e0b] text-[#b45309]'
-                : 'border-transparent text-gray-400 hover:text-gray-700'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-        <div className="ml-auto flex-shrink-0 pb-1">
-          <span className="text-[10px] text-gray-300 uppercase tracking-widest">Fandom · Fan Loyalty</span>
-        </div>
-      </div>
-
       <div className="flex-1 overflow-auto p-6">
 
         {/* ── OVERVIEW ── */}

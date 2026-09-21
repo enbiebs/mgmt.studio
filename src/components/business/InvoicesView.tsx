@@ -10,7 +10,7 @@ import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal
 import { addDays } from '@/lib/utils'
 import type { Invoice, InvoiceStatus, Currency, RevenueStream, BankTransaction } from '@/types'
 
-const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string; bg: string }> = {
+export const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string; bg: string }> = {
   draft:   { label: 'Draft',   color: 'text-gray-500',  bg: 'bg-gray-100'  },
   sent:    { label: 'Sent',    color: 'text-blue-700',  bg: 'bg-blue-50'   },
   paid:    { label: 'Paid',    color: 'text-green-700', bg: 'bg-green-50'  },
@@ -34,7 +34,7 @@ function fmtDate(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function isOverdue(inv: Invoice) {
+export function isOverdue(inv: Invoice) {
   return inv.status === 'sent' && inv.dueDate < new Date().toISOString().slice(0, 10)
 }
 
@@ -42,7 +42,7 @@ type InvFilter = 'all' | InvoiceStatus
 
 export function InvoicesView() {
   const client = useStore(s => s.getClient())
-  const editable = useStore(s => s.canEdit('business'))
+  const editable = useStore(s => s.canEdit('finance'))
   const [filter, setFilter] = useState<InvFilter>('all')
   const [selected, setSelected] = useState<Invoice | null>(null)
   const [addOpen, setAddOpen] = useState(false)
@@ -249,7 +249,7 @@ function SCard({ label, value, color, count }: { label: string; value: string; c
 }
 
 function InvoiceDetail({ invoice: inv, onClose }: { invoice: Invoice; onClose: () => void }) {
-  const editable = useStore(s => s.canEdit('business'))
+  const editable = useStore(s => s.canEdit('finance'))
   const { updateInvoiceStatus, deleteInvoice } = useStore()
   const total = invTotal(inv)
   const cfg   = STATUS_CONFIG[inv.status]
@@ -368,7 +368,7 @@ function InvoiceDetail({ invoice: inv, onClose }: { invoice: Invoice; onClose: (
 
 function InvoicePaymentLinker({ invoice: inv }: { invoice: Invoice }) {
   const client = useStore(s => s.getClient())
-  const editable = useStore(s => s.canEdit('business'))
+  const editable = useStore(s => s.canEdit('finance'))
   const { linkTransactionToInvoice } = useStore()
   const [pickerOpen, setPickerOpen] = useState(false)
   if (!client) return null

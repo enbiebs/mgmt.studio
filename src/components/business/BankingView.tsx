@@ -7,7 +7,7 @@ import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal
 import type { Currency } from '@/types'
 
 function ConnectBankButton({ clientId }: { clientId: string }) {
-  const editable = useStore(s => s.canEdit('business'))
+  const editable = useStore(s => s.canEdit('finance'))
   const loadBankData = useStore(s => s.loadBankData)
   const [linkToken, setLinkToken] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -78,7 +78,7 @@ function ConnectBankButton({ clientId }: { clientId: string }) {
 }
 
 function RefreshButton({ clientId }: { clientId: string }) {
-  const editable = useStore(s => s.canEdit('business'))
+  const editable = useStore(s => s.canEdit('finance'))
   const loadBankData = useStore(s => s.loadBankData)
   const [busy, setBusy] = useState(false)
 
@@ -108,7 +108,7 @@ function RefreshButton({ clientId }: { clientId: string }) {
 
 export function BankingView() {
   const client = useStore(s => s.getClient())
-  const editable = useStore(s => s.canEdit('business'))
+  const editable = useStore(s => s.canEdit('finance'))
   const { markDepositDone, dismissDeposit, loadBankData } = useStore()
   const [addOpen, setAddOpen] = useState(false)
 

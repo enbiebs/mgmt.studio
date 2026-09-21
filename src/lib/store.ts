@@ -15,14 +15,14 @@
 import { create } from 'zustand'
 import type {
   AppData, Client, Track, Show, ShowStatus, Post, Album,
-  MainSection, SongsSub, ContentSub, BizSub, TourSub, Stage, AnalyticsSub,
+  MainSection, SongsSub, ContentSub, BizSub, TourSub, Stage, AnalyticsSub, FandomSub, LegalSub,
   UserRole, ProjectStatus, ProjectType, Stakeholder, Project, ArtistTodo,
   TrackLabelCopy, ReleaseLabelCopy, ChecklistItemKey, ChecklistItem, TrackPriority,
   GuestListEntry, GuestListCategory, ReleaseStakeholder, StakeholderRole,
   CrewMember, ShowAdvance, TravelItem, Person, PersonActivity, Currency,
   CatalogWork, RegStatus, Invoice, InvoiceLineItem, InvoiceStatus, RevenueStream,
   LegalTemplate, LegalTemplateClause, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
-  ReleaseType,
+  ReleaseType, Venue, TourOffer, Expense, ExpenseCategory,
 } from '@/types'
 import { DEMO_DATA } from '@/lib/demo-data'
 import { DEFAULT_LEGAL_TEMPLATES } from '@/lib/legal-templates-demo'
@@ -36,12 +36,15 @@ import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE } from '@/lib/utils'
 import {
   loadWorkspaceData, getMyMembership, getGrantsForMember, getPreviewableMembers,
   type AccessGrant, type PreviewMember,
-  upsertClient, deleteClient as dbDeleteClient,
+  upsertClient, deleteClient as dbDeleteClient, setCalendarToken,
   upsertTrack, deleteTrack as dbDeleteTrack,
   upsertAlbum, deleteAlbum as dbDeleteAlbum, upsertChecklist,
   upsertPerson, deletePerson as dbDeletePerson,
   upsertStakeholder, deleteStakeholder as dbDeleteStakeholder,
   upsertShow, deleteShow as dbDeleteShow,
+  upsertOffer, deleteOffer as dbDeleteOffer,
+  upsertExpense, deleteExpense as dbDeleteExpense,
+  upsertVenue, deleteVenue as dbDeleteVenue,
   upsertPost, deletePost as dbDeletePost, replaceAutoPosts,
   upsertDeposit, deleteDeposit as dbDeleteDeposit,
   upsertRoyaltyStream, deleteRoyaltyStream as dbDeleteRoyaltyStream,
@@ -64,13 +67,22 @@ import {
 // ── Persistence helpers ─────────────────────────────────────
 const STORAGE_KEY = 'studio-v1'
 
-function loadData(): AppData {
-  if (typeof window === 'undefined') return JSON.parse(JSON.stringify(DEMO_DATA))
+// The store's initial state must be IDENTICAL on the server (which has no
+// localStorage) and on the client's first paint, or React's hydration
+// bails out and remounts the whole tree. So the synchronous initial value
+// is always the deterministic demo snapshot; any real localStorage content
+// (demo-mode's persisted edits) is loaded afterward, client-only, via
+// hydrateLocalData() — see AuthProvider's demo-mode branch.
+function defaultData(): AppData {
+  return JSON.parse(JSON.stringify(DEMO_DATA))
+}
+
+function loadLocalData(): AppData {
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) return JSON.parse(saved)
   } catch { /* ignore */ }
-  return JSON.parse(JSON.stringify(DEMO_DATA))
+  return defaultData()
 }
 
 function saveData(data: AppData) {
@@ -84,13 +96,16 @@ function saveData(data: AppData) {
 // local-storage slot alongside the same persistence pattern.
 const LEGAL_TEMPLATES_KEY = 'studio-legal-templates-v1'
 
-function loadLegalTemplatesLocal(): LegalTemplate[] {
-  if (typeof window === 'undefined') return JSON.parse(JSON.stringify(DEFAULT_LEGAL_TEMPLATES))
+function defaultLegalTemplates(): LegalTemplate[] {
+  return JSON.parse(JSON.stringify(DEFAULT_LEGAL_TEMPLATES))
+}
+
+function loadLocalLegalTemplates(): LegalTemplate[] {
   try {
     const saved = localStorage.getItem(LEGAL_TEMPLATES_KEY)
     if (saved) return JSON.parse(saved)
   } catch { /* ignore */ }
-  return JSON.parse(JSON.stringify(DEFAULT_LEGAL_TEMPLATES))
+  return defaultLegalTemplates()
 }
 
 function saveLegalTemplatesLocal(templates: LegalTemplate[]) {
@@ -98,13 +113,36 @@ function saveLegalTemplatesLocal(templates: LegalTemplate[]) {
   localStorage.setItem(LEGAL_TEMPLATES_KEY, JSON.stringify(templates))
 }
 
+// Fire-and-forget push to a client's connected Google Calendar, if any —
+// the actual sync work happens server-side (this file runs in the
+// browser and can't hold Google credentials), see
+// src/app/api/google-calendar/push[-delete]/route.ts. A failed push never
+// blocks or fails the local save; it's already persisted regardless.
+function pushToGoogleCalendar(clientId: string, recordType: 'show' | 'post' | 'project', record: unknown) {
+  fetch('/api/google-calendar/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId, recordType, record }),
+  }).catch(console.error)
+}
+
+function pushDeleteToGoogleCalendar(clientId: string, recordType: 'show' | 'post' | 'project', recordId: string) {
+  fetch('/api/google-calendar/push-delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ clientId, recordType, recordId }),
+  }).catch(console.error)
+}
+
 // access_grants.section uses 'music' where the app's MainSection uses 'songs' —
-// everything else lines up 1:1.
+// everything else lines up 1:1. 'calendar' has no grant of its own (see
+// hasAccess) — it's a read-only aggregate view gated per-event by the
+// underlying section's own access, not a section anyone can be granted.
 const SECTION_TO_GRANT_KEY: Record<MainSection, string> = {
-  songs: 'music', tour: 'tour', content: 'content', business: 'business',
+  calendar: 'calendar', songs: 'music', tour: 'tour', content: 'content', finance: 'finance',
   team: 'team', projects: 'projects', analytics: 'analytics', fandom: 'fandom', legal: 'legal',
 }
-const ALL_SECTIONS: MainSection[] = ['songs', 'tour', 'content', 'business', 'team', 'projects', 'analytics', 'fandom', 'legal']
+const ALL_SECTIONS: MainSection[] = ['songs', 'tour', 'content', 'finance', 'team', 'projects', 'analytics', 'fandom', 'legal']
 
 // ── State shape ─────────────────────────────────────────────
 interface StudioState {
@@ -145,6 +183,8 @@ interface StudioState {
   bizSub: BizSub
   tourSub: TourSub
   analyticsSub: AnalyticsSub
+  fandomSub: FandomSub
+  legalSub: LegalSub
   selectedShowId: string | null
   // Which release (single/EP/album) the Label Copy / Checklist / Status
   // sub-tabs are showing — mirrors selectedShowId's role for Tour.
@@ -176,6 +216,9 @@ interface StudioState {
 
   // ── Auth / Supabase init ──
   initFromSupabase: (userId: string) => Promise<void>
+  // Demo mode only (no Supabase configured): loads whatever was previously
+  // saved to localStorage, client-side, after the initial hydration pass.
+  hydrateLocalData: () => void
   signOut: () => Promise<void>
 
   // ── Role ──
@@ -192,6 +235,8 @@ interface StudioState {
   setBizSub: (sub: BizSub) => void
   setTourSub: (sub: TourSub) => void
   setAnalyticsSub: (sub: AnalyticsSub) => void
+  setFandomSub: (sub: FandomSub) => void
+  setLegalSub: (sub: LegalSub) => void
   setSelectedShow: (id: string | null) => void
   setSelectedAlbum: (id: string | null) => void
   setStudioConcept: (name: string) => void
@@ -208,6 +253,10 @@ interface StudioState {
   addClient: (name: string, genre: string, color: string) => void
   updateClient: (id: string, name: string, genre: string, color: string) => void
   deleteClient: (id: string) => void
+
+  // ── Calendar feed (per-client .ics subscription link) ──
+  enableCalendarFeed: (clientId: string) => void
+  disableCalendarFeed: (clientId: string) => void
 
   // ── Track actions ──
   addTrack: (albumId: string, title: string, stage: Stage) => void
@@ -287,7 +336,26 @@ interface StudioState {
   // ── Show actions ──
   addShow: (date: string, city: string, venue: string, time: string) => void
   updateShowStatus: (showId: string, status: ShowStatus) => void
+  updateShowFinancials: (showId: string, patch: { guarantee?: number; deposit?: number; currency?: Currency; viaAgency?: boolean; agencyName?: string; agencyCommissionPct?: number; managementCommissionPct?: number }) => void
+  /** No-ops if the show has no guarantee yet, or already has a generated invoice. */
+  generateInvoiceFromShow: (showId: string) => void
   deleteShow: (showId: string) => void
+
+  // ── Tour offers ──
+  addOffer: (patch: { venue: string; city: string; country: string; date: string; promoter: string; guarantee: number; door?: number; buyout?: number; notes?: string; viaAgency?: boolean; agencyName?: string; agencyCommissionPct?: number; managementCommissionPct?: number }) => void
+  /** Editing an offer's status into 'confirmed' also creates the matching Show. */
+  updateOffer: (offerId: string, patch: Partial<Omit<TourOffer, 'id'>>) => void
+  deleteOffer: (offerId: string) => void
+
+  // ── Expenses ──
+  addExpense: (patch: { description: string; vendor: string; amount: number; currency: Currency; category: ExpenseCategory; date: string; paid: boolean }) => void
+  updateExpense: (expenseId: string, patch: Partial<Omit<Expense, 'id'>>) => void
+  deleteExpense: (expenseId: string) => void
+
+  // ── Venue library (reusable across shows at the same room) ──
+  addVenue: (patch: Omit<Venue, 'id' | 'createdAt'>) => string
+  updateVenue: (venueId: string, patch: Partial<Omit<Venue, 'id' | 'createdAt'>>) => void
+  deleteVenue: (venueId: string) => void
 
   // ── Post actions ──
   addPost: (date: string, title: string, time: string, type: string) => void
@@ -324,8 +392,8 @@ interface StudioState {
 const now = new Date()
 
 export const useStore = create<StudioState>((set, get) => ({
-  data: loadData(),
-  legalTemplates: loadLegalTemplatesLocal(),
+  data: defaultData(),
+  legalTemplates: defaultLegalTemplates(),
 
   workspaceId: null,
   userId:      null,
@@ -346,6 +414,8 @@ export const useStore = create<StudioState>((set, get) => ({
   bizSub:        'royalties',
   tourSub:       'tour',
   analyticsSub:  'overview',
+  fandomSub:     'overview',
+  legalSub:      'pipeline',
   selectedShowId: null,
   selectedAlbumId: null,
   studioConcept: null,
@@ -367,6 +437,10 @@ export const useStore = create<StudioState>((set, get) => ({
     const s = get()
     const cid = clientId ?? s.clientId
     if (!cid) return false
+    // Calendar has no grant of its own — anyone with the client open can see
+    // it; what it actually shows is filtered per-event by each event's real
+    // section access (see src/lib/calendar.ts), not gated here.
+    if (section === 'calendar') return true
     if (s.role === 'manager') return true
     if (s.role === 'artist') {
       if (s.authClientId !== cid) return false
@@ -393,6 +467,10 @@ export const useStore = create<StudioState>((set, get) => ({
   },
 
   // ── Supabase init ──
+  hydrateLocalData: () => {
+    set({ data: loadLocalData(), legalTemplates: loadLocalLegalTemplates() })
+  },
+
   initFromSupabase: async (userId) => {
     set({ isLoading: true, userId })
     try {
@@ -480,7 +558,7 @@ export const useStore = create<StudioState>((set, get) => ({
   openClient: (id) => {
     const s = get()
     const firstSection = (s.role === 'manager' || s.role === 'artist')
-      ? 'songs'
+      ? 'calendar'
       : (ALL_SECTIONS.find(sec => s.hasAccess(sec, id)) ?? 'songs')
     set({ view: 'studio', clientId: id, section: firstSection, selectedShowId: null, selectedAlbumId: null })
   },
@@ -490,6 +568,8 @@ export const useStore = create<StudioState>((set, get) => ({
   setBizSub:       (sub) => set({ bizSub: sub }),
   setTourSub:      (sub) => set({ tourSub: sub }),
   setAnalyticsSub: (sub) => set({ analyticsSub: sub }),
+  setFandomSub:    (sub) => set({ fandomSub: sub }),
+  setLegalSub:     (sub) => set({ legalSub: sub }),
   setSelectedShow: (id) => set({ selectedShowId: id }),
   setSelectedAlbum: (id) => set({ selectedAlbumId: id }),
   setStudioConcept: (name) => set({ studioConcept: name }),
@@ -564,6 +644,25 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     dbDeleteClient(id).catch(console.error)
+  },
+
+  // Regenerating (calling this again while already enabled) invalidates
+  // the old link — useful if it ever leaked.
+  enableCalendarFeed: (clientId) => {
+    const { data, workspaceId } = get()
+    const token = crypto.randomUUID()
+    const updated = { clients: data.clients.map(c => c.id === clientId ? { ...c, calendarToken: token } : c) }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId) setCalendarToken(clientId, token).catch(console.error)
+  },
+
+  disableCalendarFeed: (clientId) => {
+    const { data, workspaceId } = get()
+    const updated = { clients: data.clients.map(c => c.id === clientId ? { ...c, calendarToken: undefined } : c) }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId) setCalendarToken(clientId, null).catch(console.error)
   },
 
   // ── Track actions ──
@@ -1262,7 +1361,7 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
-    if (workspaceId) upsertTravelItem(item).catch(console.error)
+    if (workspaceId && clientId) upsertTravelItem(item, clientId).catch(console.error)
   },
 
   deleteTravelItem: (itemId) => {
@@ -1560,6 +1659,58 @@ export const useStore = create<StudioState>((set, get) => ({
     dbDeleteInvoice(invoiceId).catch(console.error)
   },
 
+  // ── Expenses ──
+  addExpense: (patch) => {
+    const { data, clientId, workspaceId } = get()
+    const newExpense: Expense = { id: 'exp-' + uid(), ...patch }
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId || !c.finance) return c
+        return { ...c, finance: { ...c.finance, expenses: [...c.finance.expenses, newExpense] } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId) upsertExpense(newExpense, clientId).catch(console.error)
+  },
+
+  updateExpense: (expenseId, patch) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedExpense: Expense | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId || !c.finance) return c
+        return {
+          ...c,
+          finance: {
+            ...c.finance,
+            expenses: c.finance.expenses.map(e => {
+              if (e.id !== expenseId) return e
+              updatedExpense = { ...e, ...patch }
+              return updatedExpense
+            }),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId && updatedExpense) upsertExpense(updatedExpense, clientId).catch(console.error)
+  },
+
+  deleteExpense: (expenseId) => {
+    const { data, clientId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId || !c.finance) return c
+        return { ...c, finance: { ...c.finance, expenses: c.finance.expenses.filter(e => e.id !== expenseId) } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    dbDeleteExpense(expenseId).catch(console.error)
+  },
+
   // ── Release stakeholders ──
   addStakeholder: (albumId, patch) => {
     const { data, clientId, workspaceId } = get()
@@ -1616,7 +1767,10 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
-    if (clientId) upsertShow(newShow, clientId).catch(console.error)
+    if (clientId) {
+      upsertShow(newShow, clientId).catch(console.error)
+      pushToGoogleCalendar(clientId, 'show', newShow)
+    }
   },
 
   updateShowStatus: (showId, status) => {
@@ -1640,7 +1794,84 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
+    // Status isn't part of the pushed event body (title/date/time only),
+    // so nothing Google-visible would change — no push here.
     if (clientId && updatedShow) upsertShow(updatedShow, clientId).catch(console.error)
+  },
+
+  // Guarantee/deposit/currency don't appear on the pushed Google event
+  // either, for the same reason — no push here.
+  updateShowFinancials: (showId, patch) => {
+    const { data, clientId } = get()
+    let updatedShow: Show | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          tour: {
+            ...c.tour,
+            shows: c.tour.shows.map(s => {
+              if (s.id !== showId) return s
+              updatedShow = { ...s, ...patch }
+              return updatedShow
+            }),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (clientId && updatedShow) upsertShow(updatedShow, clientId).catch(console.error)
+  },
+
+  generateInvoiceFromShow: (showId) => {
+    const { data, clientId, workspaceId } = get()
+    const client = data.clients.find(c => c.id === clientId)
+    const show = client?.tour.shows.find(s => s.id === showId)
+    if (!client || !show || !show.guarantee || show.invoiceId) return
+
+    const agencyPct = show.viaAgency ? (show.agencyCommissionPct ?? 0) : 0
+    const mgmtPct = show.viaAgency ? (show.managementCommissionPct ?? 0) : 0
+    const net = show.guarantee * (1 - agencyPct / 100 - mgmtPct / 100)
+
+    const linkedOffer = show.tourOfferId ? client.agentData?.offers.find(o => o.id === show.tourOfferId) : undefined
+    const to = show.viaAgency && show.agencyName ? show.agencyName : (linkedOffer?.promoter ?? show.venue)
+
+    const dueDate = new Date(show.date + 'T00:00:00')
+    dueDate.setDate(dueDate.getDate() + 30)
+
+    const invoice: Invoice = {
+      id: 'inv-' + uid(),
+      number: 'INV-' + Date.now().toString().slice(-6),
+      to, category: 'touring', status: 'draft',
+      issuedDate: new Date().toISOString().slice(0, 10),
+      dueDate: dueDate.toISOString().slice(0, 10),
+      items: [{ description: `Guarantee — ${show.venue}, ${show.city} (${show.date})`, quantity: 1, rate: net }],
+      currency: show.currency ?? 'USD',
+    }
+    const updatedShow: Show = { ...show, invoiceId: invoice.id }
+
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          finance: { ...c.finance, invoices: [...(c.finance?.invoices ?? []), invoice] },
+          tour: { ...c.tour, shows: c.tour.shows.map(s => s.id === showId ? updatedShow : s) },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId) {
+      // shows.invoice_id has a real foreign key to invoices — the invoice
+      // must land in the DB first, same ordering fix already used for the
+      // offer→show write.
+      upsertInvoice(invoice, clientId)
+        .then(() => upsertShow(updatedShow, clientId))
+        .catch(console.error)
+    }
   },
 
   deleteShow: (showId) => {
@@ -1654,6 +1885,136 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated, selectedShowId: null })
     saveData(updated)
     dbDeleteShow(showId).catch(console.error)
+    if (clientId) pushDeleteToGoogleCalendar(clientId, 'show', showId)
+  },
+
+  // ── Tour offers ──
+  addOffer: (patch) => {
+    const { data, clientId, workspaceId } = get()
+    const newOffer: TourOffer = { id: 'offer-' + uid(), status: 'inquiry', ...patch }
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId || !c.agentData) return c
+        return { ...c, agentData: { ...c.agentData, offers: [...c.agentData.offers, newOffer] } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId) upsertOffer(newOffer, clientId).catch(console.error)
+  },
+
+  updateOffer: (offerId, patch) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedOffer: TourOffer | undefined
+    let newShow: Show | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId || !c.agentData) return c
+        const offers = c.agentData.offers.map(o => {
+          if (o.id !== offerId) return o
+          updatedOffer = { ...o, ...patch }
+          // Confirming an offer creates its Show automatically — only on the
+          // transition into 'confirmed', not on every edit while confirmed.
+          if (patch.status === 'confirmed' && o.status !== 'confirmed' && !updatedOffer.showId) {
+            newShow = {
+              id: 'show-' + uid(), date: updatedOffer.date, city: updatedOffer.city,
+              venue: updatedOffer.venue, time: '20:00', status: 'confirmed',
+              guarantee: updatedOffer.guarantee, currency: 'USD', tourOfferId: updatedOffer.id,
+              viaAgency: updatedOffer.viaAgency, agencyName: updatedOffer.agencyName,
+              agencyCommissionPct: updatedOffer.agencyCommissionPct,
+              managementCommissionPct: updatedOffer.managementCommissionPct,
+            }
+            updatedOffer = { ...updatedOffer, showId: newShow.id }
+          }
+          return updatedOffer
+        })
+        return {
+          ...c,
+          agentData: { ...c.agentData, offers },
+          tour: newShow
+            ? { ...c.tour, shows: [...c.tour.shows, newShow].sort((a, b) => a.date.localeCompare(b.date)) }
+            : c.tour,
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (clientId && newShow) {
+      // The offer's row references the new show's id via a foreign key, so
+      // the show must land in the DB first — write them in sequence, not
+      // fire-and-forget in parallel, or the offer write can lose the race
+      // and get rejected for pointing at a show that doesn't exist yet.
+      upsertShow(newShow, clientId)
+        .then(() => { if (workspaceId && updatedOffer) return upsertOffer(updatedOffer, clientId) })
+        .catch(console.error)
+      pushToGoogleCalendar(clientId, 'show', newShow)
+    } else if (workspaceId && clientId && updatedOffer) {
+      upsertOffer(updatedOffer, clientId).catch(console.error)
+    }
+  },
+
+  deleteOffer: (offerId) => {
+    const { data, clientId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId || !c.agentData) return c
+        return { ...c, agentData: { ...c.agentData, offers: c.agentData.offers.filter(o => o.id !== offerId) } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    dbDeleteOffer(offerId).catch(console.error)
+  },
+
+  // ── Venue library ──
+  addVenue: (patch) => {
+    const { data, clientId, workspaceId } = get()
+    const newVenue: Venue = { id: 'venue-' + uid(), createdAt: new Date().toISOString(), ...patch }
+    const updated = {
+      clients: data.clients.map(c => c.id !== clientId ? c : { ...c, tour: { ...c.tour, venues: [...(c.tour.venues ?? []), newVenue] } }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId) upsertVenue(newVenue, clientId).catch(console.error)
+    return newVenue.id
+  },
+
+  updateVenue: (venueId, patch) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedVenue: Venue | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          tour: {
+            ...c.tour,
+            venues: (c.tour.venues ?? []).map(v => {
+              if (v.id !== venueId) return v
+              const next = { ...v, ...patch }
+              updatedVenue = next
+              return next
+            }),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId && updatedVenue) upsertVenue(updatedVenue, clientId).catch(console.error)
+  },
+
+  deleteVenue: (venueId) => {
+    const { data, clientId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return { ...c, tour: { ...c.tour, venues: (c.tour.venues ?? []).filter(v => v.id !== venueId) } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    dbDeleteVenue(venueId).catch(console.error)
   },
 
   // ── Post actions ──
@@ -1668,7 +2029,10 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
-    if (clientId) upsertPost(newPost, clientId).catch(console.error)
+    if (clientId) {
+      upsertPost(newPost, clientId).catch(console.error)
+      pushToGoogleCalendar(clientId, 'post', newPost)
+    }
   },
 
   updatePost: (postId, patch) => {
@@ -1691,7 +2055,10 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
-    if (clientId && updatedPost) upsertPost(updatedPost, clientId).catch(console.error)
+    if (clientId && updatedPost) {
+      upsertPost(updatedPost, clientId).catch(console.error)
+      pushToGoogleCalendar(clientId, 'post', updatedPost)
+    }
   },
 
   deletePost: (postId) => {
@@ -1705,6 +2072,7 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     dbDeletePost(postId).catch(console.error)
+    if (clientId) pushDeleteToGoogleCalendar(clientId, 'post', postId)
   },
 
   // ── Royalties ──
@@ -1839,9 +2207,14 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
-    if (clientId) upsertProject(newProject, clientId).catch(console.error)
+    if (clientId) {
+      upsertProject(newProject, clientId).catch(console.error)
+      pushToGoogleCalendar(clientId, 'project', newProject)
+    }
   },
 
+  // Status/assignee changes below don't touch title/dueDate — the only
+  // fields on the pushed Google event — so neither pushes.
   updateProjectStatus: (projectId, status) => {
     const { data, clientId } = get()
     const updated = {
@@ -1887,6 +2260,7 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     dbDeleteProject(projectId).catch(console.error)
+    if (clientId) pushDeleteToGoogleCalendar(clientId, 'project', projectId)
   },
 
   // ── Artist Todos ──

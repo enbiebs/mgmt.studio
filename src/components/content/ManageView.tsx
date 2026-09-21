@@ -112,7 +112,7 @@ function to12h(t: string): string {
   return `${hr}:${m}${ampm}`
 }
 
-function PostModal({ post, defaultDate, onClose }: { post?: Post; defaultDate?: string; onClose: () => void }) {
+export function PostModal({ post, defaultDate, onClose }: { post?: Post; defaultDate?: string; onClose: () => void }) {
   const editable = useStore(s => s.canEdit('content'))
   const { addPost, updatePost, deletePost } = useStore()
   const [title, setTitle] = useState(post?.title ?? '')

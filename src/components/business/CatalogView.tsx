@@ -20,7 +20,7 @@ function unlinkedIncome(transactions: BankTransaction[]) {
 
 function TransactionLinker({ workId, currency }: { workId: string; currency: Currency }) {
   const client = useStore(s => s.getClient())
-  const editable = useStore(s => s.canEdit('business'))
+  const editable = useStore(s => s.canEdit('finance'))
   const { linkTransactionToCatalogWork } = useStore()
   const [pickerOpen, setPickerOpen] = useState(false)
   if (!client) return null
@@ -115,7 +115,7 @@ function AddWorkModal({ onClose }: { onClose: () => void }) {
 }
 
 function EditWorkModal({ work, onClose }: { work: CatalogWork; onClose: () => void }) {
-  const editable = useStore(s => s.canEdit('business'))
+  const editable = useStore(s => s.canEdit('finance'))
   const { updateCatalogWork } = useStore()
   const [title, setTitle] = useState(work.title)
   const [writers, setWriters] = useState(work.writers)
@@ -202,7 +202,7 @@ function exportCatalogCsv(clientName: string, works: { title: string; ipi?: stri
 
 export function CatalogView() {
   const client = useStore(s => s.getClient())
-  const editable = useStore(s => s.canEdit('business'))
+  const editable = useStore(s => s.canEdit('finance'))
   const { deleteCatalogWork } = useStore()
   const [addOpen, setAddOpen] = useState(false)
   const [editWork, setEditWork] = useState<CatalogWork | null>(null)

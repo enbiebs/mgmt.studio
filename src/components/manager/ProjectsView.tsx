@@ -232,12 +232,12 @@ export function ProjectsView() {
 }
 
 // ── Add Project Modal ──────────────────────────────────────
-function AddProjectModal({ onClose }: { onClose: () => void }) {
+export function AddProjectModal({ onClose, defaultDueDate }: { onClose: () => void; defaultDueDate?: string }) {
   const { addProject } = useStore()
   const [title, setTitle]       = useState('')
   const [type, setType]         = useState<ProjectType>('release')
   const [assignee, setAssignee] = useState<Stakeholder | ''>('')
-  const [dueDate, setDueDate]   = useState('')
+  const [dueDate, setDueDate]   = useState(defaultDueDate ?? '')
 
   function submit(e: React.FormEvent) {
     e.preventDefault()

@@ -162,7 +162,7 @@ const MASCOLO_GUESTS: GuestListEntry[] = [
 const MASCOLO_TRAVEL: TravelItem[] = [
   // ── Brooklyn Mirage (Aug 14) — domestic, no flight needed ──────────
   {
-    id: 'trv-m1', showId: 'show-mas-001', kind: 'hotel', status: 'booked',
+    id: 'trv-m1', showIds: ['show-mas-001'], kind: 'hotel', status: 'booked',
     name: 'The William Vale', address: '111 N 12th St, Brooklyn, NY 11249',
     phone: '+1 718-631-8400',
     checkIn: '2026-08-13', checkOut: '2026-08-15',
@@ -171,14 +171,14 @@ const MASCOLO_TRAVEL: TravelItem[] = [
     notes: 'Mascolo in Suite 901. TM + crew in rooms 812–815.',
   },
   {
-    id: 'trv-m2', showId: 'show-mas-001', kind: 'ground', status: 'booked',
+    id: 'trv-m2', showIds: ['show-mas-001'], kind: 'ground', status: 'booked',
     type: 'transfer', provider: 'Silver Star Transportation',
     from: 'Manhattan', to: 'The William Vale', pickupTime: '2026-08-13T14:00',
     confirmationCode: 'SST-88201', vehicleType: 'Sprinter Van',
     cost: 350, currency: 'USD',
   },
   {
-    id: 'trv-m3', showId: 'show-mas-001', kind: 'ground', status: 'booked',
+    id: 'trv-m3', showIds: ['show-mas-001'], kind: 'ground', status: 'booked',
     type: 'transfer', provider: 'Silver Star Transportation',
     from: 'The William Vale', to: 'Brooklyn Mirage', pickupTime: '2026-08-14T21:30',
     confirmationCode: 'SST-88202', vehicleType: 'Sprinter Van',
@@ -186,18 +186,20 @@ const MASCOLO_TRAVEL: TravelItem[] = [
   },
   // ── Fabric London (Aug 23) — international flight ──────────────────
   {
-    id: 'trv-m4', showId: 'show-mas-002', kind: 'flight', status: 'booked',
+    id: 'trv-m4', showIds: ['show-mas-002'], kind: 'flight', status: 'booked',
     traveler: 'Full Party (8)',
-    airline: 'British Airways', flightNumber: 'BA 178',
-    from: 'JFK', fromCity: 'New York',
-    to: 'LHR', toCity: 'London',
-    departure: '2026-08-21T21:05', arrival: '2026-08-22T09:30',
-    duration: '6h 55m', cabin: 'Business',
+    legs: [{
+      id: 'leg-m4a', airline: 'British Airways', flightNumber: 'BA 178',
+      from: 'JFK', fromCity: 'New York',
+      to: 'LHR', toCity: 'London',
+      departure: '2026-08-21T21:05', arrival: '2026-08-22T09:30',
+      duration: '6h 55m', cabin: 'Business',
+    }],
     seats: '2A, 2C, 4A, 4C, 6A, 6C, 8A, 8C',
     confirmationCode: 'BA-GHX9201', cost: 18400, currency: 'USD',
   },
   {
-    id: 'trv-m5', showId: 'show-mas-002', kind: 'hotel', status: 'booked',
+    id: 'trv-m5', showIds: ['show-mas-002'], kind: 'hotel', status: 'booked',
     name: 'The Hoxton, Shoreditch', address: '81 Great Eastern St, London EC2A 3HU',
     phone: '+44 20 7550 1000',
     checkIn: '2026-08-22', checkOut: '2026-08-24',
@@ -205,26 +207,28 @@ const MASCOLO_TRAVEL: TravelItem[] = [
     confirmationCode: 'HOX-LNSHO-4421', cost: 3600, currency: 'GBP',
   },
   {
-    id: 'trv-m6', showId: 'show-mas-002', kind: 'ground', status: 'booked',
+    id: 'trv-m6', showIds: ['show-mas-002'], kind: 'ground', status: 'booked',
     type: 'transfer', provider: 'Sixt Chauffeur',
     from: 'LHR Terminal 5', to: 'The Hoxton, Shoreditch', pickupTime: '2026-08-22T10:00',
     confirmationCode: 'SIXT-LHR-9920', vehicleType: '2× Mercedes V-Class',
     cost: 420, currency: 'GBP',
   },
   {
-    id: 'trv-m7', showId: 'show-mas-002', kind: 'flight', status: 'booked',
+    id: 'trv-m7', showIds: ['show-mas-002'], kind: 'flight', status: 'booked',
     traveler: 'Full Party (8)',
-    airline: 'Lufthansa', flightNumber: 'LH 911',
-    from: 'LHR', fromCity: 'London',
-    to: 'TXL', toCity: 'Berlin',
-    departure: '2026-08-24T13:15', arrival: '2026-08-24T16:20',
-    duration: '2h 05m', cabin: 'Economy',
+    legs: [{
+      id: 'leg-m7a', airline: 'Lufthansa', flightNumber: 'LH 911',
+      from: 'LHR', fromCity: 'London',
+      to: 'TXL', toCity: 'Berlin',
+      departure: '2026-08-24T13:15', arrival: '2026-08-24T16:20',
+      duration: '2h 05m', cabin: 'Economy',
+    }],
     confirmationCode: 'LH-7XC992', cost: 2100, currency: 'EUR',
     notes: 'Connecting to Berghain show Sep 5 — staying in Berlin for 2 weeks.',
   },
   // ── Berghain Berlin (Sep 5) — already in Berlin ────────────────────
   {
-    id: 'trv-m8', showId: 'show-mas-003', kind: 'hotel', status: 'booked',
+    id: 'trv-m8', showIds: ['show-mas-003'], kind: 'hotel', status: 'booked',
     name: 'Michelberger Hotel', address: 'Warschauer Str. 39-40, 10243 Berlin',
     phone: '+49 30 2977 8590',
     checkIn: '2026-08-24', checkOut: '2026-09-06',
@@ -233,7 +237,7 @@ const MASCOLO_TRAVEL: TravelItem[] = [
     notes: 'Extended stay — 13 nights to cover both London travel and Berghain show.',
   },
   {
-    id: 'trv-m9', showId: 'show-mas-003', kind: 'ground', status: 'needed',
+    id: 'trv-m9', showIds: ['show-mas-003'], kind: 'ground', status: 'needed',
     type: 'rental-car', provider: undefined,
     from: 'Michelberger Hotel', to: 'Berghain', pickupTime: '2026-09-04T20:00',
     vehicleType: 'Sprinter Van',
@@ -241,17 +245,19 @@ const MASCOLO_TRAVEL: TravelItem[] = [
   },
   // ── Shelter Amsterdam (Sep 20) ─────────────────────────────────────
   {
-    id: 'trv-m10', showId: 'show-mas-004', kind: 'flight', status: 'booked',
+    id: 'trv-m10', showIds: ['show-mas-004'], kind: 'flight', status: 'booked',
     traveler: 'Full Party (8)',
-    airline: 'easyJet', flightNumber: 'U2 2163',
-    from: 'BER', fromCity: 'Berlin',
-    to: 'AMS', toCity: 'Amsterdam',
-    departure: '2026-09-19T08:30', arrival: '2026-09-19T10:15',
-    duration: '1h 45m', cabin: 'Economy',
+    legs: [{
+      id: 'leg-m10a', airline: 'easyJet', flightNumber: 'U2 2163',
+      from: 'BER', fromCity: 'Berlin',
+      to: 'AMS', toCity: 'Amsterdam',
+      departure: '2026-09-19T08:30', arrival: '2026-09-19T10:15',
+      duration: '1h 45m', cabin: 'Economy',
+    }],
     confirmationCode: 'EZY-AMS-4410', cost: 1800, currency: 'EUR',
   },
   {
-    id: 'trv-m11', showId: 'show-mas-004', kind: 'hotel', status: 'pending',
+    id: 'trv-m11', showIds: ['show-mas-004'], kind: 'hotel', status: 'pending',
     name: 'Hotel V Nesplein', address: 'Nes 49, 1012 KD Amsterdam',
     checkIn: '2026-09-19', checkOut: '2026-09-21',
     roomCount: 4, confirmationCode: undefined,
@@ -259,7 +265,7 @@ const MASCOLO_TRAVEL: TravelItem[] = [
     notes: 'Awaiting confirmation from hotel.',
   },
   {
-    id: 'trv-m12', showId: 'show-mas-004', kind: 'ground', status: 'needed',
+    id: 'trv-m12', showIds: ['show-mas-004'], kind: 'ground', status: 'needed',
     type: 'transfer',
     from: 'AMS Schiphol', to: 'Hotel V Nesplein',
     notes: 'Need to book airport transfer.',
@@ -277,6 +283,7 @@ export const MASCOLO_TOUR: TourData = {
   crew:      MASCOLO_CREW,
   guestList: MASCOLO_GUESTS,
   travel:    MASCOLO_TRAVEL,
+  venues:    [],
 }
 
 // ── Nimino ─────────────────────────────────────────────────
@@ -307,22 +314,25 @@ export const NIMINO_TOUR: TourData = {
   guestList: [],
   travel: [
     {
-      id: 'trv-n1', showId: 'show-nim-001', kind: 'flight', status: 'booked',
+      id: 'trv-n1', showIds: ['show-nim-001'], kind: 'flight', status: 'booked',
       traveler: 'Full Party (3)',
-      airline: 'United', flightNumber: 'UA 521',
-      from: 'JFK', fromCity: 'New York',
-      to: 'ORD', toCity: 'Chicago',
-      departure: '2026-08-20T09:00', arrival: '2026-08-20T11:05',
-      duration: '3h 05m', cabin: 'Economy',
+      legs: [{
+        id: 'leg-n1a', airline: 'United', flightNumber: 'UA 521',
+        from: 'JFK', fromCity: 'New York',
+        to: 'ORD', toCity: 'Chicago',
+        departure: '2026-08-20T09:00', arrival: '2026-08-20T11:05',
+        duration: '3h 05m', cabin: 'Economy',
+      }],
       confirmationCode: 'UA-CHI2201', cost: 1200, currency: 'USD',
     },
     {
-      id: 'trv-n2', showId: 'show-nim-001', kind: 'hotel', status: 'booked',
+      id: 'trv-n2', showIds: ['show-nim-001'], kind: 'hotel', status: 'booked',
       name: 'Loews Chicago Hotel', address: '455 N Park Dr, Chicago, IL 60611',
       checkIn: '2026-08-20', checkOut: '2026-08-21',
       roomCount: 2, confirmationCode: 'LOEWS-CHI-5512', cost: 800, currency: 'USD',
     },
   ],
+  venues: [],
 }
 
 // ── Sierra Bloom ───────────────────────────────────────────
@@ -405,23 +415,26 @@ export const SIERRA_TOUR: TourData = {
   ],
   travel: [
     {
-      id: 'trv-s1', showId: 'show-sie-001', kind: 'flight', status: 'booked',
+      id: 'trv-s1', showIds: ['show-sie-001'], kind: 'flight', status: 'booked',
       traveler: 'Full Band (6)',
-      airline: 'Southwest', flightNumber: 'WN 1844',
-      from: 'LAX', fromCity: 'Los Angeles',
-      to: 'BNA', toCity: 'Nashville',
-      departure: '2026-08-27T11:30', arrival: '2026-08-27T17:45',
-      duration: '3h 15m', cabin: 'Economy',
+      legs: [{
+        id: 'leg-s1a', airline: 'Southwest', flightNumber: 'WN 1844',
+        from: 'LAX', fromCity: 'Los Angeles',
+        to: 'BNA', toCity: 'Nashville',
+        departure: '2026-08-27T11:30', arrival: '2026-08-27T17:45',
+        duration: '3h 15m', cabin: 'Economy',
+      }],
       confirmationCode: 'SW-BNA-3310', cost: 3600, currency: 'USD',
     },
     {
-      id: 'trv-s2', showId: 'show-sie-001', kind: 'hotel', status: 'booked',
+      id: 'trv-s2', showIds: ['show-sie-001'], kind: 'hotel', status: 'booked',
       name: 'Fairlane Hotel Nashville', address: '401 Union St, Nashville, TN 37219',
       checkIn: '2026-08-27', checkOut: '2026-08-29',
       roomCount: 8, confirmationCode: 'FAIR-NASH-7740', cost: 4800, currency: 'USD',
       notes: 'Sierra – Suite 701. Band + crew in rooms 501–507.',
     },
   ],
+  venues: [],
 }
 
 // ── Empty default (new clients) ────────────────────────────
@@ -431,4 +444,5 @@ export const EMPTY_TOUR: TourData = {
   crew:      [],
   guestList: [],
   travel:    [],
+  venues:    [],
 }

@@ -8,7 +8,8 @@
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { expensesFromTransactions } from '@/lib/bank-rollup'
-import type { ExpenseCategory } from '@/types'
+import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
+import type { ExpenseCategory, Currency } from '@/types'
 
 const CAT_LABELS: Record<ExpenseCategory, string> = {
   travel:     'Travel',
@@ -42,15 +43,29 @@ function fmtDate(iso: string) {
 
 export function PaymentsView() {
   const client = useStore(s => s.getClient())
+  const editable = useStore(s => s.canEdit('finance'))
+  const updateExpense = useStore(s => s.updateExpense)
+  const deleteExpense = useStore(s => s.deleteExpense)
   const [filterCat, setFilterCat] = useState<ExpenseCategory | 'all'>('all')
   const [showUnpaid, setShowUnpaid] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
 
   if (!client) return null
   const bankExpenses = expensesFromTransactions(client.business.banking.transactions ?? [])
   const expenses = [...(client.finance?.expenses ?? []), ...bankExpenses]
 
   if (expenses.length === 0) {
-    return <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">No expenses recorded</div>
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-400 text-sm">
+        No expenses recorded
+        {editable && (
+          <button onClick={() => setAddOpen(true)} className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+            + Add expense
+          </button>
+        )}
+        {addOpen && <ExpenseFormModal onClose={() => setAddOpen(false)} />}
+      </div>
+    )
   }
 
   const totalPaid   = expenses.filter(e => e.paid).reduce((s, e) => s + e.amount, 0)
@@ -79,6 +94,14 @@ export function PaymentsView() {
           Includes {bankExpenses.length} outgoing transactions pulled automatically from your connected bank account.
         </div>
       )}
+      {editable && (
+        <div className="flex justify-end mb-4">
+          <button onClick={() => setAddOpen(true)} className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+            + Add expense
+          </button>
+        </div>
+      )}
+      {addOpen && <ExpenseFormModal onClose={() => setAddOpen(false)} />}
       {/* Summary */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <SCard label="Total Expenses" value={fmt(total)} color="text-gray-800" sub={`${expenses.length} line items`} />
@@ -150,13 +173,16 @@ export function PaymentsView() {
               <th className="text-left px-4 py-2 text-xs text-gray-400 font-medium">Category</th>
               <th className="text-right px-4 py-2 text-xs text-gray-400 font-medium">Amount</th>
               <th className="text-center px-4 py-2 text-xs text-gray-400 font-medium">Paid</th>
+              {editable && <th className="px-4 py-2" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {sorted.length === 0 && (
-              <tr><td colSpan={6} className="text-center py-8 text-gray-400 text-sm">No expenses</td></tr>
+              <tr><td colSpan={7} className="text-center py-8 text-gray-400 text-sm">No expenses</td></tr>
             )}
-            {sorted.map(e => (
+            {sorted.map(e => {
+              const manual = !e.id.startsWith('bank-')
+              return (
               <tr key={e.id} className={`hover:bg-gray-50 ${!e.paid ? 'bg-amber-50/30' : ''}`}>
                 <td className="px-4 py-3 text-xs text-gray-500">{fmtDate(e.date)}</td>
                 <td className="px-4 py-3 font-medium text-sm">{e.description}</td>
@@ -171,13 +197,26 @@ export function PaymentsView() {
                 </td>
                 <td className="px-4 py-3 text-right font-semibold">{fmt(e.amount, e.currency)}</td>
                 <td className="px-4 py-3 text-center">
-                  {e.paid
-                    ? <span className="text-green-500 text-base">✓</span>
-                    : <span className="text-amber-500 text-xs font-semibold">Pending</span>
-                  }
+                  {manual && editable ? (
+                    <button onClick={() => updateExpense(e.id, { paid: !e.paid })} className="text-xs">
+                      {e.paid ? <span className="text-green-500 text-base">✓</span> : <span className="text-amber-500 font-semibold hover:text-amber-600">Pending</span>}
+                    </button>
+                  ) : (
+                    e.paid
+                      ? <span className="text-green-500 text-base">✓</span>
+                      : <span className="text-amber-500 text-xs font-semibold">Pending</span>
+                  )}
                 </td>
+                {editable && (
+                  <td className="px-4 py-3 text-right">
+                    {manual && (
+                      <button onClick={() => deleteExpense(e.id)} className="text-xs text-red-400 hover:text-red-500">Delete</button>
+                    )}
+                  </td>
+                )}
               </tr>
-            ))}
+              )
+            })}
           </tbody>
           {sorted.length > 0 && (
             <tfoot className="border-t border-gray-200 bg-gray-50">
@@ -189,12 +228,62 @@ export function PaymentsView() {
                   {fmt(sorted.reduce((s, e) => s + e.amount, 0))}
                 </td>
                 <td />
+                {editable && <td />}
               </tr>
             </tfoot>
           )}
         </table>
       </div>
     </div>
+  )
+}
+
+function ExpenseFormModal({ onClose }: { onClose: () => void }) {
+  const addExpense = useStore(s => s.addExpense)
+  const [f, setF] = useState({
+    description: '', vendor: '', amount: '', currency: 'USD' as Currency,
+    category: 'other' as ExpenseCategory, date: new Date().toISOString().slice(0, 10), paid: false,
+  })
+
+  function handleSave() {
+    if (!f.description || !f.amount) return
+    addExpense({
+      description: f.description, vendor: f.vendor, amount: Number(f.amount),
+      currency: f.currency, category: f.category, date: f.date, paid: f.paid,
+    })
+    onClose()
+  }
+
+  return (
+    <Modal title="Add an expense" onClose={onClose} footer={
+      <>
+        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+        <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Add expense</button>
+      </>
+    }>
+      <FormField label="Description"><input type="text" className={inputClass} value={f.description} onChange={e => setF(p => ({...p, description: e.target.value}))} /></FormField>
+      <FormField label="Vendor"><input type="text" className={inputClass} value={f.vendor} onChange={e => setF(p => ({...p, vendor: e.target.value}))} /></FormField>
+      <FormField label="Amount"><input type="number" className={inputClass} value={f.amount} onChange={e => setF(p => ({...p, amount: e.target.value}))} /></FormField>
+      <FormField label="Currency">
+        <select className={selectClass} value={f.currency} onChange={e => setF(p => ({...p, currency: e.target.value as Currency}))}>
+          <option value="USD">USD</option>
+          <option value="GBP">GBP</option>
+          <option value="EUR">EUR</option>
+        </select>
+      </FormField>
+      <FormField label="Category">
+        <select className={selectClass} value={f.category} onChange={e => setF(p => ({...p, category: e.target.value as ExpenseCategory}))}>
+          {Object.entries(CAT_LABELS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+        </select>
+      </FormField>
+      <FormField label="Date"><input type="date" className={inputClass} value={f.date} onChange={e => setF(p => ({...p, date: e.target.value}))} /></FormField>
+      <FormField label="Paid">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={f.paid} onChange={e => setF(p => ({...p, paid: e.target.checked}))} className="rounded" />
+          Already paid
+        </label>
+      </FormField>
+    </Modal>
   )
 }
 
