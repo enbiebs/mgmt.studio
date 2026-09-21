@@ -8,9 +8,17 @@
 //  already reads (client.tour.shows, client.songs.albums, etc.).
 // ──────────────────────────────────────────────────────────
 
-import type { Client } from '@/types'
+import type { Client, MainSection } from '@/types'
 
 export type CalendarEventDomain = 'show' | 'release' | 'post' | 'invoice' | 'contract' | 'project'
+
+// Which section's access grant gates seeing each domain's events — shared
+// by CalendarView.tsx and any other consumer that needs to permission-check
+// getCalendarEvents (e.g. ClientCard.tsx's dashboard stats).
+export const DOMAIN_SECTION: Record<CalendarEventDomain, MainSection> = {
+  show: 'tour', release: 'songs', post: 'content',
+  invoice: 'finance', contract: 'legal', project: 'projects',
+}
 
 export interface CalendarEvent {
   id: string

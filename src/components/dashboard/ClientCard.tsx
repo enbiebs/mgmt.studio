@@ -2,7 +2,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import { Badge } from '@/components/ui/Badge'
-import { fmt, initials } from '@/lib/utils'
+import { fmt, initials, today } from '@/lib/utils'
+import { getCalendarEvents, DOMAIN_SECTION } from '@/lib/calendar'
+import type { CalendarEventDomain } from '@/lib/calendar'
 import type { Client } from '@/types'
 
 export function ClientCard({ client: c }: { client: Client }) {
@@ -10,6 +12,7 @@ export function ClientCard({ client: c }: { client: Client }) {
   // requires role = 'manager'), unlike everything else which is scoped
   // per-section — so this checks role directly, not a section grant.
   const isManager = useStore(s => s.role === 'manager')
+  const hasAccess = useStore(s => s.hasAccess)
   const { openClient, openModal, deleteClient } = useStore()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -27,10 +30,19 @@ export function ClientCard({ client: c }: { client: Client }) {
   const finished      = tracks.filter(t => t.stage === 'done' || t.stage === 'master').length
   const usd           = c.business.royalties.streams.filter(s => s.currency === 'USD').reduce((a, b) => a + b.amount, 0)
   const gbp           = c.business.royalties.streams.filter(s => s.currency === 'GBP').reduce((a, b) => a + b.amount, 0)
-  const upcomingShows = c.tour.shows.filter(s => new Date(s.date) >= new Date()).length
   const pendingSplit  = c.business.banking.deposits.filter(d => !d.done).length
   const regIssues     = c.business.catalog.works.filter(w => w.bmi === 'warn' || w.sx === 'warn' || w.ppl === 'warn').length
   const royStr        = [usd > 0 ? fmt(usd, 'USD') : '', gbp > 0 ? fmt(gbp, 'GBP') : ''].filter(Boolean).join(' · ') || '—'
+
+  // "Upcoming" pulls from the same unified calendar aggregator the
+  // Calendar tab uses (src/lib/calendar.ts) instead of a one-off inline
+  // date filter, so it covers everything forward-looking — not just
+  // shows — and respects the same per-domain access grants.
+  const canSeeDomain = (domain: CalendarEventDomain) => hasAccess(DOMAIN_SECTION[domain], c.id)
+  const upcomingEvents = getCalendarEvents(c, canSeeDomain).filter(e => e.date >= today())
+  const upcoming       = upcomingEvents.length
+  const upcomingShows  = upcomingEvents.filter(e => e.domain === 'show').length
+  const upcomingOther  = upcoming - upcomingShows
 
   return (
     <div
@@ -87,16 +99,16 @@ export function ClientCard({ client: c }: { client: Client }) {
       <div className="grid grid-cols-2 gap-3.5">
         <StatBlock label="Songs" value={String(tracks.length)} sub={`${finished} done / mastered`} />
         <StatBlock label="Royalties Owed" value={royStr} sub={`${c.business.royalties.streams.length} streams`} smallValue />
-        <StatBlock label="Upcoming Shows" value={String(upcomingShows)} sub={`${c.tour.shows.length} total`} />
+        <StatBlock label="Upcoming" value={String(upcoming)} sub={upcomingOther > 0 ? `${upcomingShows} shows, ${upcomingOther} other` : `${upcomingShows} shows`} />
         <StatBlock label="Catalog" value={String(c.business.catalog.works.length)} sub="registered works" />
       </div>
 
       {/* ── Footer ── */}
       <div className="flex items-center gap-1.5 mt-4 pt-3.5 border-t border-gray-100">
-        {upcomingShows > 0 && <Badge variant="green">{upcomingShows} upcoming</Badge>}
-        {pendingSplit   > 0 && <Badge variant="amber">{pendingSplit} to split</Badge>}
-        {regIssues      > 0 && <Badge variant="red">{regIssues} reg issues</Badge>}
-        {!upcomingShows && !pendingSplit && !regIssues && <Badge variant="gray">All clear</Badge>}
+        {upcoming     > 0 && <Badge variant="green">{upcoming} upcoming</Badge>}
+        {pendingSplit > 0 && <Badge variant="amber">{pendingSplit} to split</Badge>}
+        {regIssues    > 0 && <Badge variant="red">{regIssues} reg issues</Badge>}
+        {!upcoming && !pendingSplit && !regIssues && <Badge variant="gray">All clear</Badge>}
         <button
           className="ml-auto text-sm font-medium px-2.5 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
           onClick={e => { e.stopPropagation(); openClient(c.id) }}

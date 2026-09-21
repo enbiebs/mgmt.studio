@@ -10,17 +10,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { calendarDays, toDateStr, today, MONTH_NAMES, DOW_SHORT } from '@/lib/utils'
-import { getCalendarEvents, CALENDAR_DOMAIN_LABEL, CALENDAR_DOMAIN_STYLE } from '@/lib/calendar'
+import { getCalendarEvents, CALENDAR_DOMAIN_LABEL, CALENDAR_DOMAIN_STYLE, DOMAIN_SECTION } from '@/lib/calendar'
 import type { CalendarEvent, CalendarEventDomain } from '@/lib/calendar'
 import type { MainSection } from '@/types'
 import { AddShowModal } from '@/components/tour/TourView'
 import { PostModal } from '@/components/content/ManageView'
 import { AddProjectModal } from '@/components/manager/ProjectsView'
 
-const DOMAIN_SECTION: Record<CalendarEventDomain, MainSection> = {
-  show: 'tour', release: 'songs', post: 'content',
-  invoice: 'finance', contract: 'legal', project: 'projects',
-}
 const ALL_DOMAINS: CalendarEventDomain[] = ['show', 'release', 'post', 'invoice', 'contract', 'project']
 
 // Quick-add on the calendar grid itself only covers the three record types
