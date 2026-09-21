@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { MONTH_NAMES, MONTH_SHORT } from '@/lib/utils'
+import { STATUS_CONFIG as INVOICE_STATUS_CONFIG, isOverdue } from '@/components/business/InvoicesView'
 import type { Currency, Show } from '@/types'
 
 export function TourView() {
@@ -298,53 +299,124 @@ export function AddShowModal({ defaultDate, onClose }: { defaultDate?: string; o
 // ── Show financials ─────────────────────────────────────────
 function ShowFinancials({ show, editable, onViewOffer }: { show: Show; editable: boolean; onViewOffer: () => void }) {
   const updateShowFinancials = useStore(s => s.updateShowFinancials)
+  const generateInvoiceFromShow = useStore(s => s.generateInvoiceFromShow)
+  const invoices = useStore(s => s.getClient()?.finance?.invoices ?? [])
+  const setSection = useStore(s => s.setSection)
+  const setBizSub = useStore(s => s.setBizSub)
   const [guarantee, setGuarantee] = useState(String(show.guarantee ?? ''))
   const [deposit, setDeposit] = useState(String(show.deposit ?? ''))
   const [currency, setCurrency] = useState<Currency>(show.currency ?? 'USD')
+  const [viaAgency, setViaAgency] = useState(show.viaAgency ?? false)
+  const [agencyName, setAgencyName] = useState(show.agencyName ?? '')
+  const [agencyPct, setAgencyPct] = useState(String(show.agencyCommissionPct ?? ''))
+  const [mgmtPct, setMgmtPct] = useState(String(show.managementCommissionPct ?? ''))
 
-  function commit(patch: { guarantee?: number; deposit?: number; currency?: Currency }) {
+  function commit(patch: Parameters<typeof updateShowFinancials>[1]) {
     updateShowFinancials(show.id, {
       guarantee: guarantee ? Number(guarantee) : undefined,
       deposit: deposit ? Number(deposit) : undefined,
-      currency,
+      currency, viaAgency,
+      agencyName: viaAgency ? (agencyName || undefined) : undefined,
+      agencyCommissionPct: viaAgency && agencyPct ? Number(agencyPct) : undefined,
+      managementCommissionPct: viaAgency && mgmtPct ? Number(mgmtPct) : undefined,
       ...patch,
     })
   }
 
   if (!editable && !show.guarantee && !show.deposit) return null
 
+  const linkedInvoice = show.invoiceId ? invoices.find(i => i.id === show.invoiceId) : undefined
+  const netExpected = show.guarantee != null
+    ? show.guarantee * (1 - (show.viaAgency ? (show.agencyCommissionPct ?? 0) : 0) / 100 - (show.viaAgency ? (show.managementCommissionPct ?? 0) : 0) / 100)
+    : undefined
+
+  function viewInvoice() {
+    setSection('finance')
+    setBizSub('invoices')
+  }
+
   return (
     <div className="border-t border-gray-100 pt-4 mb-4">
       <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Financials</div>
       {editable ? (
-        <div className="grid grid-cols-3 gap-3 mb-2">
-          <FormField label="Guarantee">
-            <input type="number" className={inputClass} value={guarantee}
-              onChange={e => setGuarantee(e.target.value)}
-              onBlur={() => commit({ guarantee: guarantee ? Number(guarantee) : undefined })} />
-          </FormField>
-          <FormField label="Deposit">
-            <input type="number" className={inputClass} value={deposit}
-              onChange={e => setDeposit(e.target.value)}
-              onBlur={() => commit({ deposit: deposit ? Number(deposit) : undefined })} />
-          </FormField>
-          <FormField label="Currency">
-            <select className={selectClass} value={currency}
-              onChange={e => { const c = e.target.value as Currency; setCurrency(c); commit({ currency: c }) }}>
-              <option value="USD">USD</option>
-              <option value="GBP">GBP</option>
-              <option value="EUR">EUR</option>
-            </select>
-          </FormField>
-        </div>
+        <>
+          <div className="grid grid-cols-3 gap-3 mb-2">
+            <FormField label="Guarantee">
+              <input type="number" className={inputClass} value={guarantee}
+                onChange={e => setGuarantee(e.target.value)}
+                onBlur={() => commit({ guarantee: guarantee ? Number(guarantee) : undefined })} />
+            </FormField>
+            <FormField label="Deposit">
+              <input type="number" className={inputClass} value={deposit}
+                onChange={e => setDeposit(e.target.value)}
+                onBlur={() => commit({ deposit: deposit ? Number(deposit) : undefined })} />
+            </FormField>
+            <FormField label="Currency">
+              <select className={selectClass} value={currency}
+                onChange={e => { const c = e.target.value as Currency; setCurrency(c); commit({ currency: c }) }}>
+                <option value="USD">USD</option>
+                <option value="GBP">GBP</option>
+                <option value="EUR">EUR</option>
+              </select>
+            </FormField>
+          </div>
+          <label className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+            <input type="checkbox" checked={viaAgency} className="rounded"
+              onChange={e => { const v = e.target.checked; setViaAgency(v); commit({ viaAgency: v }) }} />
+            Booked via agency
+          </label>
+          {viaAgency && (
+            <div className="grid grid-cols-3 gap-3 mb-2">
+              <FormField label="Agency name">
+                <input type="text" className={inputClass} value={agencyName}
+                  onChange={e => setAgencyName(e.target.value)}
+                  onBlur={() => commit({ agencyName: agencyName || undefined })} />
+              </FormField>
+              <FormField label="Agency commission (%)">
+                <input type="number" className={inputClass} value={agencyPct}
+                  onChange={e => setAgencyPct(e.target.value)}
+                  onBlur={() => commit({ agencyCommissionPct: agencyPct ? Number(agencyPct) : undefined })} />
+              </FormField>
+              <FormField label="Mgmt commission (%)">
+                <input type="number" className={inputClass} value={mgmtPct}
+                  onChange={e => setMgmtPct(e.target.value)}
+                  onBlur={() => commit({ managementCommissionPct: mgmtPct ? Number(mgmtPct) : undefined })} />
+              </FormField>
+            </div>
+          )}
+        </>
       ) : (
         <div className="flex gap-4 text-sm mb-2">
           {show.guarantee != null && <span><span className="text-gray-400">Guarantee</span> <span className="font-semibold">{show.guarantee} {show.currency ?? 'USD'}</span></span>}
           {show.deposit != null && <span><span className="text-gray-400">Deposit</span> <span className="font-semibold">{show.deposit} {show.currency ?? 'USD'}</span></span>}
         </div>
       )}
+
+      {netExpected != null && (
+        <div className="text-sm mb-2">
+          <span className="text-gray-400">Net expected</span>{' '}
+          <span className="font-semibold">{netExpected.toFixed(2)} {show.currency ?? 'USD'}</span>
+          {show.viaAgency && <span className="text-gray-400"> — via {show.agencyName || 'agency'}, after commission</span>}
+        </div>
+      )}
+
+      {show.guarantee != null && (
+        linkedInvoice ? (
+          <button onClick={viewInvoice} className="flex items-center gap-1.5 text-xs text-blue-500 hover:text-blue-600 mb-1">
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${INVOICE_STATUS_CONFIG[isOverdue(linkedInvoice) ? 'overdue' : linkedInvoice.status].bg} ${INVOICE_STATUS_CONFIG[isOverdue(linkedInvoice) ? 'overdue' : linkedInvoice.status].color}`}>
+              {INVOICE_STATUS_CONFIG[isOverdue(linkedInvoice) ? 'overdue' : linkedInvoice.status].label}
+            </span>
+            View invoice →
+          </button>
+        ) : editable && (
+          <button onClick={() => generateInvoiceFromShow(show.id)} className="text-xs text-blue-500 hover:text-blue-600 mb-1">
+            Generate invoice
+          </button>
+        )
+      )}
+
       {show.tourOfferId && (
-        <button onClick={onViewOffer} className="text-xs text-blue-500 hover:text-blue-600">
+        <button onClick={onViewOffer} className="text-xs text-blue-500 hover:text-blue-600 block">
           From offer — view in Offers →
         </button>
       )}

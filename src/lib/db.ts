@@ -324,12 +324,16 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
 
     const cShows = (shows.data ?? [])
       .filter((s: { client_id: string }) => s.client_id === c.id)
-      .map((s: { id: string; date: string; city: string; venue: string; time: string; status: string; notes?: string; guarantee?: number; deposit?: number; currency?: string; tour_offer_id?: string }) => ({
+      .map((s: { id: string; date: string; city: string; venue: string; time: string; status: string; notes?: string; guarantee?: number; deposit?: number; currency?: string; tour_offer_id?: string; via_agency?: boolean; agency_name?: string; agency_commission_pct?: number; management_commission_pct?: number; invoice_id?: string }) => ({
         id: s.id, date: s.date, city: s.city,
         venue: s.venue, time: s.time,
         status: s.status as Show['status'], notes: s.notes,
         guarantee: s.guarantee ?? undefined, deposit: s.deposit ?? undefined,
         currency: s.currency as Show['currency'], tourOfferId: s.tour_offer_id ?? undefined,
+        viaAgency: s.via_agency ?? undefined, agencyName: s.agency_name ?? undefined,
+        agencyCommissionPct: s.agency_commission_pct ?? undefined,
+        managementCommissionPct: s.management_commission_pct ?? undefined,
+        invoiceId: s.invoice_id ?? undefined,
       }))
 
     const cShowIds = cShows.map((s: { id: string }) => s.id)
@@ -496,12 +500,15 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
 
     const cOffers = (tourOffers.data ?? [])
       .filter((o: { client_id: string }) => o.client_id === c.id)
-      .map((o: { id: string; venue: string; city: string; country: string; date: string; promoter: string; guarantee: number; door?: number; buyout?: number; status: string; notes?: string; settled_at?: string; net_payout?: number; show_id?: string }) => ({
+      .map((o: { id: string; venue: string; city: string; country: string; date: string; promoter: string; guarantee: number; door?: number; buyout?: number; status: string; notes?: string; settled_at?: string; net_payout?: number; show_id?: string; via_agency?: boolean; agency_name?: string; agency_commission_pct?: number; management_commission_pct?: number }) => ({
         id: o.id, venue: o.venue, city: o.city, country: o.country,
         date: o.date, promoter: o.promoter, guarantee: o.guarantee,
         door: o.door, buyout: o.buyout, status: o.status as TourOffer['status'],
         notes: o.notes, settledAt: o.settled_at, netPayout: o.net_payout,
         showId: o.show_id ?? undefined,
+        viaAgency: o.via_agency ?? undefined, agencyName: o.agency_name ?? undefined,
+        agencyCommissionPct: o.agency_commission_pct ?? undefined,
+        managementCommissionPct: o.management_commission_pct ?? undefined,
       }))
 
     const cContracts = (contracts.data ?? [])
@@ -895,6 +902,10 @@ export async function upsertShow(show: Show, clientId: string) {
     status: show.status, notes: show.notes ?? null,
     guarantee: show.guarantee ?? null, deposit: show.deposit ?? null,
     currency: show.currency ?? null, tour_offer_id: show.tourOfferId ?? null,
+    via_agency: show.viaAgency ?? null, agency_name: show.agencyName ?? null,
+    agency_commission_pct: show.agencyCommissionPct ?? null,
+    management_commission_pct: show.managementCommissionPct ?? null,
+    invoice_id: show.invoiceId ?? null,
     updated_at: new Date().toISOString(),
   })
 }
@@ -915,6 +926,9 @@ export async function upsertOffer(offer: TourOffer, clientId: string) {
     status: offer.status, notes: offer.notes ?? null,
     settled_at: offer.settledAt ?? null, net_payout: offer.netPayout ?? null,
     show_id: offer.showId ?? null,
+    via_agency: offer.viaAgency ?? null, agency_name: offer.agencyName ?? null,
+    agency_commission_pct: offer.agencyCommissionPct ?? null,
+    management_commission_pct: offer.managementCommissionPct ?? null,
   })
 }
 

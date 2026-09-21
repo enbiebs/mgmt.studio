@@ -10,7 +10,7 @@ import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal
 import { addDays } from '@/lib/utils'
 import type { Invoice, InvoiceStatus, Currency, RevenueStream, BankTransaction } from '@/types'
 
-const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string; bg: string }> = {
+export const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string; bg: string }> = {
   draft:   { label: 'Draft',   color: 'text-gray-500',  bg: 'bg-gray-100'  },
   sent:    { label: 'Sent',    color: 'text-blue-700',  bg: 'bg-blue-50'   },
   paid:    { label: 'Paid',    color: 'text-green-700', bg: 'bg-green-50'  },
@@ -34,7 +34,7 @@ function fmtDate(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function isOverdue(inv: Invoice) {
+export function isOverdue(inv: Invoice) {
   return inv.status === 'sent' && inv.dueDate < new Date().toISOString().slice(0, 10)
 }
 

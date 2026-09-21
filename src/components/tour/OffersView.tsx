@@ -116,6 +116,9 @@ function OfferFormModal({ initial, onClose }: { initial: TourOffer | null; onClo
     date: initial?.date ?? '', promoter: initial?.promoter ?? '',
     guarantee: String(initial?.guarantee ?? ''), door: String(initial?.door ?? ''), buyout: String(initial?.buyout ?? ''),
     notes: initial?.notes ?? '',
+    viaAgency: initial?.viaAgency ?? false, agencyName: initial?.agencyName ?? '',
+    agencyCommissionPct: String(initial?.agencyCommissionPct ?? ''),
+    managementCommissionPct: String(initial?.managementCommissionPct ?? ''),
   })
 
   function handleSave() {
@@ -124,6 +127,9 @@ function OfferFormModal({ initial, onClose }: { initial: TourOffer | null; onClo
       venue: f.venue, city: f.city, country: f.country, date: f.date, promoter: f.promoter,
       guarantee: Number(f.guarantee), door: f.door ? Number(f.door) : undefined, buyout: f.buyout ? Number(f.buyout) : undefined,
       notes: f.notes || undefined,
+      viaAgency: f.viaAgency, agencyName: f.viaAgency ? (f.agencyName || undefined) : undefined,
+      agencyCommissionPct: f.viaAgency && f.agencyCommissionPct ? Number(f.agencyCommissionPct) : undefined,
+      managementCommissionPct: f.viaAgency && f.managementCommissionPct ? Number(f.managementCommissionPct) : undefined,
     }
     if (initial) updateOffer(initial.id, patch)
     else addOffer(patch)
@@ -182,6 +188,20 @@ function OfferFormModal({ initial, onClose }: { initial: TourOffer | null; onClo
       <FormField label="Door split (%)"><input type="number" className={inputClass} value={f.door} onChange={e => setF(p => ({...p, door: e.target.value}))} /></FormField>
       <FormField label="Buyout ($)"><input type="number" className={inputClass} value={f.buyout} onChange={e => setF(p => ({...p, buyout: e.target.value}))} /></FormField>
       <FormField label="Notes"><input type="text" className={inputClass} value={f.notes} onChange={e => setF(p => ({...p, notes: e.target.value}))} /></FormField>
+      <FormField label="Payment flow">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={f.viaAgency} onChange={e => setF(p => ({...p, viaAgency: e.target.checked}))} className="rounded" />
+          Booked via agency
+        </label>
+      </FormField>
+      {f.viaAgency && (
+        <>
+          <FormField label="Agency name"><input type="text" className={inputClass} value={f.agencyName} onChange={e => setF(p => ({...p, agencyName: e.target.value}))} /></FormField>
+          <FormField label="Agency commission (%)"><input type="number" className={inputClass} value={f.agencyCommissionPct} onChange={e => setF(p => ({...p, agencyCommissionPct: e.target.value}))} /></FormField>
+          <FormField label="Management commission (%)"><input type="number" className={inputClass} value={f.managementCommissionPct} onChange={e => setF(p => ({...p, managementCommissionPct: e.target.value}))} /></FormField>
+          <div className="text-[11px] text-gray-400 -mt-2">Only deducted from the expected receivable when booked via agency — leave blank if not taken at the agency level.</div>
+        </>
+      )}
     </Modal>
   )
 }

@@ -336,11 +336,13 @@ interface StudioState {
   // ── Show actions ──
   addShow: (date: string, city: string, venue: string, time: string) => void
   updateShowStatus: (showId: string, status: ShowStatus) => void
-  updateShowFinancials: (showId: string, patch: { guarantee?: number; deposit?: number; currency?: Currency }) => void
+  updateShowFinancials: (showId: string, patch: { guarantee?: number; deposit?: number; currency?: Currency; viaAgency?: boolean; agencyName?: string; agencyCommissionPct?: number; managementCommissionPct?: number }) => void
+  /** No-ops if the show has no guarantee yet, or already has a generated invoice. */
+  generateInvoiceFromShow: (showId: string) => void
   deleteShow: (showId: string) => void
 
   // ── Tour offers ──
-  addOffer: (patch: { venue: string; city: string; country: string; date: string; promoter: string; guarantee: number; door?: number; buyout?: number; notes?: string }) => void
+  addOffer: (patch: { venue: string; city: string; country: string; date: string; promoter: string; guarantee: number; door?: number; buyout?: number; notes?: string; viaAgency?: boolean; agencyName?: string; agencyCommissionPct?: number; managementCommissionPct?: number }) => void
   /** Editing an offer's status into 'confirmed' also creates the matching Show. */
   updateOffer: (offerId: string, patch: Partial<Omit<TourOffer, 'id'>>) => void
   deleteOffer: (offerId: string) => void
@@ -1823,6 +1825,55 @@ export const useStore = create<StudioState>((set, get) => ({
     if (clientId && updatedShow) upsertShow(updatedShow, clientId).catch(console.error)
   },
 
+  generateInvoiceFromShow: (showId) => {
+    const { data, clientId, workspaceId } = get()
+    const client = data.clients.find(c => c.id === clientId)
+    const show = client?.tour.shows.find(s => s.id === showId)
+    if (!client || !show || !show.guarantee || show.invoiceId) return
+
+    const agencyPct = show.viaAgency ? (show.agencyCommissionPct ?? 0) : 0
+    const mgmtPct = show.viaAgency ? (show.managementCommissionPct ?? 0) : 0
+    const net = show.guarantee * (1 - agencyPct / 100 - mgmtPct / 100)
+
+    const linkedOffer = show.tourOfferId ? client.agentData?.offers.find(o => o.id === show.tourOfferId) : undefined
+    const to = show.viaAgency && show.agencyName ? show.agencyName : (linkedOffer?.promoter ?? show.venue)
+
+    const dueDate = new Date(show.date + 'T00:00:00')
+    dueDate.setDate(dueDate.getDate() + 30)
+
+    const invoice: Invoice = {
+      id: 'inv-' + uid(),
+      number: 'INV-' + Date.now().toString().slice(-6),
+      to, category: 'touring', status: 'draft',
+      issuedDate: new Date().toISOString().slice(0, 10),
+      dueDate: dueDate.toISOString().slice(0, 10),
+      items: [{ description: `Guarantee — ${show.venue}, ${show.city} (${show.date})`, quantity: 1, rate: net }],
+      currency: show.currency ?? 'USD',
+    }
+    const updatedShow: Show = { ...show, invoiceId: invoice.id }
+
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          finance: { ...c.finance, invoices: [...(c.finance?.invoices ?? []), invoice] },
+          tour: { ...c.tour, shows: c.tour.shows.map(s => s.id === showId ? updatedShow : s) },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId) {
+      // shows.invoice_id has a real foreign key to invoices — the invoice
+      // must land in the DB first, same ordering fix already used for the
+      // offer→show write.
+      upsertInvoice(invoice, clientId)
+        .then(() => upsertShow(updatedShow, clientId))
+        .catch(console.error)
+    }
+  },
+
   deleteShow: (showId) => {
     const { data, clientId } = get()
     const updated = {
@@ -1869,6 +1920,9 @@ export const useStore = create<StudioState>((set, get) => ({
               id: 'show-' + uid(), date: updatedOffer.date, city: updatedOffer.city,
               venue: updatedOffer.venue, time: '20:00', status: 'confirmed',
               guarantee: updatedOffer.guarantee, currency: 'USD', tourOfferId: updatedOffer.id,
+              viaAgency: updatedOffer.viaAgency, agencyName: updatedOffer.agencyName,
+              agencyCommissionPct: updatedOffer.agencyCommissionPct,
+              managementCommissionPct: updatedOffer.managementCommissionPct,
             }
             updatedOffer = { ...updatedOffer, showId: newShow.id }
           }

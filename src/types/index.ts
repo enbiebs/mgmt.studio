@@ -204,6 +204,11 @@ export interface Show {
   deposit?: number
   currency?: Currency
   tourOfferId?: string   // → TourOffer this show was confirmed from, if any
+  viaAgency?: boolean               // booked through a booking agency, not directly
+  agencyName?: string
+  agencyCommissionPct?: number      // agency's cut, only deducted when viaAgency
+  managementCommissionPct?: number  // management's cut, only deducted when viaAgency
+  invoiceId?: string      // → Invoice generated to track this show's receivable, if any
 }
 
 export interface Post {
@@ -728,6 +733,10 @@ export interface TourOffer {
   settledAt?: string
   netPayout?: number        // after splits
   showId?:    string        // → Show created when this offer was confirmed
+  viaAgency?: boolean               // booked through a booking agency, not directly
+  agencyName?: string
+  agencyCommissionPct?: number      // agency's cut, only deducted when viaAgency
+  managementCommissionPct?: number  // management's cut, only deducted when viaAgency
 }
 
 // ── Legal / Contracts ───────────────────────────────────────
