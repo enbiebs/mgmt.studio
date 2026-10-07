@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import { Badge } from '@/components/ui/Badge'
 import { fmt, initials, today } from '@/lib/utils'
-import { getCalendarEvents, DOMAIN_SECTION } from '@/lib/calendar'
+import { getCalendarEvents, canSeeCalendarDomain } from '@/lib/calendar'
 import type { CalendarEventDomain } from '@/lib/calendar'
 import type { Client } from '@/types'
 
@@ -13,6 +13,7 @@ export function ClientCard({ client: c }: { client: Client }) {
   // per-section — so this checks role directly, not a section grant.
   const isManager = useStore(s => s.role === 'manager')
   const hasAccess = useStore(s => s.hasAccess)
+  const role = useStore(s => s.role)
   const { openClient, openModal, deleteClient } = useStore()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -38,7 +39,7 @@ export function ClientCard({ client: c }: { client: Client }) {
   // Calendar tab uses (src/lib/calendar.ts) instead of a one-off inline
   // date filter, so it covers everything forward-looking — not just
   // shows — and respects the same per-domain access grants.
-  const canSeeDomain = (domain: CalendarEventDomain) => hasAccess(DOMAIN_SECTION[domain], c.id)
+  const canSeeDomain = (domain: CalendarEventDomain) => canSeeCalendarDomain(domain, c.id, role, hasAccess)
   const upcomingEvents = getCalendarEvents(c, canSeeDomain).filter(e => e.date >= today())
   const upcoming       = upcomingEvents.length
   const upcomingShows  = upcomingEvents.filter(e => e.domain === 'show').length

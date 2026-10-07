@@ -18,7 +18,9 @@ export function Subnav() {
     setSongsSub, setContentSub, setBizSub, setTourSub, setAnalyticsSub, setFandomSub, setLegalSub,
   } = useStore()
   const client = useStore(s => s.getClient())
-  const subs = SUBNAV[section] ?? []
+  const role = useStore(s => s.role)
+  // Expenses/bills (the "Payments" tab) are management-side only.
+  const subs = (SUBNAV[section] ?? []).filter(([, key]) => !(role === 'artist' && key === 'payments'))
 
   function isActive(key: string) {
     if (section === 'songs')     return songsSub === key

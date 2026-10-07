@@ -10,14 +10,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { calendarDays, toDateStr, today, MONTH_NAMES, DOW_SHORT } from '@/lib/utils'
-import { getCalendarEvents, CALENDAR_DOMAIN_LABEL, CALENDAR_DOMAIN_STYLE, DOMAIN_SECTION } from '@/lib/calendar'
+import { getCalendarEvents, canSeeCalendarDomain, CALENDAR_DOMAIN_LABEL, CALENDAR_DOMAIN_STYLE } from '@/lib/calendar'
 import type { CalendarEvent, CalendarEventDomain } from '@/lib/calendar'
 import type { MainSection } from '@/types'
 import { AddShowModal } from '@/components/tour/TourView'
 import { PostModal } from '@/components/content/ManageView'
 import { AddProjectModal } from '@/components/manager/ProjectsView'
 
-const ALL_DOMAINS: CalendarEventDomain[] = ['show', 'release', 'post', 'invoice', 'contract', 'project']
+const ALL_DOMAINS: CalendarEventDomain[] = ['show', 'release', 'post', 'invoice', 'contract', 'project', 'bill']
 
 // Quick-add on the calendar grid itself only covers the three record types
 // that have few enough required fields to create with a single lightweight
@@ -35,6 +35,7 @@ const QUICK_ADD_TYPES: QuickAddType[] = ['show', 'post', 'project']
 export function CalendarView() {
   const client = useStore(s => s.getClient())
   const hasAccess = useStore(s => s.hasAccess)
+  const role = useStore(s => s.role)
   const canEdit = useStore(s => s.canEdit)
   const canEditAny = canEdit('tour') || canEdit('content') || canEdit('projects')
   const { calYear, calMonth, calPrev, calNext, calToday } = useStore()
@@ -58,7 +59,7 @@ export function CalendarView() {
 
   if (!client) return null
 
-  const canSee = (domain: CalendarEventDomain) => hasAccess(DOMAIN_SECTION[domain], client.id)
+  const canSee = (domain: CalendarEventDomain) => canSeeCalendarDomain(domain, client.id, role, hasAccess)
   const creatableTypes = QUICK_ADD_TYPES.filter(t => canEdit(QUICK_ADD_CONFIG[t].section))
   const events = getCalendarEvents(client, canSee).filter(e => activeDomains.has(e.domain))
   const days = calendarDays(calYear, calMonth)
@@ -88,6 +89,8 @@ export function CalendarView() {
       setSection('legal')
     } else if (e.domain === 'project') {
       setSection('projects')
+    } else if (e.domain === 'bill') {
+      setSection('finance'); setBizSub('payments')
     }
   }
 

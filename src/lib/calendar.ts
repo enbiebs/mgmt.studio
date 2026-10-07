@@ -8,16 +8,32 @@
 //  already reads (client.tour.shows, client.songs.albums, etc.).
 // ──────────────────────────────────────────────────────────
 
-import type { Client, MainSection } from '@/types'
+import type { Client, MainSection, UserRole } from '@/types'
 
-export type CalendarEventDomain = 'show' | 'release' | 'post' | 'invoice' | 'contract' | 'project'
+export type CalendarEventDomain = 'show' | 'release' | 'post' | 'invoice' | 'contract' | 'project' | 'bill'
 
 // Which section's access grant gates seeing each domain's events — shared
 // by CalendarView.tsx and any other consumer that needs to permission-check
 // getCalendarEvents (e.g. ClientCard.tsx's dashboard stats).
 export const DOMAIN_SECTION: Record<CalendarEventDomain, MainSection> = {
   show: 'tour', release: 'songs', post: 'content',
-  invoice: 'finance', contract: 'legal', project: 'projects',
+  invoice: 'finance', contract: 'legal', project: 'projects', bill: 'finance',
+}
+
+// Bills live in Finance, which the artist's own login can otherwise view -
+// but bills are management-side only, so the artist never sees their dates.
+const MANAGEMENT_ONLY_DOMAINS: CalendarEventDomain[] = ['bill']
+
+// The one place that decides whether a viewer may see a domain's events;
+// CalendarView and the roster cards both go through it.
+export function canSeeCalendarDomain(
+  domain: CalendarEventDomain,
+  clientId: string,
+  role: UserRole,
+  hasAccess: (section: MainSection, clientId?: string) => boolean,
+): boolean {
+  if (role === 'artist' && MANAGEMENT_ONLY_DOMAINS.includes(domain)) return false
+  return hasAccess(DOMAIN_SECTION[domain], clientId)
 }
 
 export interface CalendarEvent {
@@ -76,12 +92,23 @@ export function getCalendarEvents(
     }
   }
 
+  if (canSee('bill')) {
+    for (const e of client.finance.expenses) {
+      if (!e.dueDate || e.paid) continue
+      events.push({
+        id: `bill-${e.id}`, date: e.dueDate, domain: 'bill',
+        title: `Bill due — ${e.vendor}`,
+        subtitle: `${e.currency} ${e.amount.toLocaleString()}${e.billNumber ? ` · ${e.billNumber}` : ''}`,
+      })
+    }
+  }
+
   return events
 }
 
 export const CALENDAR_DOMAIN_LABEL: Record<CalendarEventDomain, string> = {
   show: 'Shows', release: 'Releases', post: 'Posts',
-  invoice: 'Invoices', contract: 'Contracts', project: 'Projects',
+  invoice: 'Invoices', contract: 'Contracts', project: 'Projects', bill: 'Bills',
 }
 
 export const CALENDAR_DOMAIN_STYLE: Record<CalendarEventDomain, string> = {
@@ -91,4 +118,5 @@ export const CALENDAR_DOMAIN_STYLE: Record<CalendarEventDomain, string> = {
   invoice:  'bg-amber-50 border-amber-400 text-amber-700',
   contract: 'bg-red-50 border-red-400 text-red-600',
   project:  'bg-green-50 border-green-400 text-green-700',
+  bill:     'bg-orange-50 border-orange-400 text-orange-700',
 }
