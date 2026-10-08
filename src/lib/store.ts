@@ -22,7 +22,7 @@ import type {
   CrewMember, ShowAdvance, TravelItem, Person, PersonActivity, Currency,
   CatalogWork, RegStatus, Invoice, InvoiceLineItem, InvoiceStatus, RevenueStream,
   LegalTemplate, LegalTemplateClause, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
-  ReleaseType, Venue, TourOffer, Expense, ExpenseCategory,
+  ReleaseType, Venue, TourOffer, Expense, Vendor,
 } from '@/types'
 import { DEMO_DATA } from '@/lib/demo-data'
 import { DEFAULT_LEGAL_TEMPLATES } from '@/lib/legal-templates-demo'
@@ -44,6 +44,7 @@ import {
   upsertShow, deleteShow as dbDeleteShow,
   upsertOffer, deleteOffer as dbDeleteOffer,
   upsertExpense, deleteExpense as dbDeleteExpense,
+  upsertVendor, deleteVendor as dbDeleteVendor,
   upsertVenue, deleteVenue as dbDeleteVenue,
   upsertPost, deletePost as dbDeletePost, replaceAutoPosts,
   upsertDeposit, deleteDeposit as dbDeleteDeposit,
@@ -348,9 +349,14 @@ interface StudioState {
   deleteOffer: (offerId: string) => void
 
   // ── Expenses ──
-  addExpense: (patch: { description: string; vendor: string; amount: number; currency: Currency; category: ExpenseCategory; date: string; paid: boolean }) => void
+  addExpense: (patch: Omit<Expense, 'id'>) => void
   updateExpense: (expenseId: string, patch: Partial<Omit<Expense, 'id'>>) => void
   deleteExpense: (expenseId: string) => void
+  // A confirmed bill: saves the (new or updated) Vendor and the Expense that
+  // points at it - vendor first, since expenses.vendor_id is a foreign key.
+  addBill: (bill: { expense: Omit<Expense, 'id' | 'vendorId'>; vendor: Vendor }) => void
+  updateVendor: (vendorId: string, patch: Partial<Omit<Vendor, 'id'>>) => void
+  deleteVendor: (vendorId: string) => void
 
   // ── Venue library (reusable across shows at the same room) ──
   addVenue: (patch: Omit<Venue, 'id' | 'createdAt'>) => string
@@ -1700,6 +1706,7 @@ export const useStore = create<StudioState>((set, get) => ({
 
   deleteExpense: (expenseId) => {
     const { data, clientId } = get()
+    const removed = data.clients.find(c => c.id === clientId)?.finance?.expenses.find(e => e.id === expenseId)
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId || !c.finance) return c
@@ -1709,6 +1716,77 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     dbDeleteExpense(expenseId).catch(console.error)
+    if (removed?.billFilePath && clientId) {
+      fetch('/api/bills/file', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId, path: removed.billFilePath }),
+      }).catch(console.error)
+    }
+  },
+
+  addBill: ({ expense, vendor }) => {
+    const { data, clientId, workspaceId } = get()
+    const newExpense: Expense = { id: 'exp-' + uid(), ...expense, vendorId: vendor.id }
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId || !c.finance) return c
+        const vendors = c.finance.vendors ?? []
+        const nextVendors = vendors.some(v => v.id === vendor.id)
+          ? vendors.map(v => v.id === vendor.id ? vendor : v)
+          : [...vendors, vendor]
+        return { ...c, finance: { ...c.finance, vendors: nextVendors, expenses: [...c.finance.expenses, newExpense] } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId) {
+      upsertVendor(vendor, clientId).then(() => upsertExpense(newExpense, clientId)).catch(console.error)
+    }
+  },
+
+  updateVendor: (vendorId, patch) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedVendor: Vendor | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId || !c.finance) return c
+        return {
+          ...c,
+          finance: {
+            ...c.finance,
+            vendors: (c.finance.vendors ?? []).map(v => {
+              if (v.id !== vendorId) return v
+              updatedVendor = { ...v, ...patch }
+              return updatedVendor
+            }),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId && clientId && updatedVendor) upsertVendor(updatedVendor, clientId).catch(console.error)
+  },
+
+  deleteVendor: (vendorId) => {
+    const { data, clientId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId || !c.finance) return c
+        return {
+          ...c,
+          finance: {
+            ...c.finance,
+            vendors: (c.finance.vendors ?? []).filter(v => v.id !== vendorId),
+            expenses: c.finance.expenses.map(e => e.vendorId === vendorId ? { ...e, vendorId: undefined } : e),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    dbDeleteVendor(vendorId).catch(console.error)
   },
 
   // ── Release stakeholders ──

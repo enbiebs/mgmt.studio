@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.132.0",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.0",
     "googleapis": "^181.0.0",
@@ -18,6 +19,7 @@
     "react-dom": "19.2.4",
     "react-plaid-link": "^5.0.0",
     "wavesurfer.js": "^7.12.11",
+    "zod": "^4.6.5",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

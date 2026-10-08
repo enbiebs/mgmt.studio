@@ -9,18 +9,12 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { expensesFromTransactions } from '@/lib/bank-rollup'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
+import { BillUploadModal } from './BillUpload'
+import { VendorsPanel } from './VendorsPanel'
+import { CAT_LABELS } from '@/lib/expense-categories'
+import { VENDOR_FIELD_LABEL } from '@/lib/vendors'
+import { today } from '@/lib/utils'
 import type { ExpenseCategory, Currency } from '@/types'
-
-const CAT_LABELS: Record<ExpenseCategory, string> = {
-  travel:     'Travel',
-  recording:  'Recording / Studio',
-  marketing:  'Marketing & PR',
-  legal:      'Legal',
-  management: 'Management',
-  equipment:  'Equipment',
-  meals:      'Meals / Hospitality',
-  other:      'Other',
-}
 
 const CAT_COLORS: Record<ExpenseCategory, string> = {
   travel:     '#f97316',
@@ -41,6 +35,15 @@ function fmtDate(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// Unpaid bills turn amber in the last week before they're due, red once overdue.
+function dueStatus(dueDate: string, paid: boolean): 'overdue' | 'soon' | 'ok' {
+  if (paid) return 'ok'
+  const now = today()
+  if (dueDate < now) return 'overdue'
+  const days = (new Date(dueDate + 'T00:00:00').getTime() - new Date(now + 'T00:00:00').getTime()) / 86_400_000
+  return days <= 7 ? 'soon' : 'ok'
+}
+
 export function PaymentsView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('finance'))
@@ -49,6 +52,7 @@ export function PaymentsView() {
   const [filterCat, setFilterCat] = useState<ExpenseCategory | 'all'>('all')
   const [showUnpaid, setShowUnpaid] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
+  const [billOpen, setBillOpen] = useState(false)
 
   if (!client) return null
   const bankExpenses = expensesFromTransactions(client.business.banking.transactions ?? [])
@@ -59,11 +63,18 @@ export function PaymentsView() {
       <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-400 text-sm">
         No expenses recorded
         {editable && (
-          <button onClick={() => setAddOpen(true)} className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
-            + Add expense
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => setBillOpen(true)} className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+              Upload bill
+            </button>
+            <button onClick={() => setAddOpen(true)} className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+              + Add expense
+            </button>
+          </div>
         )}
         {addOpen && <ExpenseFormModal onClose={() => setAddOpen(false)} />}
+        {billOpen && <BillUploadModal onClose={() => setBillOpen(false)} />}
+        <div className="w-full max-w-3xl px-6"><VendorsPanel editable={editable} /></div>
       </div>
     )
   }
@@ -95,13 +106,17 @@ export function PaymentsView() {
         </div>
       )}
       {editable && (
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-end gap-2 mb-4">
+          <button onClick={() => setBillOpen(true)} className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+            Upload bill
+          </button>
           <button onClick={() => setAddOpen(true)} className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
             + Add expense
           </button>
         </div>
       )}
       {addOpen && <ExpenseFormModal onClose={() => setAddOpen(false)} />}
+      {billOpen && <BillUploadModal onClose={() => setBillOpen(false)} />}
       {/* Summary */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <SCard label="Total Expenses" value={fmt(total)} color="text-gray-800" sub={`${expenses.length} line items`} />
@@ -168,6 +183,7 @@ export function PaymentsView() {
           <thead className="bg-gray-50">
             <tr>
               <th className="text-left px-4 py-2 text-xs text-gray-400 font-medium">Date</th>
+              <th className="text-left px-4 py-2 text-xs text-gray-400 font-medium">Due</th>
               <th className="text-left px-4 py-2 text-xs text-gray-400 font-medium">Description</th>
               <th className="text-left px-4 py-2 text-xs text-gray-400 font-medium">Vendor</th>
               <th className="text-left px-4 py-2 text-xs text-gray-400 font-medium">Category</th>
@@ -178,14 +194,44 @@ export function PaymentsView() {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {sorted.length === 0 && (
-              <tr><td colSpan={7} className="text-center py-8 text-gray-400 text-sm">No expenses</td></tr>
+              <tr><td colSpan={8} className="text-center py-8 text-gray-400 text-sm">No expenses</td></tr>
             )}
             {sorted.map(e => {
               const manual = !e.id.startsWith('bank-')
               return (
               <tr key={e.id} className={`hover:bg-gray-50 ${!e.paid ? 'bg-amber-50/30' : ''}`}>
                 <td className="px-4 py-3 text-xs text-gray-500">{fmtDate(e.date)}</td>
-                <td className="px-4 py-3 font-medium text-sm">{e.description}</td>
+                <td className="px-4 py-3 text-xs whitespace-nowrap">
+                  {e.dueDate ? (() => {
+                    const status = dueStatus(e.dueDate, e.paid)
+                    return (
+                      <span className={status === 'overdue' ? 'text-red-600 font-semibold' : status === 'soon' ? 'text-amber-600 font-medium' : 'text-gray-500'}>
+                        {fmtDate(e.dueDate)}{status === 'overdue' && ' · Overdue'}
+                      </span>
+                    )
+                  })() : <span className="text-gray-300">—</span>}
+                </td>
+                <td className="px-4 py-3 font-medium text-sm">
+                  {e.description}
+                  {e.billFilePath && (
+                    <a
+                      href={`/api/bills/file?clientId=${encodeURIComponent(client.id)}&path=${encodeURIComponent(e.billFilePath)}`}
+                      target="_blank" rel="noreferrer"
+                      className="ml-2 text-[10px] font-semibold text-blue-500 hover:underline"
+                    >
+                      PDF
+                    </a>
+                  )}
+                  {e.vendorFlags && e.vendorFlags.length > 0 && (
+                    <span
+                      title={`Vendor details differed from the saved vendor on this bill: ${e.vendorFlags.map(f => VENDOR_FIELD_LABEL[f]).join(', ')}`}
+                      className="ml-2 px-1.5 py-0.5 rounded bg-red-50 text-red-600 text-[10px] font-semibold"
+                    >
+                      ⚠ Details changed
+                    </span>
+                  )}
+                  {e.billNumber && <div className="text-[10px] font-normal text-gray-400">#{e.billNumber}</div>}
+                </td>
                 <td className="px-4 py-3 text-xs text-gray-500">{e.vendor}</td>
                 <td className="px-4 py-3">
                   <span
@@ -221,7 +267,7 @@ export function PaymentsView() {
           {sorted.length > 0 && (
             <tfoot className="border-t border-gray-200 bg-gray-50">
               <tr>
-                <td colSpan={4} className="px-4 py-2 text-right text-xs font-bold text-gray-500 uppercase tracking-wide">
+                <td colSpan={5} className="px-4 py-2 text-right text-xs font-bold text-gray-500 uppercase tracking-wide">
                   {filterCat === 'all' ? 'Total' : CAT_LABELS[filterCat]}
                 </td>
                 <td className="px-4 py-2 text-right font-bold">
@@ -234,6 +280,8 @@ export function PaymentsView() {
           )}
         </table>
       </div>
+
+      <VendorsPanel editable={editable} />
     </div>
   )
 }
@@ -242,7 +290,7 @@ function ExpenseFormModal({ onClose }: { onClose: () => void }) {
   const addExpense = useStore(s => s.addExpense)
   const [f, setF] = useState({
     description: '', vendor: '', amount: '', currency: 'USD' as Currency,
-    category: 'other' as ExpenseCategory, date: new Date().toISOString().slice(0, 10), paid: false,
+    category: 'other' as ExpenseCategory, date: new Date().toISOString().slice(0, 10), dueDate: '', paid: false,
   })
 
   function handleSave() {
@@ -250,6 +298,7 @@ function ExpenseFormModal({ onClose }: { onClose: () => void }) {
     addExpense({
       description: f.description, vendor: f.vendor, amount: Number(f.amount),
       currency: f.currency, category: f.category, date: f.date, paid: f.paid,
+      dueDate: f.dueDate || undefined,
     })
     onClose()
   }
@@ -277,6 +326,7 @@ function ExpenseFormModal({ onClose }: { onClose: () => void }) {
         </select>
       </FormField>
       <FormField label="Date"><input type="date" className={inputClass} value={f.date} onChange={e => setF(p => ({...p, date: e.target.value}))} /></FormField>
+      <FormField label="Due date (optional)"><input type="date" className={inputClass} value={f.dueDate} onChange={e => setF(p => ({...p, dueDate: e.target.value}))} /></FormField>
       <FormField label="Paid">
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={f.paid} onChange={e => setF(p => ({...p, paid: e.target.checked}))} className="rounded" />

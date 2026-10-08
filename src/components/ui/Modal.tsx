@@ -6,6 +6,7 @@ interface ModalProps {
   onClose: () => void
   children: React.ReactNode
   footer?: React.ReactNode
+  wide?: boolean   // roomier + scrolls when the content is taller than the screen
 }
 
 // A dismissed modal should retrace the same path it arrived on (fade +
@@ -13,7 +14,7 @@ interface ModalProps {
 // a short exit animation before the parent actually unmounts it.
 const EXIT_MS = 150
 
-export function Modal({ title, onClose, children, footer }: ModalProps) {
+export function Modal({ title, onClose, children, footer, wide }: ModalProps) {
   const [closing, setClosing] = useState(false)
 
   function close() {
@@ -34,7 +35,7 @@ export function Modal({ title, onClose, children, footer }: ModalProps) {
       className={`fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-in duration-150 ${closing ? 'animate-out fade-out' : 'fade-in'}`}
       onClick={(e) => { if (e.target === e.currentTarget) close() }}
     >
-      <div className={`bg-canvas rounded-2xl shadow-2xl w-[460px] max-w-[92vw] p-6 animate-in duration-200 ${closing ? 'animate-out slide-out-to-bottom-3' : 'slide-in-from-bottom-3'}`}>
+      <div className={`bg-canvas rounded-2xl shadow-2xl ${wide ? 'w-[640px] max-h-[90vh] overflow-y-auto' : 'w-[460px]'} max-w-[92vw] p-6 animate-in duration-200 ${closing ? 'animate-out slide-out-to-bottom-3' : 'slide-in-from-bottom-3'}`}>
         <h2 className="font-serif text-lg font-medium mb-5">{title}</h2>
         <div className="space-y-3">{children}</div>
         {footer && <div className="flex gap-2 justify-end mt-6">{footer}</div>}

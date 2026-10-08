@@ -16,7 +16,7 @@ import type {
   AdvanceHospitality, AdvanceLogistics,
   CrewMember, GuestListEntry, TravelItem, Currency, Person, PersonActivity, CatalogWork,
   LegalTemplate, LegalTemplateClause, Stage, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
-  Venue, FlightLeg,
+  Venue, FlightLeg, Vendor,
 } from '@/types'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
 import { EMPTY_FANDOM }    from '@/lib/fandom-demo'
@@ -50,7 +50,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     checklistItems, stakeholders,
     crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems, flightLegs, travelItemShows,
     people, bankAccounts, bankTransactions,
-    trackRounds, trackNotes, trackNoteReplies, trackCredits, venues,
+    trackRounds, trackNotes, trackNoteReplies, trackCredits, venues, vendors,
   ] = await Promise.all([
     supabase.from('albums').select('*').in('client_id', clientIds),
     supabase.from('tracks').select('*'),
@@ -84,6 +84,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     supabase.from('track_note_replies').select('*').order('created_at'),
     supabase.from('track_credits').select('*').order('sort_order'),
     supabase.from('venues').select('*').in('client_id', clientIds),
+    supabase.from('vendors').select('*').in('client_id', clientIds),
   ])
 
   const albumRows     = albums.data       ?? []
@@ -539,11 +540,31 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
 
     const cExpenses = (expenses.data ?? [])
       .filter((e: { client_id: string }) => e.client_id === c.id)
-      .map((e: { id: string; description: string; vendor: string; amount: number; currency: string; category: string; date: string; paid: boolean }) => ({
+      .map((e: {
+        id: string; description: string; vendor: string; amount: number; currency: string; category: string; date: string; paid: boolean
+        vendor_id: string | null; due_date: string | null; bill_number: string | null; bill_file_path: string | null; vendor_flags: string[] | null
+      }): Expense => ({
         id: e.id, description: e.description, vendor: e.vendor,
         amount: e.amount, currency: e.currency as 'USD'|'GBP'|'EUR',
         category: e.category as Expense['category'],
         date: e.date, paid: e.paid,
+        vendorId: e.vendor_id ?? undefined,
+        dueDate: e.due_date ?? undefined,
+        billNumber: e.bill_number ?? undefined,
+        billFilePath: e.bill_file_path ?? undefined,
+        vendorFlags: e.vendor_flags?.length ? (e.vendor_flags as Expense['vendorFlags']) : undefined,
+      }))
+
+    const cVendors = (vendors.data ?? [])
+      .filter((v: { client_id: string }) => v.client_id === c.id)
+      .map((v: {
+        id: string; name: string; address: string | null; email: string | null; phone: string | null
+        tax_id: string | null; bank_last4: string | null; bank_fingerprint: string | null
+      }): Vendor => ({
+        id: v.id, name: v.name,
+        address: v.address ?? undefined, email: v.email ?? undefined, phone: v.phone ?? undefined,
+        taxId: v.tax_id ?? undefined,
+        bankLast4: v.bank_last4 ?? undefined, bankFingerprint: v.bank_fingerprint ?? undefined,
       }))
 
     const cPLMonths = (plMonths.data ?? [])
@@ -589,7 +610,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       artistTodos: cTodos,
       agentData:   { offers: cOffers },
       legal:       { contracts: cContracts },
-      finance:     { invoices: cInvoices, expenses: cExpenses, plMonths: cPLMonths },
+      finance:     { invoices: cInvoices, expenses: cExpenses, vendors: cVendors, plMonths: cPLMonths },
       // Analytics and fandom come from the JSONB column (external API data)
       analytics: (c.analytics && Object.keys(c.analytics).length > 0)
         ? c.analytics
@@ -938,19 +959,46 @@ export async function deleteOffer(offerId: string) {
 }
 
 // ── Expense ──────────────────────────────────────────────────
+// Throws on a failed write (unlike most helpers here) - a bill is a financial
+// record, so a rejected save must reach the caller's .catch, not vanish.
 export async function upsertExpense(expense: Expense, clientId: string) {
   const supabase = createClient()
-  await supabase.from('expenses').upsert({
+  const { error } = await supabase.from('expenses').upsert({
     id: expense.id, client_id: clientId,
     description: expense.description, vendor: expense.vendor,
     amount: expense.amount, currency: expense.currency,
     category: expense.category, date: expense.date, paid: expense.paid,
+    vendor_id: expense.vendorId ?? null,
+    due_date: expense.dueDate ?? null,
+    bill_number: expense.billNumber ?? null,
+    bill_file_path: expense.billFilePath ?? null,
+    vendor_flags: expense.vendorFlags ?? null,
   })
+  if (error) throw error
 }
 
 export async function deleteExpense(expenseId: string) {
   const supabase = createClient()
   await supabase.from('expenses').delete().eq('id', expenseId)
+}
+
+// ── Vendor ───────────────────────────────────────────────────
+export async function upsertVendor(vendor: Vendor, clientId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('vendors').upsert({
+    id: vendor.id, client_id: clientId,
+    name: vendor.name,
+    address: vendor.address ?? null, email: vendor.email ?? null, phone: vendor.phone ?? null,
+    tax_id: vendor.taxId ?? null,
+    bank_last4: vendor.bankLast4 ?? null, bank_fingerprint: vendor.bankFingerprint ?? null,
+    updated_at: new Date().toISOString(),
+  })
+  if (error) throw error
+}
+
+export async function deleteVendor(vendorId: string) {
+  const supabase = createClient()
+  await supabase.from('vendors').delete().eq('id', vendorId)
 }
 
 export async function upsertVenue(venue: Venue, clientId: string) {

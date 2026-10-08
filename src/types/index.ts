@@ -784,6 +784,8 @@ export interface Invoice {
   notes?:     string
 }
 
+// Expenses and bills are one list: a bill is just an expense with a due date,
+// an attached PDF, and a link to a saved Vendor.
 export interface Expense {
   id:          string
   description: string
@@ -794,6 +796,26 @@ export interface Expense {
   date:        string
   paid:        boolean
   receipt?:    string       // URL or filename
+  vendorId?:     string     // → saved Vendor, when the bill matched/created one
+  dueDate?:      string     // ISO "2026-08-14"
+  billNumber?:   string
+  billFilePath?: string     // private storage path of the attached PDF
+  vendorFlags?:  VendorField[]  // vendor details that differed from the saved vendor when this bill was confirmed
+}
+
+export type VendorField = 'address' | 'email' | 'phone' | 'taxId' | 'bank'
+
+// Bank details are never stored in full - last 4 digits for display, plus a
+// server-keyed fingerprint so a changed account is still detected.
+export interface Vendor {
+  id:               string
+  name:             string
+  address?:         string
+  email?:           string
+  phone?:           string
+  taxId?:           string
+  bankLast4?:       string
+  bankFingerprint?: string
 }
 
 export interface PLMonth {
@@ -821,6 +843,7 @@ export interface PLMonth {
 export interface ClientFinance {
   invoices:  Invoice[]
   expenses:  Expense[]
+  vendors:   Vendor[]
   plMonths:  PLMonth[]
 }
 
