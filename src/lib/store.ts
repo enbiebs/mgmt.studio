@@ -34,7 +34,12 @@ import { EMPTY_FINANCE } from '@/lib/finance-demo'
 import { EMPTY_TOUR } from '@/lib/advance-demo'
 import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE } from '@/lib/utils'
 import {
+  SECTION_TO_GRANT_KEY, findException, filterClientForViewer,
+  type ItemException, type ItemType, type ItemEffect, type Viewer,
+} from '@/lib/item-access'
+import {
   loadWorkspaceData, getMyMembership, getGrantsForMember, getPreviewableMembers,
+  loadItemAccess, upsertItemAccess, deleteItemAccess,
   type AccessGrant, type PreviewMember,
   upsertClient, deleteClient as dbDeleteClient, setCalendarToken,
   upsertTrack, deleteTrack as dbDeleteTrack,
@@ -135,14 +140,9 @@ function pushDeleteToGoogleCalendar(clientId: string, recordType: 'show' | 'post
   }).catch(console.error)
 }
 
-// access_grants.section uses 'music' where the app's MainSection uses 'songs' —
-// everything else lines up 1:1. 'calendar' has no grant of its own (see
-// hasAccess) — it's a read-only aggregate view gated per-event by the
-// underlying section's own access, not a section anyone can be granted.
-const SECTION_TO_GRANT_KEY: Record<MainSection, string> = {
-  calendar: 'calendar', songs: 'music', tour: 'tour', content: 'content', finance: 'finance',
-  team: 'team', projects: 'projects', analytics: 'analytics', fandom: 'fandom', legal: 'legal',
-}
+// 'calendar' has no grant of its own (see hasAccess) — it's a read-only aggregate
+// view gated per-event by the underlying section's own access, not a section
+// anyone can be granted.
 const ALL_SECTIONS: MainSection[] = ['songs', 'tour', 'content', 'finance', 'team', 'projects', 'analytics', 'fandom', 'legal']
 
 // ── State shape ─────────────────────────────────────────────
@@ -174,6 +174,12 @@ interface StudioState {
   // real managers only.
   previewMembers: PreviewMember[]
   previewMemberId: string | null
+  // Per-item sharing exceptions (manager-only data) and each previewable
+  // member's area grants - what the "Who can see this" control works from.
+  itemAccess: ItemException[]
+  memberGrants: Record<string, AccessGrant[]>
+  // The manager's full data, set aside while previewing as someone else.
+  previewBackup: AppData | null
 
   // Navigation
   view: 'dashboard' | 'studio'
@@ -208,6 +214,12 @@ interface StudioState {
   // client, edit limited to 'projects' (the todo/request list). Agent/
   // lawyer/team: driven by resolved access_grants.
   hasAccess: (section: MainSection, clientId?: string, requireEdit?: boolean) => boolean
+  // True when the person has no grant for the section but can load items in it
+  // (they were shared) - they get a trimmed set of tabs and view-only access.
+  isShareOnly: (section: MainSection, clientId?: string) => boolean
+  loadMemberGrants: () => Promise<void>
+  // effect null removes the exception (back to the person's normal access).
+  setItemEffect: (clientId: string, itemType: ItemType, itemId: string, memberId: string, effect: ItemEffect | null) => void
   // Shorthand for hasAccess(section, undefined, true) against the current
   // client — what every Add/Edit/Delete button in a view should check.
   canEdit: (section: MainSection) => boolean
@@ -411,6 +423,9 @@ export const useStore = create<StudioState>((set, get) => ({
   grants:        [],
   previewMembers: [],
   previewMemberId: null,
+  itemAccess: [],
+  memberGrants: {},
+  previewBackup: null,
 
   view:          'dashboard',
   clientId:      null,
@@ -453,9 +468,20 @@ export const useStore = create<StudioState>((set, get) => ({
       return requireEdit ? section === 'projects' : true
     }
     const key = SECTION_TO_GRANT_KEY[section]
-    return s.grants.some(g =>
+    if (s.grants.some(g =>
       g.section === key && (g.clientId === null || g.clientId === cid) && (!requireEdit || g.canEdit)
-    )
+    )) return true
+    // A shared item opens its section for viewing only - never for editing.
+    return !requireEdit && s.isShareOnly(section, cid)
+  },
+
+  isShareOnly: (section, clientId) => {
+    const s = get()
+    const cid = clientId ?? s.clientId
+    if (!cid || s.role === 'manager' || s.role === 'artist' || section === 'calendar') return false
+    const key = SECTION_TO_GRANT_KEY[section]
+    const granted = s.grants.some(g => g.section === key && (g.clientId === null || g.clientId === cid))
+    return !granted && !!s.data.clients.find(c => c.id === cid)?.itemSections?.includes(section)
   },
 
   canEdit: (section) => get().hasAccess(section, undefined, true),
@@ -469,6 +495,8 @@ export const useStore = create<StudioState>((set, get) => ({
       if (g.clientId === null) return 'all'
       ids.add(g.clientId)
     }
+    // Clients where something was shared with them also belong on their roster.
+    for (const c of s.data.clients) if (c.itemSections?.length) ids.add(c.id)
     return Array.from(ids)
   },
 
@@ -504,10 +532,11 @@ export const useStore = create<StudioState>((set, get) => ({
 
       let grants: AccessGrant[] = []
       let previewMembers: PreviewMember[] = []
+      let itemAccess: ItemException[] = []
       if (role === 'agent' || role === 'lawyer' || role === 'team') {
         grants = await getGrantsForMember(memberId)
       } else if (role === 'manager') {
-        previewMembers = await getPreviewableMembers(workspaceId)
+        ;[previewMembers, itemAccess] = await Promise.all([getPreviewableMembers(workspaceId), loadItemAccess()])
       }
 
       set({
@@ -518,6 +547,7 @@ export const useStore = create<StudioState>((set, get) => ({
         authClientId: memberClientId,
         grants,
         previewMembers,
+        itemAccess,
         data: hasClients ? appData : { clients: [] },
         legalTemplates,
         // Artists land straight in their own client — no roster to pick from.
@@ -541,22 +571,63 @@ export const useStore = create<StudioState>((set, get) => ({
 
   // ── Role ──
   previewAs: async (memberId) => {
+    const { previewBackup, workspaceId, itemAccess } = get()
     if (memberId === null) {
-      set({ role: 'manager', grants: [], authClientId: null, previewMemberId: null, view: 'dashboard', clientId: null, section: 'songs' })
+      // Back to the manager's own view. Reload, so anything edited while
+      // previewing is reflected instead of the stale pre-preview copy.
+      let data = previewBackup
+      if (workspaceId) {
+        try { data = await loadWorkspaceData(workspaceId) } catch (e) { console.error(e) }
+      }
+      set({
+        role: 'manager', grants: [], authClientId: null, previewMemberId: null, view: 'dashboard',
+        clientId: null, section: 'songs', previewBackup: null, ...(data ? { data } : {}),
+      })
       return
     }
     const member = get().previewMembers.find(m => m.id === memberId)
     if (!member) return
     const grants = member.role === 'artist' ? [] : await getGrantsForMember(member.id)
+    // A manager's own session can read every row, so the preview hides what
+    // this person's login wouldn't get (the database does it for real logins).
+    const base = previewBackup ?? get().data
+    const viewer: Viewer = { memberId: member.id, role: member.role, clientId: member.clientId, grants }
     set({
       role: member.role,
       grants,
       authClientId: member.clientId,
       previewMemberId: memberId,
+      previewBackup: base,
+      data: { clients: base.clients.map(c => filterClientForViewer(c, viewer, itemAccess)) },
       view: member.role === 'artist' ? 'studio' : 'dashboard',
       clientId: member.role === 'artist' ? member.clientId : null,
       section: 'songs',
     })
+  },
+
+  loadMemberGrants: async () => {
+    const { previewMembers, memberGrants } = get()
+    const missing = previewMembers.filter(m => m.role !== 'artist' && !memberGrants[m.id])
+    if (missing.length === 0) return
+    const loaded = await Promise.all(missing.map(async m => [m.id, await getGrantsForMember(m.id)] as const))
+    set({ memberGrants: { ...get().memberGrants, ...Object.fromEntries(loaded) } })
+  },
+
+  setItemEffect: (clientId, itemType, itemId, memberId, effect) => {
+    const before = get().itemAccess
+    const existing = findException(before, memberId, itemType, itemId)
+    if (effect === null) {
+      if (!existing) return
+      set({ itemAccess: before.filter(e => e.id !== existing.id) })
+      deleteItemAccess(existing.id).catch(err => { console.error(err); set({ itemAccess: before }) })
+      return
+    }
+    const next: ItemException = existing
+      ? { ...existing, effect }
+      : { id: 'acc-' + uid(), clientId, itemType, itemId, memberId, effect }
+    set({ itemAccess: existing ? before.map(e => e.id === existing.id ? next : e) : [...before, next] })
+    // Sharing is a security setting: if the save is rejected, put the switch back.
+    upsertItemAccess(next).catch(err => { console.error(err); set({ itemAccess: before }) })
   },
 
   // ── Navigation ──

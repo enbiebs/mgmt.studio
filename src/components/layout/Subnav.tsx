@@ -1,6 +1,7 @@
 'use client'
 import { useStore } from '@/lib/store'
 import { initials } from '@/lib/utils'
+import { shareOnlyTabs, effectiveSub } from '@/lib/item-access'
 
 const SUBNAV: Record<string, [string, string][]> = {
   songs:     [['Tracks', 'tracks'], ['Label Copy', 'labelcopy'], ['Checklist', 'checklist'], ['Status', 'status']],
@@ -18,15 +19,17 @@ export function Subnav() {
     setSongsSub, setContentSub, setBizSub, setTourSub, setAnalyticsSub, setFandomSub, setLegalSub,
   } = useStore()
   const client = useStore(s => s.getClient())
-  const role = useStore(s => s.role)
-  // Expenses/bills (the "Payments" tab) are management-side only.
-  const subs = (SUBNAV[section] ?? []).filter(([, key]) => !(role === 'artist' && key === 'payments'))
+  // Someone with no grant for this section but a shared item in it gets only
+  // the tabs that show that kind of item.
+  const shareOnly = useStore(s => s.isShareOnly(section))
+  const allowed = shareOnly ? shareOnlyTabs(section, client ?? undefined) : undefined
+  const subs = (SUBNAV[section] ?? []).filter(([, key]) => !allowed || allowed.includes(key))
 
   function isActive(key: string) {
-    if (section === 'songs')     return songsSub === key
-    if (section === 'content')   return contentSub === key
-    if (section === 'finance')   return bizSub === key
-    if (section === 'tour')      return tourSub === key
+    if (section === 'songs')     return effectiveSub(songsSub, allowed) === key
+    if (section === 'content')   return effectiveSub(contentSub, allowed) === key
+    if (section === 'finance')   return effectiveSub(bizSub, allowed) === key
+    if (section === 'tour')      return effectiveSub(tourSub, allowed) === key
     if (section === 'analytics') return analyticsSub === key
     if (section === 'fandom')    return fandomSub === key
     if (section === 'legal')     return legalSub === key

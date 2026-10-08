@@ -6,6 +6,7 @@
 
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
+import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { addDays } from '@/lib/utils'
 import type { Invoice, InvoiceStatus, Currency, RevenueStream, BankTransaction } from '@/types'
@@ -336,6 +337,8 @@ function InvoiceDetail({ invoice: inv, onClose }: { invoice: Invoice; onClose: (
           {inv.notes && <div className="text-xs text-gray-400 italic">{inv.notes}</div>}
 
           {inv.status !== 'void' && inv.status !== 'draft' && <InvoicePaymentLinker invoice={inv} />}
+
+          <div className="pt-1"><ItemAccessButton itemType="invoice" itemId={inv.id} /></div>
         </div>
 
         {/* Status actions — one clear primary action for where this invoice is right now */}

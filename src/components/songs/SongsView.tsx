@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useStore } from '@/lib/store'
+import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { stageLabel, stageBadgeClass, isStale, uid, RELEASE_TYPE_LABEL } from '@/lib/utils'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { TrackWaveform } from './TrackWaveform'
@@ -149,6 +150,7 @@ function ReleaseSection({ album, editable, filter, onOpenTrack, onAddTrack, onDe
             {RELEASE_TYPE_LABEL[releaseType]}
           </span>
           <span className="text-xs text-gray-400 flex-shrink-0">{tracks.length} {tracks.length === 1 ? 'track' : 'tracks'}</span>
+          <ItemAccessButton itemType="album" itemId={album.id} />
         </div>
         {editable && (
           <div className="flex gap-1.5 flex-shrink-0">
