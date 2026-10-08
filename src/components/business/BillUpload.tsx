@@ -262,11 +262,11 @@ export function BillUploadModal({ onClose }: { onClose: () => void }) {
           </ul>
           <div className="text-xs text-red-700">Changed payment details are a common sign of invoice fraud — confirm with the vendor directly before paying.</div>
           <div className="space-y-1 pt-1">
-            <label className="flex items-center gap-2 text-sm text-gray-700">
+            <label className="flex items-center gap-2 text-sm text-red-800">
               <input type="radio" checked={resolution === 'keep'} onChange={() => setResolution('keep')} />
               Keep the saved details
             </label>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
+            <label className="flex items-center gap-2 text-sm text-red-800">
               <input type="radio" checked={resolution === 'update'} onChange={() => setResolution('update')} />
               Update the vendor to the new details
             </label>

@@ -80,7 +80,12 @@ export function billReadingConfigured() {
 }
 
 export async function extractBill(pdfBase64: string): Promise<ExtractedBill> {
-  const client = new Anthropic()
+  // A personal ("sk-ant-usr-") key isn't tied to a workspace, so Anthropic needs
+  // the workspace named on every request. A workspace-scoped key doesn't.
+  const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID
+  const client = new Anthropic({
+    defaultHeaders: workspaceId ? { 'anthropic-workspace-id': workspaceId } : undefined,
+  })
   const response = await client.messages.parse({
     model: 'claude-opus-5-5',
     max_tokens: 16000,

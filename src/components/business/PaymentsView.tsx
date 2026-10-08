@@ -74,6 +74,7 @@ export function PaymentsView() {
         )}
         {addOpen && <ExpenseFormModal onClose={() => setAddOpen(false)} />}
         {billOpen && <BillUploadModal onClose={() => setBillOpen(false)} />}
+        <div className="w-full max-w-3xl px-6"><VendorsPanel editable={editable} /></div>
       </div>
     )
   }
