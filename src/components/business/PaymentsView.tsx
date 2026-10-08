@@ -11,6 +11,7 @@ import { expensesFromTransactions } from '@/lib/bank-rollup'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { BillUploadModal } from './BillUpload'
 import { VendorsPanel } from './VendorsPanel'
+import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { CAT_LABELS } from '@/lib/expense-categories'
 import { VENDOR_FIELD_LABEL } from '@/lib/vendors'
 import { today } from '@/lib/utils'
@@ -256,7 +257,10 @@ export function PaymentsView() {
                 {editable && (
                   <td className="px-4 py-3 text-right">
                     {manual && (
-                      <button onClick={() => deleteExpense(e.id)} className="text-xs text-red-400 hover:text-red-500">Delete</button>
+                      <span className="inline-flex items-center gap-3">
+                        <ItemAccessButton itemType="expense" itemId={e.id} />
+                        <button onClick={() => deleteExpense(e.id)} className="text-xs text-red-400 hover:text-red-500">Delete</button>
+                      </span>
                     )}
                   </td>
                 )}

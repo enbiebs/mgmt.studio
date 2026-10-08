@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
+import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { calendarDays, toDateStr, today, MONTH_NAMES, DOW_SHORT } from '@/lib/utils'
 import type { Post, PostType } from '@/types'
@@ -143,9 +144,12 @@ export function PostModal({ post, defaultDate, onClose }: { post?: Post; default
       editable ? (
         <>
           {post && (
-            <button onClick={handleDelete} className="px-3 py-1.5 border border-red-200 text-red-500 rounded-lg text-sm hover:bg-red-50 mr-auto">
-              Delete post
-            </button>
+            <div className="mr-auto flex gap-2">
+              <button onClick={handleDelete} className="px-3 py-1.5 border border-red-200 text-red-500 rounded-lg text-sm hover:bg-red-50">
+                Delete post
+              </button>
+              <ItemAccessButton itemType="post" itemId={post.id} />
+            </div>
           )}
           <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
           <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">

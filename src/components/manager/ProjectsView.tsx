@@ -8,6 +8,7 @@
 
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
+import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import type { ProjectType, ProjectStatus, Stakeholder } from '@/types'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 
@@ -177,6 +178,7 @@ export function ProjectsView() {
                 {/* Actions */}
                 {editable && (
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    <ItemAccessButton itemType="project" itemId={project.id} />
                     {next && (
                       <button
                         onClick={() => updateProjectStatus(project.id, next)}

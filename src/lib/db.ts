@@ -23,6 +23,7 @@ import { EMPTY_FANDOM }    from '@/lib/fandom-demo'
 import { EMPTY_AGENT }     from '@/lib/agent-demo'
 import { EMPTY_LEGAL }     from '@/lib/legal-demo'
 import { EMPTY_FINANCE }   from '@/lib/finance-demo'
+import { sectionsWithItems, type ItemException, type ItemType, type ItemEffect } from '@/lib/item-access'
 
 // ── Load ───────────────────────────────────────────────────
 export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
@@ -621,7 +622,34 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     } as Client
   })
 
-  return { clients }
+  return { clients: clients.map(c => ({ ...c, itemSections: sectionsWithItems(c) })) }
+}
+
+// ── Per-item sharing exceptions (manager-only; see item-access.ts) ──
+// Other logins get no rows back (the database hides the table from them) -
+// their own limits are applied by the database on every other query.
+export async function loadItemAccess(): Promise<ItemException[]> {
+  const supabase = createClient()
+  const { data } = await supabase.from('item_access').select('id, client_id, item_type, item_id, member_id, effect')
+  return (data ?? []).map((r: { id: string; client_id: string; item_type: string; item_id: string; member_id: string; effect: string }) => ({
+    id: r.id, clientId: r.client_id, itemType: r.item_type as ItemType,
+    itemId: r.item_id, memberId: r.member_id, effect: r.effect as ItemEffect,
+  }))
+}
+
+export async function upsertItemAccess(ex: ItemException) {
+  const supabase = createClient()
+  const { error } = await supabase.from('item_access').upsert({
+    id: ex.id, client_id: ex.clientId, item_type: ex.itemType,
+    item_id: ex.itemId, member_id: ex.memberId, effect: ex.effect,
+  }, { onConflict: 'item_type,item_id,member_id' })
+  if (error) throw error
+}
+
+export async function deleteItemAccess(id: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('item_access').delete().eq('id', id)
+  if (error) throw error
 }
 
 // Legal templates are shared workspace-wide (not per-client), so they're

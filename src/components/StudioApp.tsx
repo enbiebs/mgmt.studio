@@ -11,6 +11,7 @@
 // ──────────────────────────────────────────────────────────
 
 import { useStore } from '@/lib/store'
+import { effectiveSub, shareOnlyTabs } from '@/lib/item-access'
 import { AppHeader }  from '@/components/layout/AppHeader'
 import { Subnav }     from '@/components/layout/Subnav'
 import { CalendarView } from '@/components/calendar/CalendarView'
@@ -51,7 +52,13 @@ import { CrewView }      from '@/components/tour/CrewView'
 import { OffersView }    from '@/components/tour/OffersView'
 
 export function StudioApp() {
-  const { view, section, songsSub, contentSub, bizSub, tourSub, data, role, hasAccess, accessibleClientIds, openModal, isLoading } = useStore()
+  const { view, section, songsSub: rawSongsSub, contentSub: rawContentSub, bizSub: rawBizSub, tourSub: rawTourSub, clientId, data, role, hasAccess, isShareOnly, accessibleClientIds, openModal, isLoading } = useStore()
+  // Someone with only a shared item lands on a tab that shows it, not an empty one.
+  const allowedTabs = isShareOnly(section) ? shareOnlyTabs(section, data.clients.find(c => c.id === clientId)) : undefined
+  const songsSub = effectiveSub(rawSongsSub, allowedTabs) as typeof rawSongsSub
+  const contentSub = effectiveSub(rawContentSub, allowedTabs) as typeof rawContentSub
+  const bizSub = effectiveSub(rawBizSub, allowedTabs) as typeof rawBizSub
+  const tourSub = effectiveSub(rawTourSub, allowedTabs) as typeof rawTourSub
 
   // Show loading spinner while Supabase data is hydrating
   if (isLoading) {

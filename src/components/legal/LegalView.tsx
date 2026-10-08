@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from 'react'
 import { useStore } from '@/lib/store'
+import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { Modal, FormField, inputClass } from '@/components/ui/Modal'
 import { uid } from '@/lib/utils'
 import { extractPlaceholders, fillClauses, guessDefault, downloadRtf } from '@/lib/legal-doc-gen'
@@ -188,6 +189,7 @@ function ContractCard({ contract: c }: { contract: Contract }) {
         </div>
       )}
       {c.notes && <div className="mt-2 text-[10px] text-gray-400 italic line-clamp-2">{c.notes}</div>}
+      <div className="mt-2"><ItemAccessButton itemType="contract" itemId={c.id} /></div>
     </div>
   )
 }
@@ -202,6 +204,7 @@ function ContractRow({ contract: c }: { contract: Contract }) {
         <div className="text-xs text-gray-400">{c.counterparty}</div>
       </div>
       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${cfg.bg} ${cfg.color}`}>{cfg.label}</span>
+      <ItemAccessButton itemType="contract" itemId={c.id} />
     </div>
   )
 }

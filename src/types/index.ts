@@ -281,6 +281,10 @@ export interface Client {
   agentData:   AgentData
   legal:       LegalData
   finance:     ClientFinance
+  // Sections where this client has at least one item the viewer can load.
+  // For someone with no grant for a section, an item there means it was shared
+  // with them (see src/lib/item-access.ts). Computed on load, not stored.
+  itemSections?: MainSection[]
 }
 
 export interface AppData {
