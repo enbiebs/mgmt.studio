@@ -22,7 +22,7 @@ import type {
   CrewMember, ShowAdvance, TravelItem, Person, PersonActivity, Currency,
   CatalogWork, RegStatus, Invoice, InvoiceLineItem, InvoiceStatus, RevenueStream,
   LegalTemplate, LegalTemplateClause, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
-  ReleaseType, Venue, TourOffer, Expense, Vendor,
+  ReleaseType, Venue, TourOffer, Expense, Vendor, Run, Budget, CrewRate, FinanceSettings,
 } from '@/types'
 import { DEMO_DATA } from '@/lib/demo-data'
 import { DEFAULT_LEGAL_TEMPLATES } from '@/lib/legal-templates-demo'
@@ -33,6 +33,7 @@ import { EMPTY_LEGAL } from '@/lib/legal-demo'
 import { EMPTY_FINANCE } from '@/lib/finance-demo'
 import { EMPTY_TOUR } from '@/lib/advance-demo'
 import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE } from '@/lib/utils'
+import { buildNewBudget, snapshotOf, type FxRates } from '@/lib/budget'
 import {
   SECTION_TO_GRANT_KEY, findException, filterClientForViewer,
   type ItemException, type ItemType, type ItemEffect, type Viewer,
@@ -50,6 +51,7 @@ import {
   upsertOffer, deleteOffer as dbDeleteOffer,
   upsertExpense, deleteExpense as dbDeleteExpense,
   upsertVendor, deleteVendor as dbDeleteVendor,
+  upsertRun, deleteRun as dbDeleteRun, upsertBudget, deleteBudget as dbDeleteBudget, upsertCrewRate, upsertFinanceSettings,
   upsertVenue, deleteVenue as dbDeleteVenue,
   upsertPost, deletePost as dbDeletePost, replaceAutoPosts,
   upsertDeposit, deleteDeposit as dbDeleteDeposit,
@@ -180,6 +182,9 @@ interface StudioState {
   memberGrants: Record<string, AccessGrant[]>
   // The manager's full data, set aside while previewing as someone else.
   previewBackup: AppData | null
+  // Tour budgets (Stage 4): which budget is open, and live exchange rates (USD per unit)
+  selectedBudgetId: string | null
+  fxRates: FxRates
 
   // Navigation
   view: 'dashboard' | 'studio'
@@ -333,7 +338,7 @@ interface StudioState {
 
   // ── Crew ──
   /** Inserts when the id is new, replaces when it already exists. */
-  saveCrewMember: (member: CrewMember) => void
+  saveCrewMember: (member: CrewMember, rate?: CrewRate) => void
   deleteCrewMember: (memberId: string) => void
 
   // ── Show advances ──
@@ -369,6 +374,19 @@ interface StudioState {
   addBill: (bill: { expense: Omit<Expense, 'id' | 'vendorId'>; vendor: Vendor }) => void
   updateVendor: (vendorId: string, patch: Partial<Omit<Vendor, 'id'>>) => void
   deleteVendor: (vendorId: string) => void
+
+  // ── Runs, budgets, crew pay (Stage 4) ──
+  addRun: (name: string) => string
+  renameRun: (runId: string, name: string) => void
+  deleteRun: (runId: string) => void
+  setShowRun: (showId: string, runId: string | null) => void
+  setCrewRate: (rate: CrewRate) => void
+  setFinanceSettings: (settings: FinanceSettings) => void
+  addBudget: (target: { showId?: string; offerId?: string }) => string | null
+  updateBudget: (budgetId: string, patch: Partial<Pick<Budget, 'name' | 'currency' | 'lines' | 'commissions' | 'notes'>>) => void
+  deleteBudget: (budgetId: string) => void
+  setSelectedBudget: (id: string | null) => void
+  loadFxRates: () => Promise<void>
 
   // ── Venue library (reusable across shows at the same room) ──
   addVenue: (patch: Omit<Venue, 'id' | 'createdAt'>) => string
@@ -426,6 +444,8 @@ export const useStore = create<StudioState>((set, get) => ({
   itemAccess: [],
   memberGrants: {},
   previewBackup: null,
+  selectedBudgetId: null,
+  fxRates: {},
 
   view:          'dashboard',
   clientId:      null,
@@ -1350,25 +1370,34 @@ export const useStore = create<StudioState>((set, get) => ({
   },
 
   // ── Crew ──
-  saveCrewMember: (member) => {
+  saveCrewMember: (member, rate) => {
     const { data, clientId, workspaceId } = get()
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId) return c
         const crew = c.tour.crew ?? []
         const exists = crew.some(m => m.id === member.id)
+        const rates = c.finance.crewRates ?? []
         return {
           ...c,
           tour: {
             ...c.tour,
             crew: exists ? crew.map(m => m.id === member.id ? member : m) : [...crew, member],
           },
+          finance: rate
+            ? { ...c.finance, crewRates: rates.some(r => r.crewMemberId === rate.crewMemberId) ? rates.map(r => r.crewMemberId === rate.crewMemberId ? rate : r) : [...rates, rate] }
+            : c.finance,
         }
       }),
     }
     set({ data: updated })
     saveData(updated)
-    if (workspaceId && clientId) upsertCrewMember(member, clientId).catch(console.error)
+    // The pay row points at the crew row (foreign key), so the crew member goes first.
+    if (workspaceId && clientId) {
+      upsertCrewMember(member, clientId)
+        .then(() => { if (rate) return upsertCrewRate(rate, clientId) })
+        .catch(console.error)
+    }
   },
 
   deleteCrewMember: (memberId) => {
@@ -2041,21 +2070,37 @@ export const useStore = create<StudioState>((set, get) => ({
   addOffer: (patch) => {
     const { data, clientId, workspaceId } = get()
     const newOffer: TourOffer = { id: 'offer-' + uid(), status: 'inquiry', ...patch }
+    // A budget is drafted the moment an offer comes in (crew who tour with the
+    // artist and their saved rates are already in it).
+    const client = data.clients.find(c => c.id === clientId)
+    const newBudget: Budget | undefined = client
+      ? { id: 'bud-' + uid(), updatedAt: new Date().toISOString(), ...buildNewBudget({ client, offer: newOffer }) }
+      : undefined
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId || !c.agentData) return c
-        return { ...c, agentData: { ...c.agentData, offers: [...c.agentData.offers, newOffer] } }
+        return {
+          ...c,
+          agentData: { ...c.agentData, offers: [...c.agentData.offers, newOffer] },
+          finance: newBudget ? { ...c.finance, budgets: [...(c.finance.budgets ?? []), newBudget] } : c.finance,
+        }
       }),
     }
     set({ data: updated })
     saveData(updated)
-    if (workspaceId && clientId) upsertOffer(newOffer, clientId).catch(console.error)
+    if (workspaceId && clientId) {
+      // budgets.offer_id is a foreign key to the offer, so the offer goes first.
+      upsertOffer(newOffer, clientId)
+        .then(() => { if (newBudget) return upsertBudget(newBudget, clientId) })
+        .catch(console.error)
+    }
   },
 
   updateOffer: (offerId, patch) => {
     const { data, clientId, workspaceId } = get()
     let updatedOffer: TourOffer | undefined
     let newShow: Show | undefined
+    let lockedBudget: Budget | undefined
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId || !c.agentData) return c
@@ -2077,9 +2122,23 @@ export const useStore = create<StudioState>((set, get) => ({
           }
           return updatedOffer
         })
+        // Confirming the offer locks the budget's Original: from here on edits only
+        // change "Current", so Original vs Current vs Actual stays meaningful.
+        const finance = newShow
+          ? {
+              ...c.finance,
+              budgets: (c.finance.budgets ?? []).map(b => {
+                if (b.offerId !== offerId || b.status !== 'draft') return b
+                const now = new Date().toISOString()
+                lockedBudget = { ...b, showId: newShow!.id, status: 'locked', original: snapshotOf(b), lockedAt: now, updatedAt: now }
+                return lockedBudget
+              }),
+            }
+          : c.finance
         return {
           ...c,
           agentData: { ...c.agentData, offers },
+          finance,
           tour: newShow
             ? { ...c.tour, shows: [...c.tour.shows, newShow].sort((a, b) => a.date.localeCompare(b.date)) }
             : c.tour,
@@ -2095,6 +2154,7 @@ export const useStore = create<StudioState>((set, get) => ({
       // and get rejected for pointing at a show that doesn't exist yet.
       upsertShow(newShow, clientId)
         .then(() => { if (workspaceId && updatedOffer) return upsertOffer(updatedOffer, clientId) })
+        .then(() => { if (workspaceId && lockedBudget) return upsertBudget(lockedBudget, clientId) })
         .catch(console.error)
       pushToGoogleCalendar(clientId, 'show', newShow)
     } else if (workspaceId && clientId && updatedOffer) {
@@ -2113,6 +2173,127 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     dbDeleteOffer(offerId).catch(console.error)
+  },
+
+  // ── Runs, budgets, crew pay (Stage 4) ──
+  addRun: (name) => {
+    const { data, clientId, workspaceId } = get()
+    const run: Run = { id: 'run-' + uid(), name: name.trim() || 'New run' }
+    const updated = { clients: data.clients.map(c => c.id !== clientId ? c : { ...c, tour: { ...c.tour, runs: [...(c.tour.runs ?? []), run] } }) }
+    set({ data: updated }); saveData(updated)
+    if (workspaceId && clientId) upsertRun(run, clientId).catch(console.error)
+    return run.id
+  },
+
+  renameRun: (runId, name) => {
+    const { data, clientId, workspaceId } = get()
+    let renamed: Run | undefined
+    const updated = { clients: data.clients.map(c => c.id !== clientId ? c : { ...c, tour: { ...c.tour, runs: (c.tour.runs ?? []).map(r => r.id !== runId ? r : (renamed = { ...r, name: name.trim() || r.name })) } }) }
+    set({ data: updated }); saveData(updated)
+    if (workspaceId && clientId && renamed) upsertRun(renamed, clientId).catch(console.error)
+  },
+
+  deleteRun: (runId) => {
+    const { data, clientId } = get()
+    // The database un-groups the run's shows (and clears whole-run cost links); mirror that here.
+    const updated = {
+      clients: data.clients.map(c => c.id !== clientId ? c : {
+        ...c,
+        tour: {
+          ...c.tour,
+          runs: (c.tour.runs ?? []).filter(r => r.id !== runId),
+          shows: c.tour.shows.map(sh => sh.runId === runId ? { ...sh, runId: undefined } : sh),
+          travel: c.tour.travel.map(t => t.runId === runId ? { ...t, runId: undefined } : t),
+        },
+        finance: { ...c.finance, expenses: c.finance.expenses.map(e => e.runId === runId ? { ...e, runId: undefined } : e) },
+      }),
+    }
+    set({ data: updated }); saveData(updated)
+    dbDeleteRun(runId).catch(console.error)
+  },
+
+  setShowRun: (showId, runId) => {
+    const { data, clientId, workspaceId } = get()
+    let changed: Show | undefined
+    const updated = {
+      clients: data.clients.map(c => c.id !== clientId ? c : {
+        ...c,
+        tour: { ...c.tour, shows: c.tour.shows.map(sh => sh.id !== showId ? sh : (changed = { ...sh, runId: runId ?? undefined })) },
+      }),
+    }
+    set({ data: updated }); saveData(updated)
+    if (workspaceId && clientId && changed) upsertShow(changed, clientId).catch(console.error)
+  },
+
+  setCrewRate: (rate) => {
+    const { data, clientId, workspaceId } = get()
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        const rates = c.finance.crewRates ?? []
+        const next = rates.some(r => r.crewMemberId === rate.crewMemberId)
+          ? rates.map(r => r.crewMemberId === rate.crewMemberId ? rate : r)
+          : [...rates, rate]
+        return { ...c, finance: { ...c.finance, crewRates: next } }
+      }),
+    }
+    set({ data: updated }); saveData(updated)
+    if (workspaceId && clientId) upsertCrewRate(rate, clientId).catch(console.error)
+  },
+
+  setFinanceSettings: (settings) => {
+    const { data, clientId, workspaceId } = get()
+    const updated = { clients: data.clients.map(c => c.id !== clientId ? c : { ...c, finance: { ...c.finance, settings } }) }
+    set({ data: updated }); saveData(updated)
+    if (workspaceId && clientId) upsertFinanceSettings(settings, clientId).catch(console.error)
+  },
+
+  addBudget: ({ showId, offerId }) => {
+    const { data, clientId, workspaceId } = get()
+    const client = data.clients.find(c => c.id === clientId)
+    if (!client) return null
+    const offer = client.agentData.offers.find(o => (offerId ? o.id === offerId : o.showId === showId))
+    const show = client.tour.shows.find(sh => sh.id === (showId ?? offer?.showId))
+    if (!offer && !show) return null
+    // One budget per offer/show: reuse it if it's already there.
+    const existing = (client.finance.budgets ?? []).find(b => (offer && b.offerId === offer.id) || (show && b.showId === show.id))
+    if (existing) return existing.id
+    const budget: Budget = { id: 'bud-' + uid(), updatedAt: new Date().toISOString(), ...buildNewBudget({ client, show, offer }) }
+    const updated = { clients: data.clients.map(c => c.id !== clientId ? c : { ...c, finance: { ...c.finance, budgets: [...(c.finance.budgets ?? []), budget] } }) }
+    set({ data: updated }); saveData(updated)
+    if (workspaceId && clientId) upsertBudget(budget, clientId).catch(console.error)
+    return budget.id
+  },
+
+  updateBudget: (budgetId, patch) => {
+    const { data, clientId, workspaceId } = get()
+    let next: Budget | undefined
+    const updated = {
+      clients: data.clients.map(c => c.id !== clientId ? c : {
+        ...c,
+        finance: { ...c.finance, budgets: (c.finance.budgets ?? []).map(b => b.id !== budgetId ? b : (next = { ...b, ...patch, updatedAt: new Date().toISOString() })) },
+      }),
+    }
+    set({ data: updated }); saveData(updated)
+    if (workspaceId && clientId && next) upsertBudget(next, clientId).catch(console.error)
+  },
+
+  deleteBudget: (budgetId) => {
+    const { data, clientId, selectedBudgetId } = get()
+    const updated = { clients: data.clients.map(c => c.id !== clientId ? c : { ...c, finance: { ...c.finance, budgets: (c.finance.budgets ?? []).filter(b => b.id !== budgetId) } }) }
+    set({ data: updated, selectedBudgetId: selectedBudgetId === budgetId ? null : selectedBudgetId }); saveData(updated)
+    dbDeleteBudget(budgetId).catch(console.error)
+  },
+
+  setSelectedBudget: (id) => set({ selectedBudgetId: id }),
+
+  loadFxRates: async () => {
+    try {
+      const res = await fetch('/api/fx')
+      if (!res.ok) return
+      const body = await res.json() as { rates?: FxRates }
+      if (body.rates) set({ fxRates: body.rates })
+    } catch (e) { console.error(e) }
   },
 
   // ── Venue library ──

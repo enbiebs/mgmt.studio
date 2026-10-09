@@ -4,7 +4,8 @@ import { useStore } from '@/lib/store'
 import { uid } from '@/lib/utils'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { PersonPicker } from '@/components/people/PersonPicker'
-import type { CrewMember, CrewRole } from '@/types'
+import { financeSettings } from '@/lib/budget'
+import type { CrewMember, CrewRate, CrewRole } from '@/types'
 
 export const CREW_ROLE_ORDER: CrewRole[] = [
   'tour-manager', 'production-manager', 'foh', 'monitors', 'lighting',
@@ -121,6 +122,15 @@ function CrewMemberModal({ member, onClose }: { member?: CrewMember; onClose: ()
   const editable = useStore(s => s.canEdit('tour'))
   const client = useStore(s => s.getClient())
   const { saveCrewMember } = useStore()
+  // Pay is money: management side only (the same people who can see budgets).
+  const canSeePay = useStore(s => s.role !== 'artist' && s.hasAccess('finance'))
+  const savedRate = member ? client?.finance.crewRates.find(r => r.crewMemberId === member.id) : undefined
+  const [pay, setPay] = useState({
+    toursWithArtist: savedRate?.toursWithArtist ?? false,
+    rateUnit: (savedRate?.rateUnit ?? 'day') as 'day' | 'show',
+    rateShow: savedRate ? String(savedRate.rateShow) : '', rateAdvance: savedRate?.rateAdvance != null ? String(savedRate.rateAdvance) : '',
+    rateTravel: savedRate?.rateTravel != null ? String(savedRate.rateTravel) : '', perDiem: savedRate ? String(savedRate.perDiem) : '',
+  })
   const [personId, setPersonId] = useState(member?.personId ?? '')
   const [role, setRole] = useState<CrewRole>(member?.role ?? 'other')
   const [emergencyName, setEmergencyName] = useState(member?.emergencyName ?? '')
@@ -131,13 +141,23 @@ function CrewMemberModal({ member, onClose }: { member?: CrewMember; onClose: ()
 
   function handleSave() {
     if (!personId) return
+    const id = member?.id ?? 'crew-' + uid()
+    const num = (s: string) => (s.trim() === '' ? undefined : Number(s))
+    const hasPay = pay.toursWithArtist || pay.rateShow.trim() !== '' || pay.perDiem.trim() !== '' || !!savedRate
+    const rate: CrewRate | undefined = canSeePay && hasPay
+      ? {
+          crewMemberId: id, toursWithArtist: pay.toursWithArtist, rateUnit: pay.rateUnit,
+          rateShow: num(pay.rateShow) ?? 0, rateAdvance: num(pay.rateAdvance), rateTravel: num(pay.rateTravel),
+          perDiem: num(pay.perDiem) ?? 0, currency: client ? financeSettings(client).homeCurrency : 'USD',
+        }
+      : undefined
     saveCrewMember({
-      id: member?.id ?? 'crew-' + uid(), personId, role,
+      id, personId, role,
       emergencyName: emergencyName.trim() || undefined,
       emergencyPhone: emergencyPhone.trim() || undefined,
       passport: passport.trim() || undefined,
       notes: notes.trim() || undefined,
-    })
+    }, rate)
     onClose()
   }
 
@@ -181,6 +201,41 @@ function CrewMemberModal({ member, onClose }: { member?: CrewMember; onClose: ()
       <FormField label="Notes">
         <input className={inputClass} value={notes} onChange={e => setNotes(e.target.value)} disabled={!editable} />
       </FormField>
+
+      {canSeePay && (
+        <div className="border-t border-gray-100 pt-3 space-y-3">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Pay (used to fill in budgets)</div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" className="rounded" checked={pay.toursWithArtist} disabled={!editable}
+              onChange={e => setPay(p => ({ ...p, toursWithArtist: e.target.checked }))} />
+            Tours with the artist — add to every new budget automatically
+          </label>
+          <FormField label="Paid">
+            <select className={selectClass} value={pay.rateUnit} disabled={!editable} onChange={e => setPay(p => ({ ...p, rateUnit: e.target.value as 'day' | 'show' }))}>
+              <option value="day">By the day</option>
+              <option value="show">A flat fee per show</option>
+            </select>
+          </FormField>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label={pay.rateUnit === 'show' ? 'Fee per show' : 'Show-day rate'}>
+              <input className={inputClass} inputMode="decimal" value={pay.rateShow} disabled={!editable} onChange={e => setPay(p => ({ ...p, rateShow: e.target.value }))} />
+            </FormField>
+            <FormField label="Per diem (per day)">
+              <input className={inputClass} inputMode="decimal" value={pay.perDiem} disabled={!editable} onChange={e => setPay(p => ({ ...p, perDiem: e.target.value }))} />
+            </FormField>
+            {pay.rateUnit === 'day' && (
+              <>
+                <FormField label="Advance-day rate (blank = travel rate)">
+                  <input className={inputClass} inputMode="decimal" value={pay.rateAdvance} disabled={!editable} onChange={e => setPay(p => ({ ...p, rateAdvance: e.target.value }))} />
+                </FormField>
+                <FormField label="Travel-day rate (blank = show rate)">
+                  <input className={inputClass} inputMode="decimal" value={pay.rateTravel} disabled={!editable} onChange={e => setPay(p => ({ ...p, rateTravel: e.target.value }))} />
+                </FormField>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </Modal>
   )
 }

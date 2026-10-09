@@ -5,7 +5,7 @@ import { shareOnlyTabs, effectiveSub } from '@/lib/item-access'
 
 const SUBNAV: Record<string, [string, string][]> = {
   songs:     [['Tracks', 'tracks'], ['Label Copy', 'labelcopy'], ['Checklist', 'checklist'], ['Status', 'status']],
-  tour:      [['Shows', 'tour'], ['Offers', 'offers'], ['Advance', 'advance'], ['Day Sheet', 'daysheet'], ['Travel', 'travel'], ['Crew', 'crew'], ['Guests', 'guests']],
+  tour:      [['Shows', 'tour'], ['Offers', 'offers'], ['Budget', 'budget'], ['Advance', 'advance'], ['Day Sheet', 'daysheet'], ['Travel', 'travel'], ['Crew', 'crew'], ['Guests', 'guests']],
   content:   [['Manage', 'manage'], ['Studio', 'studio'], ['Lab', 'lab']],
   finance:   [['Royalties', 'royalties'], ['Banking', 'banking'], ['Catalog', 'catalog'], ['P&L', 'pl'], ['Invoices', 'invoices'], ['Payments', 'payments']],
   analytics: [['Overview', 'overview'], ['Streaming', 'streaming'], ['Playlists', 'playlists'], ['Social', 'social'], ['TikTok', 'tiktok'], ['Audience', 'audience'], ['Charts', 'charts']],
@@ -23,7 +23,9 @@ export function Subnav() {
   // the tabs that show that kind of item.
   const shareOnly = useStore(s => s.isShareOnly(section))
   const allowed = shareOnly ? shareOnlyTabs(section, client ?? undefined) : undefined
-  const subs = (SUBNAV[section] ?? []).filter(([, key]) => !allowed || allowed.includes(key))
+  // Budgets are money: management side only (Finance access, never the artist).
+  const canSeeBudgets = useStore(s => s.role !== 'artist' && s.hasAccess('finance'))
+  const subs = (SUBNAV[section] ?? []).filter(([, key]) => (!allowed || allowed.includes(key)) && (key !== 'budget' || canSeeBudgets))
 
   function isActive(key: string) {
     if (section === 'songs')     return effectiveSub(songsSub, allowed) === key

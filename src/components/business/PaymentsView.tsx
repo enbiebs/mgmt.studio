@@ -11,11 +11,12 @@ import { expensesFromTransactions } from '@/lib/bank-rollup'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { BillUploadModal } from './BillUpload'
 import { VendorsPanel } from './VendorsPanel'
+import { CostAssignment, type CostAssignmentValue } from './CostAssignment'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { CAT_LABELS } from '@/lib/expense-categories'
 import { VENDOR_FIELD_LABEL } from '@/lib/vendors'
 import { today } from '@/lib/utils'
-import type { ExpenseCategory, Currency } from '@/types'
+import type { Expense, ExpenseCategory, Currency } from '@/types'
 
 const CAT_COLORS: Record<ExpenseCategory, string> = {
   travel:     '#f97316',
@@ -54,6 +55,7 @@ export function PaymentsView() {
   const [showUnpaid, setShowUnpaid] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [billOpen, setBillOpen] = useState(false)
+  const [assigning, setAssigning] = useState<Expense | null>(null)
 
   if (!client) return null
   const bankExpenses = expensesFromTransactions(client.business.banking.transactions ?? [])
@@ -118,6 +120,7 @@ export function PaymentsView() {
       )}
       {addOpen && <ExpenseFormModal onClose={() => setAddOpen(false)} />}
       {billOpen && <BillUploadModal onClose={() => setBillOpen(false)} />}
+      {assigning && <AssignExpenseModal expense={assigning} onClose={() => setAssigning(null)} />}
       {/* Summary */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <SCard label="Total Expenses" value={fmt(total)} color="text-gray-800" sub={`${expenses.length} line items`} />
@@ -232,6 +235,13 @@ export function PaymentsView() {
                     </span>
                   )}
                   {e.billNumber && <div className="text-[10px] font-normal text-gray-400">#{e.billNumber}</div>}
+                  {(e.showIds?.length || e.runId) && (
+                    <div className="text-[10px] font-normal text-purple-600">
+                      Counts against {e.showIds?.length
+                        ? (e.showIds.length === 1 ? (client.tour.shows.find(s => s.id === e.showIds![0])?.venue ?? '1 show') : `${e.showIds.length} shows`)
+                        : `run: ${client.tour.runs?.find(r => r.id === e.runId)?.name ?? 'unknown'}`}
+                    </div>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-xs text-gray-500">{e.vendor}</td>
                 <td className="px-4 py-3">
@@ -258,6 +268,7 @@ export function PaymentsView() {
                   <td className="px-4 py-3 text-right">
                     {manual && (
                       <span className="inline-flex items-center gap-3">
+                        <button onClick={() => setAssigning(e)} className="text-xs text-purple-500 hover:text-purple-600">Assign</button>
                         <ItemAccessButton itemType="expense" itemId={e.id} />
                         <button onClick={() => deleteExpense(e.id)} className="text-xs text-red-400 hover:text-red-500">Delete</button>
                       </span>
@@ -296,6 +307,7 @@ function ExpenseFormModal({ onClose }: { onClose: () => void }) {
     description: '', vendor: '', amount: '', currency: 'USD' as Currency,
     category: 'other' as ExpenseCategory, date: new Date().toISOString().slice(0, 10), dueDate: '', paid: false,
   })
+  const [assign, setAssign] = useState<CostAssignmentValue>({ showIds: [] })
 
   function handleSave() {
     if (!f.description || !f.amount) return
@@ -303,6 +315,7 @@ function ExpenseFormModal({ onClose }: { onClose: () => void }) {
       description: f.description, vendor: f.vendor, amount: Number(f.amount),
       currency: f.currency, category: f.category, date: f.date, paid: f.paid,
       dueDate: f.dueDate || undefined,
+      showIds: assign.showIds.length > 0 ? assign.showIds : undefined, runId: assign.runId, bucket: assign.bucket,
     })
     onClose()
   }
@@ -337,6 +350,28 @@ function ExpenseFormModal({ onClose }: { onClose: () => void }) {
           Already paid
         </label>
       </FormField>
+      <FormField label="Counts against">
+        <CostAssignment value={assign} onChange={setAssign} />
+      </FormField>
+    </Modal>
+  )
+}
+
+// Change which show(s) / run / budget line an existing expense counts against.
+function AssignExpenseModal({ expense, onClose }: { expense: Expense; onClose: () => void }) {
+  const updateExpense = useStore(s => s.updateExpense)
+  const [assign, setAssign] = useState<CostAssignmentValue>({ showIds: expense.showIds ?? [], runId: expense.runId, bucket: expense.bucket })
+  return (
+    <Modal title={`Counts against — ${expense.description}`} onClose={onClose} footer={
+      <>
+        <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+        <button
+          onClick={() => { updateExpense(expense.id, { showIds: assign.showIds.length > 0 ? assign.showIds : undefined, runId: assign.runId, bucket: assign.bucket }); onClose() }}
+          className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600"
+        >Save</button>
+      </>
+    }>
+      <CostAssignment value={assign} onChange={setAssign} />
     </Modal>
   )
 }

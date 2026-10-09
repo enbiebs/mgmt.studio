@@ -16,7 +16,7 @@ import type {
   AdvanceHospitality, AdvanceLogistics,
   CrewMember, GuestListEntry, TravelItem, Currency, Person, PersonActivity, CatalogWork,
   LegalTemplate, LegalTemplateClause, Stage, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
-  Venue, FlightLeg, Vendor,
+  Venue, FlightLeg, Vendor, Run, Budget, CrewRate, FinanceSettings, BudgetLine, BudgetCommission, BudgetSnapshot, Currency as Cur,
 } from '@/types'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
 import { EMPTY_FANDOM }    from '@/lib/fandom-demo'
@@ -52,6 +52,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems, flightLegs, travelItemShows,
     people, bankAccounts, bankTransactions,
     trackRounds, trackNotes, trackNoteReplies, trackCredits, venues, vendors,
+    runsQ, budgetsQ, crewRatesQ, financeSettingsQ, expenseShowsQ,
   ] = await Promise.all([
     supabase.from('albums').select('*').in('client_id', clientIds),
     supabase.from('tracks').select('*'),
@@ -86,6 +87,11 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     supabase.from('track_credits').select('*').order('sort_order'),
     supabase.from('venues').select('*').in('client_id', clientIds),
     supabase.from('vendors').select('*').in('client_id', clientIds),
+    supabase.from('runs').select('*').in('client_id', clientIds),
+    supabase.from('budgets').select('*').in('client_id', clientIds),
+    supabase.from('crew_rates').select('*').in('client_id', clientIds),
+    supabase.from('client_finance_settings').select('*').in('client_id', clientIds),
+    supabase.from('expense_shows').select('*'),
   ])
 
   const albumRows     = albums.data       ?? []
@@ -110,7 +116,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
   // travel_items is a single table with a `kind` discriminator, so every
   // per-variant column is nullable and gets narrowed back out below.
   type TravelRow = {
-    id: string; client_id: string; show_id?: string; kind: string; status: string
+    id: string; client_id: string; show_id?: string; run_id?: string; kind: string; status: string
     confirmation_code?: string; cost?: number; currency?: string; notes?: string
     person_ids?: string[]
     traveler?: string; airline?: string; flight_number?: string
@@ -154,7 +160,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
 
   const toTravelItem = (t: TravelRow): TravelItem => {
     const base = {
-      id: t.id, showIds: showIdsByTravelItem[t.id] ?? [],
+      id: t.id, showIds: showIdsByTravelItem[t.id] ?? [], runId: t.run_id ?? undefined,
       status: t.status as TravelItem['status'],
       confirmationCode: t.confirmation_code ?? undefined,
       cost: t.cost ?? undefined,
@@ -326,7 +332,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
 
     const cShows = (shows.data ?? [])
       .filter((s: { client_id: string }) => s.client_id === c.id)
-      .map((s: { id: string; date: string; city: string; venue: string; time: string; status: string; notes?: string; guarantee?: number; deposit?: number; currency?: string; tour_offer_id?: string; via_agency?: boolean; agency_name?: string; agency_commission_pct?: number; management_commission_pct?: number; invoice_id?: string }) => ({
+      .map((s: { id: string; date: string; city: string; venue: string; time: string; status: string; notes?: string; guarantee?: number; deposit?: number; currency?: string; tour_offer_id?: string; via_agency?: boolean; agency_name?: string; agency_commission_pct?: number; management_commission_pct?: number; invoice_id?: string; run_id?: string }) => ({
         id: s.id, date: s.date, city: s.city,
         venue: s.venue, time: s.time,
         status: s.status as Show['status'], notes: s.notes,
@@ -336,6 +342,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
         agencyCommissionPct: s.agency_commission_pct ?? undefined,
         managementCommissionPct: s.management_commission_pct ?? undefined,
         invoiceId: s.invoice_id ?? undefined,
+        runId: s.run_id ?? undefined,
       }))
 
     const cShowIds = cShows.map((s: { id: string }) => s.id)
@@ -539,11 +546,46 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
         })),
       }))
 
+    const cRuns: Run[] = (runsQ.data ?? [])
+      .filter((r: { client_id: string }) => r.client_id === c.id)
+      .map((r: { id: string; name: string }) => ({ id: r.id, name: r.name }))
+
+    const cBudgets: Budget[] = (budgetsQ.data ?? [])
+      .filter((b: { client_id: string }) => b.client_id === c.id)
+      .map((b: {
+        id: string; offer_id: string | null; show_id: string | null; name: string; currency: string; status: string
+        version: number; lines: BudgetLine[]; commissions: BudgetCommission[]; notes: string | null
+        original: BudgetSnapshot | null; locked_at: string | null; updated_at: string
+      }) => ({
+        id: b.id, offerId: b.offer_id ?? undefined, showId: b.show_id ?? undefined, name: b.name,
+        currency: b.currency as Cur, status: b.status as Budget['status'], version: b.version,
+        lines: b.lines ?? [], commissions: b.commissions ?? [], notes: b.notes ?? undefined,
+        original: b.original ?? undefined, lockedAt: b.locked_at ?? undefined, updatedAt: b.updated_at,
+      }))
+
+    const cCrewRates: CrewRate[] = (crewRatesQ.data ?? [])
+      .filter((r: { client_id: string }) => r.client_id === c.id)
+      .map((r: { crew_member_id: string; tours_with_artist: boolean; rate_unit: string; rate_show: number; rate_travel: number | null; rate_advance: number | null; per_diem: number; currency: string }) => ({
+        crewMemberId: r.crew_member_id, toursWithArtist: r.tours_with_artist, rateUnit: r.rate_unit as CrewRate['rateUnit'],
+        rateShow: Number(r.rate_show), rateTravel: r.rate_travel ?? undefined, rateAdvance: r.rate_advance ?? undefined,
+        perDiem: Number(r.per_diem), currency: r.currency as Cur,
+      }))
+
+    const settingsRow = (financeSettingsQ.data ?? []).find((r: { client_id: string }) => r.client_id === c.id) as
+      { home_currency: string; default_commissions: FinanceSettings['defaultCommissions'] } | undefined
+    const cFinanceSettings: FinanceSettings | undefined = settingsRow
+      ? { homeCurrency: settingsRow.home_currency as Cur, defaultCommissions: settingsRow.default_commissions ?? [] }
+      : undefined
+
+    const showIdsByExpense = ((expenseShowsQ.data ?? []) as { expense_id: string; show_id: string }[])
+      .reduce((acc, row) => { (acc[row.expense_id] ??= []).push(row.show_id); return acc }, {} as Record<string, string[]>)
+
     const cExpenses = (expenses.data ?? [])
       .filter((e: { client_id: string }) => e.client_id === c.id)
       .map((e: {
         id: string; description: string; vendor: string; amount: number; currency: string; category: string; date: string; paid: boolean
         vendor_id: string | null; due_date: string | null; bill_number: string | null; bill_file_path: string | null; vendor_flags: string[] | null
+        run_id: string | null; bucket: string | null
       }): Expense => ({
         id: e.id, description: e.description, vendor: e.vendor,
         amount: e.amount, currency: e.currency as 'USD'|'GBP'|'EUR',
@@ -554,6 +596,8 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
         billNumber: e.bill_number ?? undefined,
         billFilePath: e.bill_file_path ?? undefined,
         vendorFlags: e.vendor_flags?.length ? (e.vendor_flags as Expense['vendorFlags']) : undefined,
+        showIds: showIdsByExpense[e.id], runId: e.run_id ?? undefined,
+        bucket: (e.bucket ?? undefined) as Expense['bucket'],
       }))
 
     const cVendors = (vendors.data ?? [])
@@ -600,6 +644,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
         guestList: cGuestList,
         travel:    cTravel,
         venues:    cVenues,
+        runs:      cRuns,
       },
       content:  { posts: cPosts },
       business: {
@@ -611,7 +656,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       artistTodos: cTodos,
       agentData:   { offers: cOffers },
       legal:       { contracts: cContracts },
-      finance:     { invoices: cInvoices, expenses: cExpenses, vendors: cVendors, plMonths: cPLMonths },
+      finance:     { invoices: cInvoices, expenses: cExpenses, vendors: cVendors, plMonths: cPLMonths, budgets: cBudgets, crewRates: cCrewRates, settings: cFinanceSettings },
       // Analytics and fandom come from the JSONB column (external API data)
       analytics: (c.analytics && Object.keys(c.analytics).length > 0)
         ? c.analytics
@@ -955,6 +1000,7 @@ export async function upsertShow(show: Show, clientId: string) {
     agency_commission_pct: show.agencyCommissionPct ?? null,
     management_commission_pct: show.managementCommissionPct ?? null,
     invoice_id: show.invoiceId ?? null,
+    run_id: show.runId ?? null,
     updated_at: new Date().toISOString(),
   })
 }
@@ -1001,6 +1047,65 @@ export async function upsertExpense(expense: Expense, clientId: string) {
     bill_number: expense.billNumber ?? null,
     bill_file_path: expense.billFilePath ?? null,
     vendor_flags: expense.vendorFlags ?? null,
+    run_id: expense.runId ?? null,
+    bucket: expense.bucket ?? null,
+  })
+  if (error) throw error
+  // Show links - zero, one or several - same delete-then-reinsert pattern as travel.
+  const del = await supabase.from('expense_shows').delete().eq('expense_id', expense.id)
+  if (del.error) throw del.error
+  const showIds = expense.showIds ?? []
+  if (showIds.length > 0) {
+    const ins = await supabase.from('expense_shows').insert(
+      showIds.map(showId => ({ id: `${expense.id}-${showId}`, expense_id: expense.id, show_id: showId }))
+    )
+    if (ins.error) throw ins.error
+  }
+}
+
+// ── Runs, budgets, crew rates, finance settings (Stage 4) ────
+export async function upsertRun(run: Run, clientId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('runs').upsert({ id: run.id, client_id: clientId, name: run.name })
+  if (error) throw error
+}
+
+export async function deleteRun(runId: string) {
+  const supabase = createClient()
+  await supabase.from('runs').delete().eq('id', runId)
+}
+
+export async function upsertBudget(b: Budget, clientId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('budgets').upsert({
+    id: b.id, client_id: clientId, offer_id: b.offerId ?? null, show_id: b.showId ?? null,
+    name: b.name, currency: b.currency, status: b.status, version: b.version,
+    lines: b.lines, commissions: b.commissions, notes: b.notes ?? null,
+    original: b.original ?? null, locked_at: b.lockedAt ?? null,
+    updated_at: new Date().toISOString(),
+  })
+  if (error) throw error
+}
+
+export async function deleteBudget(budgetId: string) {
+  const supabase = createClient()
+  await supabase.from('budgets').delete().eq('id', budgetId)
+}
+
+export async function upsertCrewRate(r: CrewRate, clientId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('crew_rates').upsert({
+    crew_member_id: r.crewMemberId, client_id: clientId, tours_with_artist: r.toursWithArtist,
+    rate_unit: r.rateUnit, rate_show: r.rateShow, rate_travel: r.rateTravel ?? null,
+    rate_advance: r.rateAdvance ?? null, per_diem: r.perDiem, currency: r.currency,
+  })
+  if (error) throw error
+}
+
+export async function upsertFinanceSettings(s: FinanceSettings, clientId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('client_finance_settings').upsert({
+    client_id: clientId, home_currency: s.homeCurrency, default_commissions: s.defaultCommissions,
   })
   if (error) throw error
 }
@@ -1313,6 +1418,7 @@ export async function deleteGuestListEntry(entryId: string) {
 function travelItemToRow(item: TravelItem, clientId: string) {
   const base = {
     id: item.id, client_id: clientId,
+    run_id: item.runId ?? null,
     // show_id is nullable and unused going forward (migration 016) —
     // real show links live in travel_item_shows, written separately
     // in upsertTravelItem.
@@ -1369,7 +1475,9 @@ function travelItemToRow(item: TravelItem, clientId: string) {
 
 export async function upsertTravelItem(item: TravelItem, clientId: string) {
   const supabase = createClient()
-  await supabase.from('travel_items').upsert(travelItemToRow(item, clientId))
+  const { error } = await supabase.from('travel_items').upsert(travelItemToRow(item, clientId))
+  // Without this, a refused save looked successful on screen and the item vanished on reload.
+  if (error) throw error
   // Flights are the one kind with real one-to-many children — same
   // delete-then-reinsert pattern as invoice_line_items/advance_contacts.
   if (item.kind === 'flight') {
