@@ -5,6 +5,7 @@
 //  evenly; a whole run shares it evenly across that run's shows.
 // ──────────────────────────────────────────────────────────
 
+import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { selectClass } from '@/components/ui/Modal'
 import { BUCKET_LABEL, PRODUCTION_BUCKETS } from '@/lib/budget'
@@ -13,7 +14,10 @@ import type { BudgetBucket } from '@/types'
 export interface CostAssignmentValue { showIds: string[]; runId?: string; bucket?: BudgetBucket }
 
 type Mode = 'none' | 'shows' | 'run'
-const modeOf = (v: CostAssignmentValue): Mode => (v.showIds.length > 0 ? 'shows' : v.runId ? 'run' : 'none')
+// "Specific show(s)" with nothing ticked yet looks the same as "none" in the data, so the
+// component remembers that the picker was asked for (pickingShows).
+const modeOf = (v: CostAssignmentValue, pickingShows: boolean): Mode =>
+  v.showIds.length > 0 ? 'shows' : v.runId ? 'run' : pickingShows ? 'shows' : 'none'
 
 const SOUND_AND_PRODUCTION: BudgetBucket[] = ['sound_lights', ...PRODUCTION_BUCKETS]
 
@@ -21,11 +25,13 @@ export function CostAssignment({ value, onChange }: { value: CostAssignmentValue
   const client = useStore(s => s.getClient())
   const shows = [...(client?.tour.shows ?? [])].sort((a, b) => a.date.localeCompare(b.date))
   const runs = client?.tour.runs ?? []
-  const mode = modeOf(value)
+  const [pickingShows, setPickingShows] = useState(false)
+  const mode = modeOf(value, pickingShows)
 
   function setMode(m: Mode) {
+    setPickingShows(m === 'shows')
     if (m === 'none') onChange({ ...value, showIds: [], runId: undefined })
-    else if (m === 'shows') onChange({ ...value, showIds: value.showIds, runId: undefined })
+    else if (m === 'shows') onChange({ ...value, runId: undefined })
     else onChange({ ...value, showIds: [], runId: value.runId ?? runs[0]?.id })
   }
 

@@ -1475,7 +1475,9 @@ function travelItemToRow(item: TravelItem, clientId: string) {
 
 export async function upsertTravelItem(item: TravelItem, clientId: string) {
   const supabase = createClient()
-  await supabase.from('travel_items').upsert(travelItemToRow(item, clientId))
+  const { error } = await supabase.from('travel_items').upsert(travelItemToRow(item, clientId))
+  // Without this, a refused save looked successful on screen and the item vanished on reload.
+  if (error) throw error
   // Flights are the one kind with real one-to-many children — same
   // delete-then-reinsert pattern as invoice_line_items/advance_contacts.
   if (item.kind === 'flight') {
