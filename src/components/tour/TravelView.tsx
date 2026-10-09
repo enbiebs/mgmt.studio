@@ -20,6 +20,8 @@ import type {
 function ShowsEditor({ item, onChange }: { item: TravelItem; onChange: (showIds: string[]) => void }) {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('tour'))
+  const saveTravelItem = useStore(s => s.saveTravelItem)
+  const runs = client?.tour.runs ?? []
   const [pickerOpen, setPickerOpen] = useState(false)
   const shows = client?.tour.shows ?? []
   const linkedIds = item.showIds ?? []
@@ -66,6 +68,20 @@ function ShowsEditor({ item, onChange }: { item: TravelItem; onChange: (showIds:
         </div>
         )}
       </div>
+      {/* A cost for a whole run (e.g. an international flight) is shared evenly across that run's shows. */}
+      {runs.length > 0 && linkedIds.length === 0 && (
+        <div className="flex items-center gap-1.5 mt-1.5">
+          <span className="text-[10px] text-gray-400 uppercase tracking-wide mr-0.5">Run</span>
+          <select
+            className="px-1.5 py-0.5 border border-gray-200 rounded text-[11px] bg-canvas" disabled={!editable}
+            value={item.runId ?? ''} onChange={e => saveTravelItem({ ...item, runId: e.target.value || undefined })}
+          >
+            <option value="">No run</option>
+            {runs.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+          {item.runId && <span className="text-[10px] text-gray-400">cost shared across that run&apos;s shows</span>}
+        </div>
+      )}
     </div>
   )
 }

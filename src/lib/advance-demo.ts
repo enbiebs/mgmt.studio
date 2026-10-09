@@ -284,6 +284,7 @@ export const MASCOLO_TOUR: TourData = {
   guestList: MASCOLO_GUESTS,
   travel:    MASCOLO_TRAVEL,
   venues:    [],
+  runs: [],
 }
 
 // ── Nimino ─────────────────────────────────────────────────
@@ -333,6 +334,7 @@ export const NIMINO_TOUR: TourData = {
     },
   ],
   venues: [],
+  runs: [],
 }
 
 // ── Sierra Bloom ───────────────────────────────────────────
@@ -435,6 +437,7 @@ export const SIERRA_TOUR: TourData = {
     },
   ],
   venues: [],
+  runs: [],
 }
 
 // ── Empty default (new clients) ────────────────────────────
@@ -445,4 +448,5 @@ export const EMPTY_TOUR: TourData = {
   guestList: [],
   travel:    [],
   venues:    [],
+  runs: [],
 }

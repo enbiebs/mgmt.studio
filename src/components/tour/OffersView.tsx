@@ -110,7 +110,8 @@ export function OffersView() {
 
 // ── Add / Edit offer modal ──────────────────────────────────
 function OfferFormModal({ initial, onClose }: { initial: TourOffer | null; onClose: () => void }) {
-  const { addOffer, updateOffer, deleteOffer } = useStore()
+  const { addOffer, updateOffer, deleteOffer, addBudget, setSelectedBudget, setTourSub } = useStore()
+  const canSeeBudgets = useStore(s => s.role !== 'artist' && s.hasAccess('finance'))
   const [f, setF] = useState({
     venue: initial?.venue ?? '', city: initial?.city ?? '', country: initial?.country ?? '',
     date: initial?.date ?? '', promoter: initial?.promoter ?? '',
@@ -147,12 +148,22 @@ function OfferFormModal({ initial, onClose }: { initial: TourOffer | null; onClo
     onClose()
   }
 
+  function openBudget() {
+    if (!initial) return
+    const id = addBudget({ offerId: initial.id })
+    if (id) { setSelectedBudget(id); setTourSub('budget'); onClose() }
+  }
+
   return (
     <Modal title={initial ? 'Edit offer' : 'Add an offer'} onClose={onClose} footer={
       <>
         {initial && (
-          <button onClick={handleDelete} className="px-3 py-1.5 text-sm text-red-400 hover:text-red-500 mr-auto">Delete</button>
+          <button onClick={handleDelete} className="px-3 py-1.5 text-sm text-red-400 hover:text-red-500">Delete</button>
         )}
+        {initial && canSeeBudgets && (
+          <button onClick={openBudget} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 mr-auto">Open budget</button>
+        )}
+        {initial && !canSeeBudgets && <span className="mr-auto" />}
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
         <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">
           {initial ? 'Save' : 'Add offer'}
@@ -175,7 +186,7 @@ function OfferFormModal({ initial, onClose }: { initial: TourOffer | null; onClo
             ))}
           </div>
           {initial.status !== 'confirmed' && !initial.showId && (
-            <div className="text-[11px] text-gray-400 mt-1">Moving this to Confirmed will automatically create the Show.</div>
+            <div className="text-[11px] text-gray-400 mt-1">Moving this to Confirmed will automatically create the Show and lock the budget&apos;s Original.</div>
           )}
         </FormField>
       )}

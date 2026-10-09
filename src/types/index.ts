@@ -209,6 +209,7 @@ export interface Show {
   agencyCommissionPct?: number      // agency's cut, only deducted when viaAgency
   managementCommissionPct?: number  // management's cut, only deducted when viaAgency
   invoiceId?: string      // → Invoice generated to track this show's receivable, if any
+  runId?: string          // → Run this show belongs to (one run per show)
 }
 
 export interface Post {
@@ -477,7 +478,7 @@ export type MainSection  = 'calendar' | 'songs' | 'tour' | 'content' | 'finance'
 export type SongsSub     = 'tracks' | 'labelcopy' | 'checklist' | 'status'
 export type ContentSub   = 'manage' | 'studio' | 'lab'
 export type BizSub       = 'royalties' | 'banking' | 'catalog' | 'pl' | 'invoices' | 'payments'
-export type TourSub      = 'tour' | 'stage-plot' | 'advance' | 'daysheet' | 'crew' | 'guests' | 'travel' | 'offers'
+export type TourSub      = 'tour' | 'stage-plot' | 'advance' | 'daysheet' | 'crew' | 'guests' | 'travel' | 'offers' | 'budget'
 export type AnalyticsSub = 'overview' | 'streaming' | 'playlists' | 'social' | 'tiktok' | 'audience' | 'charts'
 export type FandomSub    = 'overview' | 'fans' | 'referrals' | 'messaging'
 export type LegalSub     = 'pipeline' | 'alerts' | 'register' | 'templates'
@@ -626,6 +627,7 @@ export interface FlightLeg {
 export interface TravelFlight {
   id:                string
   showIds?:          string[]       // → Show — zero (a promo trip/day off), one, or several (one flight covering a festival weekend)
+  runId?:             string         // → Run — cost shared across all of that run's shows (when no specific shows are linked)
   kind:              'flight'
   status:            TravelStatus
   traveler:          string         // "Full Party" | individual name
@@ -641,6 +643,7 @@ export interface TravelFlight {
 export interface TravelHotel {
   id:                string
   showIds?:          string[]       // → Show — zero, one, or several (see TravelFlight)
+  runId?:             string         // → Run — cost shared across all of that run's shows (when no specific shows are linked)
   kind:              'hotel'
   status:            TravelStatus
   personIds?:        string[]       // → Person — who from Team this booking actually covers
@@ -660,6 +663,7 @@ export interface TravelHotel {
 export interface TravelGround {
   id:                string
   showIds?:          string[]       // → Show — zero, one, or several (see TravelFlight)
+  runId?:             string         // → Run — cost shared across all of that run's shows (when no specific shows are linked)
   kind:              'ground'
   status:            TravelStatus
   personIds?:        string[]       // → Person — who from Team this booking actually covers
@@ -717,6 +721,7 @@ export interface TourData {
   guestList:  GuestListEntry[]
   travel:     TravelItem[]
   venues:     Venue[]
+  runs:       Run[]
 }
 
 // ── Agent / Booking ─────────────────────────────────────────
@@ -805,6 +810,11 @@ export interface Expense {
   billNumber?:   string
   billFilePath?: string     // private storage path of the attached PDF
   vendorFlags?:  VendorField[]  // vendor details that differed from the saved vendor when this bill was confirmed
+  // Cost linking (Stage 4): the specific show(s) this applies to (split evenly), or a whole run
+  // (shared evenly across its shows); neither = not counted against any show.
+  showIds?:      string[]
+  runId?:        string
+  bucket?:       BudgetBucket   // which budget line this cost counts toward
 }
 
 export type VendorField = 'address' | 'email' | 'phone' | 'taxId' | 'bank'
@@ -849,6 +859,83 @@ export interface ClientFinance {
   expenses:  Expense[]
   vendors:   Vendor[]
   plMonths:  PLMonth[]
+  budgets:   Budget[]
+  crewRates: CrewRate[]
+  settings?: FinanceSettings   // home currency + default commissions; absent = defaults
+}
+
+// ── Runs & tour budgets (Stage 4) ───────────────────────────
+// A run is a named group of shows ("Europe Fall 2026"); a show is in at most one.
+export interface Run {
+  id:   string
+  name: string
+}
+
+// The budget mirrors Eli's example budget: Income → Sound & Lights → Production
+// costs → Commissions → Net, every commission with its own % and its own base.
+export type BudgetSection = 'income' | 'sound_lights' | 'production'
+export type BudgetBucket =
+  | 'guarantee' | 'overage' | 'sound_lights' | 'labor' | 'filming_editing' | 'social_content'
+  | 'airfare' | 'hotels' | 'local_transport' | 'insurance' | 'payroll_taxes' | 'per_diems' | 'supplies'
+
+export interface BudgetLine {
+  id:            string
+  section:       BudgetSection
+  bucket:        BudgetBucket
+  label:         string
+  amount:        number
+  crewMemberId?: string
+  days?:         { advance: number; travel: number; show: number }   // crew lines: what the amount was worked out from
+}
+
+export type CommissionBase = 'gross' | 'after_sound_lights' | 'after_production' | 'flat'
+export interface BudgetCommission {
+  id:    string
+  label: string
+  pct:   number
+  base:  CommissionBase
+  flat?: number             // used when base is 'flat'
+}
+
+// What "Original" compares against: the budget as it stood when the offer was confirmed.
+export interface BudgetSnapshot {
+  lines:       BudgetLine[]
+  commissions: BudgetCommission[]
+  currency:    Currency
+  version:     number
+}
+
+export interface Budget {
+  id:          string
+  offerId?:    string       // created when the offer comes in
+  showId?:     string       // set when the offer is confirmed (or a show budget made directly)
+  name:        string
+  currency:    Currency
+  status:      'draft' | 'locked'
+  version:     number
+  lines:       BudgetLine[]
+  commissions: BudgetCommission[]
+  notes?:      string
+  original?:   BudgetSnapshot
+  lockedAt?:   string
+  updatedAt?:  string
+}
+
+// Saved pay for a crew member, applied automatically to budgets.
+export interface CrewRate {
+  crewMemberId:   string
+  toursWithArtist: boolean   // auto-added to every new budget
+  rateUnit:       'day' | 'show'
+  rateShow:       number     // per show day (or per show)
+  rateAdvance?:   number     // per advance day; blank = same as the travel rate
+  rateTravel?:    number     // per travel day; blank = same as the show rate
+  perDiem:        number
+  currency:       Currency
+}
+
+export interface FinanceSettings {
+  homeCurrency:       Currency
+  defaultCommissions: Omit<BudgetCommission, 'id'>[]
 }
 
 export interface AgentData {

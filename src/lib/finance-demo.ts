@@ -39,6 +39,8 @@ export const MASCOLO_FINANCE: ClientFinance = {
     exp({ description: 'Rider — Catering + Hospitality', vendor: 'Various', amount: 890, currency: 'USD', category: 'meals', date: '2026-08-22', paid: true }),
   ],
   vendors: [],
+  budgets: [],
+  crewRates: [],
   plMonths: [
     pl('2026-01', { touring: 0, streaming: 12400, sync: 0, brand: 11250, merch: 3200, other: 0 }, { travel: 0, recording: 0, marketing: 4500, legal: 0, management: 5370, equipment: 0, meals: 0, other: 800 }),
     pl('2026-02', { touring: 0, streaming: 13100, sync: 22000, brand: 0, merch: 2800, other: 0 }, { travel: 0, recording: 2400, marketing: 4500, legal: 1200, management: 7680, equipment: 0, meals: 0, other: 600 }),
@@ -67,6 +69,8 @@ export const NIMINO_FINANCE: ClientFinance = {
     exp({ description: 'Flights LAX→ORD (The Mid show)', vendor: 'Southwest Airlines', amount: 380, currency: 'USD', category: 'travel', date: '2026-07-08', paid: true }),
   ],
   vendors: [],
+  budgets: [],
+  crewRates: [],
   plMonths: [
     pl('2026-01', { touring: 0, streaming: 3200, sync: 0, brand: 0, merch: 800, other: 0 }, { travel: 0, recording: 0, marketing: 800, legal: 0, management: 800, equipment: 0, meals: 0, other: 200 }),
     pl('2026-02', { touring: 0, streaming: 4100, sync: 0, brand: 0, merch: 1100, other: 0 }, { travel: 0, recording: 480, marketing: 800, legal: 0, management: 1040, equipment: 0, meals: 0, other: 0 }),
@@ -99,6 +103,8 @@ export const SIERRA_FINANCE: ClientFinance = {
     exp({ description: 'Tour Van Rental — Governors Ball weekend', vendor: 'Enterprise Truck Rental', amount: 980, currency: 'USD', category: 'travel', date: '2026-06-06', paid: true }),
   ],
   vendors: [],
+  budgets: [],
+  crewRates: [],
   plMonths: [
     pl('2026-01', { touring: 0, streaming: 1800, sync: 0, brand: 0, merch: 1200, other: 0 }, { travel: 0, recording: 0, marketing: 4500, legal: 0, management: 750, equipment: 0, meals: 0, other: 0 }),
     pl('2026-02', { touring: 0, streaming: 2400, sync: 0, brand: 0, merch: 1600, other: 0 }, { travel: 0, recording: 6500, marketing: 4500, legal: 0, management: 1000, equipment: 0, meals: 0, other: 0 }),
@@ -114,5 +120,7 @@ export const EMPTY_FINANCE: ClientFinance = {
   invoices: [],
   expenses: [],
   vendors: [],
+  budgets: [],
+  crewRates: [],
   plMonths: [],
 }

@@ -50,6 +50,7 @@ import { TravelView }   from '@/components/tour/TravelView'
 import { GuestListView } from '@/components/tour/GuestListView'
 import { CrewView }      from '@/components/tour/CrewView'
 import { OffersView }    from '@/components/tour/OffersView'
+import { BudgetView }    from '@/components/tour/BudgetView'
 
 export function StudioApp() {
   const { view, section, songsSub: rawSongsSub, contentSub: rawContentSub, bizSub: rawBizSub, tourSub: rawTourSub, clientId, data, role, hasAccess, isShareOnly, accessibleClientIds, openModal, isLoading } = useStore()
@@ -129,6 +130,7 @@ export function StudioApp() {
               )}
               {section === 'tour'     && (
                 tourSub === 'offers'   ? <OffersView />           :
+                tourSub === 'budget'   ? <BudgetView />           :
                 tourSub === 'advance'  ? <AdvanceView />          :
                 tourSub === 'daysheet' ? <DaySheetView />         :
                 tourSub === 'travel'   ? <TravelView />           :
