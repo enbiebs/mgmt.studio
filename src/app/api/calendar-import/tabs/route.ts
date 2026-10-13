@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireTourEditAccess, listTabs, MAX_CALENDAR_BYTES } from '@/lib/calendar-import-server'
+import { listTabs, MAX_CALENDAR_BYTES } from '@/lib/calendar-import-server'
+import { requireTourEditAccess } from '@/lib/tour-access'
 
 // Step 1 of importing a calendar: open the spreadsheet and say which of its tabs look like a
 // day-by-day calendar. Nothing is read by the AI and nothing is saved here.

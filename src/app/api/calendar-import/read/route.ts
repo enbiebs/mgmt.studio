@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
-import { requireTourEditAccess, readCalendar, calendarReadingConfigured, MAX_CALENDAR_BYTES } from '@/lib/calendar-import-server'
+import { readCalendar, calendarReadingConfigured, MAX_CALENDAR_BYTES } from '@/lib/calendar-import-server'
+import { requireTourEditAccess } from '@/lib/tour-access'
 
 // Reading a whole year of rows takes a while.
 export const maxDuration = 60

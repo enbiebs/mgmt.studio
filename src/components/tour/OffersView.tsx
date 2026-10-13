@@ -8,6 +8,8 @@ import { useMemo, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { Modal, FormField, inputClass } from '@/components/ui/Modal'
 import { SendOfferSheetModal } from '@/components/tour/SendOfferSheetModal'
+import { PasteOfferModal } from '@/components/tour/PasteOfferModal'
+import type { OfferPrefill } from '@/lib/offer-paste'
 import { OfferTermsFields } from '@/components/tour/OfferTermsFields'
 import { draftFromTerms, termsFromDraft, maxPotential, replyStatus } from '@/lib/offer-terms'
 import { latestSheet, longDate, SHEET_STATUS_LABEL, SHEET_STATUS_STYLE } from '@/lib/offer-sheet'
@@ -42,6 +44,9 @@ export function OffersView() {
   const [tab, setTab] = useState<AgentTab>('pipeline')
   const [addOpen, setAddOpen] = useState(false)
   const [editingOffer, setEditingOffer] = useState<TourOffer | null>(null)
+  const [pasteOpen, setPasteOpen] = useState(false)
+  // An offer that was read from pasted text: the form opens with it filled in.
+  const [pasted, setPasted] = useState<{ offer: OfferPrefill; notices: string[] } | null>(null)
   const [sendingOfferId, setSendingOfferId] = useState<string | null>(null)
 
   if (!client) return null
@@ -73,12 +78,21 @@ export function OffersView() {
               <StatPill label="Settled YTD" value={fmt(settledTotal)} color="text-blue-700" />
             </div>
             {editable && (
-              <button
-                onClick={() => setAddOpen(true)}
-                className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
-              >
-                + Add offer
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setPasteOpen(true)}
+                  title="Paste an offer email or attach it, and the form fills itself in"
+                  className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Paste an offer
+                </button>
+                <button
+                  onClick={() => setAddOpen(true)}
+                  className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+                >
+                  + Add offer
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -104,10 +118,17 @@ export function OffersView() {
         {tab === 'settled'  && <HistoryTab  settled={settled} cancelled={cancelled} />}
       </div>
 
-      {(addOpen || editingOffer) && (
+      {pasteOpen && (
+        <PasteOfferModal
+          onClose={() => setPasteOpen(false)}
+          onRead={(offer, notices) => { setPasteOpen(false); setPasted({ offer, notices }) }}
+        />
+      )}
+      {(addOpen || editingOffer || pasted) && (
         <OfferFormModal
           initial={editingOffer}
-          onClose={() => { setAddOpen(false); setEditingOffer(null) }}
+          prefill={pasted}
+          onClose={() => { setAddOpen(false); setEditingOffer(null); setPasted(null) }}
           onSendSheet={id => setSendingOfferId(id)}
         />
       )}
@@ -117,26 +138,37 @@ export function OffersView() {
 }
 
 // ── Add / Edit offer modal ──────────────────────────────────
-function OfferFormModal({ initial, onClose, onSendSheet }: { initial: TourOffer | null; onClose: () => void; onSendSheet: (offerId: string) => void }) {
+function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
+  initial: TourOffer | null
+  prefill?: { offer: OfferPrefill; notices: string[] } | null
+  onClose: () => void
+  onSendSheet: (offerId: string) => void
+}) {
   const { addOffer, updateOffer, deleteOffer, addBudget, setSelectedBudget, setTourSub } = useStore()
   const canSeeBudgets = useStore(s => s.role !== 'artist' && s.hasAccess('finance'))
   // Sheets carry budget numbers, so sending needs edit access to both Tour and Finance.
   const canSendSheets = useStore(s => s.role !== 'artist' && s.canEdit('tour') && s.canEdit('finance'))
   const allSheets = useStore(s => s.getClient()?.tour.offerSheets)
   const sheets = useMemo(() => (initial ? (allSheets ?? []).filter(sh => sh.offerId === initial.id) : []), [allSheets, initial])
+  // A new offer can start from what was read out of pasted text.
+  const seed: Partial<TourOffer> | undefined = initial ?? prefill?.offer
   const [f, setF] = useState({
-    venue: initial?.venue ?? '', city: initial?.city ?? '', country: initial?.country ?? '',
-    date: initial?.date ?? '', promoter: initial?.promoter ?? '',
-    guarantee: String(initial?.guarantee ?? ''), door: String(initial?.door ?? ''), buyout: String(initial?.buyout ?? ''),
-    notes: initial?.notes ?? '',
-    viaAgency: initial?.viaAgency ?? false, agencyName: initial?.agencyName ?? '',
-    agencyCommissionPct: String(initial?.agencyCommissionPct ?? ''),
-    managementCommissionPct: String(initial?.managementCommissionPct ?? ''),
+    venue: seed?.venue ?? '', city: seed?.city ?? '', country: seed?.country ?? '',
+    date: seed?.date ?? '', promoter: seed?.promoter ?? '',
+    guarantee: String(seed?.guarantee ?? ''), door: String(seed?.door ?? ''), buyout: String(seed?.buyout ?? ''),
+    notes: seed?.notes ?? '',
+    viaAgency: seed?.viaAgency ?? false, agencyName: seed?.agencyName ?? '',
+    agencyCommissionPct: String(seed?.agencyCommissionPct ?? ''),
+    managementCommissionPct: String(seed?.managementCommissionPct ?? ''),
   })
-  const [terms, setTerms] = useState(() => draftFromTerms(initial?.terms))
+  const [terms, setTerms] = useState(() => draftFromTerms(seed?.terms))
+  const [triedSave, setTriedSave] = useState(false)
+  const missing = [
+    !f.venue && 'venue', !f.city && 'city', !f.date && 'date', !f.promoter && 'promoter', !f.guarantee && 'guarantee',
+  ].filter((m): m is string => !!m)
 
   function handleSave() {
-    if (!f.venue || !f.city || !f.date || !f.promoter || !f.guarantee) return
+    if (missing.length > 0) { setTriedSave(true); return }
     const patch = {
       venue: f.venue, city: f.city, country: f.country, date: f.date, promoter: f.promoter,
       guarantee: Number(f.guarantee), door: f.door ? Number(f.door) : undefined, buyout: f.buyout ? Number(f.buyout) : undefined,
@@ -169,7 +201,7 @@ function OfferFormModal({ initial, onClose, onSendSheet }: { initial: TourOffer 
   }
 
   return (
-    <Modal title={initial ? 'Edit offer' : 'Add an offer'} onClose={onClose} wide footer={
+    <Modal title={initial ? 'Edit offer' : prefill ? 'Check this offer' : 'Add an offer'} onClose={onClose} wide footer={
       <>
         {initial && (
           <button onClick={handleDelete} className="px-3 py-1.5 text-sm text-red-400 hover:text-red-500">Delete</button>
@@ -184,6 +216,17 @@ function OfferFormModal({ initial, onClose, onSendSheet }: { initial: TourOffer 
         </button>
       </>
     }>
+      {!initial && prefill && (
+        <div className="rounded-lg border border-amber-300 text-amber-700 text-xs px-3 py-2.5 space-y-1">
+          <div className="font-semibold">Filled in from the offer you pasted. Please check it before adding.</div>
+          {prefill.notices.length > 0 && (
+            <ul className="list-disc pl-4 space-y-0.5">{prefill.notices.map((n, i) => <li key={i}>{n}</li>)}</ul>
+          )}
+        </div>
+      )}
+      {triedSave && missing.length > 0 && (
+        <div className="rounded-lg border border-red-200 text-red-600 text-xs px-3 py-2">Still needed before this can be added: {missing.join(', ')}.</div>
+      )}
       {initial && (
         <FormField label="Status">
           <div className="flex items-center bg-gray-100 rounded-full p-0.5 text-xs gap-0.5 w-fit flex-wrap">

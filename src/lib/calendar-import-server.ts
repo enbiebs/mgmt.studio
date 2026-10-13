@@ -4,9 +4,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
-import { NextResponse } from 'next/server'
 import readXlsxFile from 'read-excel-file/node'
-import { createClient } from '@/lib/supabase/server'
 import { billReadingConfigured } from '@/lib/bills'
 import {
   readTab, numberAppearsIn, venueAppearsIn, CURRENCY_WORDS,
@@ -16,25 +14,6 @@ import { toDateStr } from '@/lib/utils'
 
 export const MAX_CALENDAR_BYTES = 4 * 1024 * 1024
 export const calendarReadingConfigured = billReadingConfigured
-
-// Same rule as everything else that edits the tour: Tour edit access to the client AND not the
-// artist's own login. Both checks are the database functions the row-level security uses.
-export async function requireTourEditAccess(clientId: unknown) {
-  if (typeof clientId !== 'string' || !clientId) {
-    return { error: NextResponse.json({ error: 'Missing clientId' }, { status: 400 }) }
-  }
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: NextResponse.json({ error: 'Not signed in' }, { status: 401 }) }
-  const [section, management] = await Promise.all([
-    supabase.rpc('has_section_access', { target_client_id: clientId, target_section: 'tour', require_edit: true }),
-    supabase.rpc('is_management_side', { target_client_id: clientId }),
-  ])
-  if (section.data !== true || management.data !== true) {
-    return { error: NextResponse.json({ error: 'Not allowed' }, { status: 403 }) }
-  }
-  return { user }
-}
 
 // ── Opening the file ─────────────────────────────────────────
 export async function openWorkbook(buf: Buffer): Promise<{ name: string; data: Cell[][] }[]> {
