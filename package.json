@@ -19,6 +19,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-plaid-link": "^5.0.0",
+    "read-excel-file": "^9.3.12",
     "wavesurfer.js": "^7.12.11",
     "zod": "^4.6.5",
     "zustand": "^5.0.14"

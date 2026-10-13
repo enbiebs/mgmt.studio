@@ -363,6 +363,8 @@ interface StudioState {
 
   // ── Show actions ──
   addShow: (date: string, city: string, venue: string, time: string) => void
+  // Adds many shows at once (the spreadsheet import). Resolves with how many were saved and how many weren't.
+  importShows: (shows: Show[]) => Promise<{ saved: number; failed: number }>
   updateShowStatus: (showId: string, status: ShowStatus) => void
   updateShowFinancials: (showId: string, patch: { guarantee?: number; deposit?: number; currency?: Currency; viaAgency?: boolean; agencyName?: string; agencyCommissionPct?: number; managementCommissionPct?: number }) => void
   /** No-ops if the show has no guarantee yet, or already has a generated invoice. */
@@ -1981,6 +1983,27 @@ export const useStore = create<StudioState>((set, get) => ({
       upsertShow(newShow, clientId).catch(console.error)
       pushToGoogleCalendar(clientId, 'show', newShow)
     }
+  },
+
+  importShows: async (shows) => {
+    const { clientId } = get()
+    if (!clientId || shows.length === 0) return { saved: 0, failed: 0 }
+    const updated = {
+      clients: get().data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return { ...c, tour: { ...c.tour, shows: [...c.tour.shows, ...shows].sort((a, b) => a.date.localeCompare(b.date)) } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    // Saved a few at a time so a long calendar doesn't open dozens of connections at once.
+    let failed = 0
+    for (let i = 0; i < shows.length; i += 8) {
+      const results = await Promise.allSettled(shows.slice(i, i + 8).map(s => upsertShow(s, clientId)))
+      failed += results.filter(r => r.status === 'rejected').length
+    }
+    shows.forEach(s => pushToGoogleCalendar(clientId, 'show', s))
+    return { saved: shows.length - failed, failed }
   },
 
   updateShowStatus: (showId, status) => {
