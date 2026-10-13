@@ -17,7 +17,7 @@ import { AddShowModal } from '@/components/tour/TourView'
 import { PostModal } from '@/components/content/ManageView'
 import { AddProjectModal } from '@/components/manager/ProjectsView'
 
-const ALL_DOMAINS: CalendarEventDomain[] = ['show', 'release', 'post', 'invoice', 'contract', 'project', 'bill']
+const ALL_DOMAINS: CalendarEventDomain[] = ['show', 'offer', 'release', 'post', 'invoice', 'contract', 'project', 'bill']
 
 // Quick-add on the calendar grid itself only covers the three record types
 // that have few enough required fields to create with a single lightweight
@@ -91,6 +91,8 @@ export function CalendarView() {
       setSection('projects')
     } else if (e.domain === 'bill') {
       setSection('finance'); setBizSub('payments')
+    } else if (e.domain === 'offer') {
+      setSection('tour'); setTourSub('offers')
     }
   }
 

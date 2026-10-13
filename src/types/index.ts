@@ -722,10 +722,43 @@ export interface TourData {
   travel:     TravelItem[]
   venues:     Venue[]
   runs:       Run[]
+  offerSheets?: OfferSheet[]   // management with Tour + Finance access, and the artist's own login
 }
 
 // ── Agent / Booking ─────────────────────────────────────────
 export type OfferStatus = 'inquiry' | 'hold' | 'confirmed' | 'cancelled' | 'settled'
+
+// Everything an offer says beyond venue / date / guarantee. All optional: an offer only
+// carries the terms that were actually quoted.
+export interface OfferBonus   { atTickets: number; amount: number }        // "$750 if 850 tickets sell"
+export interface OfferPayment { when: string; pct: number }                // "30 days out" - 25
+export interface OfferTerms {
+  // The show
+  capacity?:         number
+  ageLimit?:         string          // All ages / 18+ / 21+
+  venueType?:        string          // "Converted warehouse"
+  billing?:          string          // Headline / Direct support / Support / Festival set
+  doors?:            string          // "21:00"
+  setStart?:         string          // "00:30"  (12:30 AM)
+  setLengthMin?:     number
+  // Money beyond the guarantee
+  bonuses?:          OfferBonus[]
+  groundTransport?:  number          // contributed by the promoter
+  hotel?:            number
+  airfare?:          number
+  merchArtistPct?:   number          // the artist's share of merch
+  merchSoldBy?:      'artist' | 'venue'
+  // Terms
+  production?:       string          // "House production and backline only"
+  hospitality?:      string          // "No meal or hospitality buyouts"
+  payments?:         OfferPayment[]  // schedule, percentages add up to 100
+  radiusMiles?:      number          // radius clause: no shows within this many miles ...
+  radiusDaysAfter?:  number          // ... from confirmation until this many days after the show
+  // For deciding
+  routingNotes?:     string          // "Cancun is the next day, 7:30 PM set"
+  alternativeDates?: string          // "December is open except 12/14"
+  respondBy?:        string          // ISO date: the buyer wants an answer by then
+}
 
 export interface TourOffer {
   id:         string
@@ -746,6 +779,7 @@ export interface TourOffer {
   agencyName?: string
   agencyCommissionPct?: number      // agency's cut, only deducted when viaAgency
   managementCommissionPct?: number  // management's cut, only deducted when viaAgency
+  terms?: OfferTerms
 }
 
 // ── Legal / Contracts ───────────────────────────────────────
@@ -936,6 +970,43 @@ export interface CrewRate {
 export interface FinanceSettings {
   homeCurrency:       Currency
   defaultCommissions: Omit<BudgetCommission, 'id'>[]
+}
+
+// ── Offer sheets (Stage 4, Part 2) ──────────────────────────
+// What the manager sends the artist for one offer: a SNAPSHOT of the deal and
+// the budget at send time. The artist taps Approve or Pass; nothing confirms
+// by itself. Sending again makes the next version and supersedes the earlier ones.
+export type OfferSheetStatus = 'sent' | 'approved' | 'passed' | 'superseded' | 'withdrawn'
+export type OfferSheetDetail = 'full' | 'summary'
+
+export interface OfferSheetSnapshot {
+  artistName:  string
+  currency:    Currency
+  // The offer's own internal notes are deliberately never included.
+  offer: {
+    venue: string; city: string; country: string; date: string; promoter: string
+    guarantee: number; door?: number; buyout?: number
+    terms?: OfferTerms
+  }
+  // Always present; a summary sheet carries nothing but these (and no per-line detail).
+  totals: { gross: number; soundLights: number; production: number; commissions: number; net: number }
+  // Full breakdown only.
+  lines?:        { section: BudgetSection; label: string; amount: number }[]
+  commissions?:  { label: string; pct: number; base: CommissionBase; flat?: number; amount: number }[]
+  budgetNotes?:  string
+}
+
+export interface OfferSheet {
+  id:            string
+  offerId:       string
+  version:       number
+  status:        OfferSheetStatus
+  detail:        OfferSheetDetail
+  message?:      string
+  snapshot:      OfferSheetSnapshot
+  sentAt:        string
+  respondedAt?:  string
+  responseNote?: string
 }
 
 export interface AgentData {

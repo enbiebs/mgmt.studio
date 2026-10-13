@@ -141,8 +141,14 @@ export function filterClientForViewer(c: Client, v: Viewer, exceptions: ItemExce
   const tourAccess = hasSectionGrant(v, 'tour', c.id)
 
   const albums = c.songs.albums.filter(a => sees('album', a.id))
-  // Vendors have no per-item sharing: management side only, with Finance access.
+  // Vendors, budgets, crew pay and finance settings have no per-item sharing: management
+  // side only, with Finance access (the database rule is the same).
   const vendorsVisible = v.role !== 'artist' && hasSectionGrant(v, 'finance', c.id)
+  // Offers are deal negotiations: management side with Tour access. The artist only learns
+  // about an offer through a sheet sent to them (offer sheets also need Finance, since they
+  // carry budget numbers).
+  const offersVisible = v.role !== 'artist' && tourAccess
+  const sheetsVisible = v.role === 'artist' ? v.clientId === c.id : tourAccess && vendorsVisible
 
   const filtered: Client = {
     ...c,
@@ -151,6 +157,7 @@ export function filterClientForViewer(c: Client, v: Viewer, exceptions: ItemExce
       shows,
       advances: c.tour.advances.filter(a => showIds.has(a.showId)),
       guestList: c.tour.guestList.filter(g => showIds.has(g.showId)),
+      offerSheets: sheetsVisible ? c.tour.offerSheets : [],
       travel: c.tour.travel.filter(t => {
         const links = t.showIds ?? []
         return links.length === 0 ? tourAccess : links.some(id => showIds.has(id))
@@ -165,7 +172,11 @@ export function filterClientForViewer(c: Client, v: Viewer, exceptions: ItemExce
       invoices: c.finance.invoices.filter(i => sees('invoice', i.id)),
       expenses: c.finance.expenses.filter(e => sees('expense', e.id)),
       vendors: vendorsVisible ? c.finance.vendors : [],
+      budgets: vendorsVisible ? c.finance.budgets : [],
+      crewRates: vendorsVisible ? c.finance.crewRates : [],
+      settings: vendorsVisible ? c.finance.settings : undefined,
     },
+    agentData: { ...c.agentData, offers: offersVisible ? c.agentData.offers : [] },
   }
   return { ...filtered, itemSections: sectionsWithItems(filtered) }
 }

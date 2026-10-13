@@ -4,9 +4,13 @@
 //  calendar, and settlements (pre-Shows negotiation stage).
 // ──────────────────────────────────────────────────────────
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { Modal, FormField, inputClass } from '@/components/ui/Modal'
+import { SendOfferSheetModal } from '@/components/tour/SendOfferSheetModal'
+import { OfferTermsFields } from '@/components/tour/OfferTermsFields'
+import { draftFromTerms, termsFromDraft, maxPotential, replyStatus } from '@/lib/offer-terms'
+import { latestSheet, longDate, SHEET_STATUS_LABEL, SHEET_STATUS_STYLE } from '@/lib/offer-sheet'
 import type { TourOffer, OfferStatus } from '@/types'
 
 const ALL_STATUSES: OfferStatus[] = ['inquiry', 'hold', 'confirmed', 'settled', 'cancelled']
@@ -37,6 +41,7 @@ export function OffersView() {
   const [tab, setTab] = useState<AgentTab>('pipeline')
   const [addOpen, setAddOpen] = useState(false)
   const [editingOffer, setEditingOffer] = useState<TourOffer | null>(null)
+  const [sendingOfferId, setSendingOfferId] = useState<string | null>(null)
 
   if (!client) return null
   const offers = client.agentData?.offers ?? []
@@ -102,16 +107,22 @@ export function OffersView() {
         <OfferFormModal
           initial={editingOffer}
           onClose={() => { setAddOpen(false); setEditingOffer(null) }}
+          onSendSheet={id => setSendingOfferId(id)}
         />
       )}
+      {sendingOfferId && <SendOfferSheetModal offerId={sendingOfferId} onClose={() => setSendingOfferId(null)} />}
     </div>
   )
 }
 
 // ── Add / Edit offer modal ──────────────────────────────────
-function OfferFormModal({ initial, onClose }: { initial: TourOffer | null; onClose: () => void }) {
+function OfferFormModal({ initial, onClose, onSendSheet }: { initial: TourOffer | null; onClose: () => void; onSendSheet: (offerId: string) => void }) {
   const { addOffer, updateOffer, deleteOffer, addBudget, setSelectedBudget, setTourSub } = useStore()
   const canSeeBudgets = useStore(s => s.role !== 'artist' && s.hasAccess('finance'))
+  // Sheets carry budget numbers, so sending needs edit access to both Tour and Finance.
+  const canSendSheets = useStore(s => s.role !== 'artist' && s.canEdit('tour') && s.canEdit('finance'))
+  const allSheets = useStore(s => s.getClient()?.tour.offerSheets)
+  const sheets = useMemo(() => (initial ? (allSheets ?? []).filter(sh => sh.offerId === initial.id) : []), [allSheets, initial])
   const [f, setF] = useState({
     venue: initial?.venue ?? '', city: initial?.city ?? '', country: initial?.country ?? '',
     date: initial?.date ?? '', promoter: initial?.promoter ?? '',
@@ -121,6 +132,7 @@ function OfferFormModal({ initial, onClose }: { initial: TourOffer | null; onClo
     agencyCommissionPct: String(initial?.agencyCommissionPct ?? ''),
     managementCommissionPct: String(initial?.managementCommissionPct ?? ''),
   })
+  const [terms, setTerms] = useState(() => draftFromTerms(initial?.terms))
 
   function handleSave() {
     if (!f.venue || !f.city || !f.date || !f.promoter || !f.guarantee) return
@@ -131,6 +143,7 @@ function OfferFormModal({ initial, onClose }: { initial: TourOffer | null; onClo
       viaAgency: f.viaAgency, agencyName: f.viaAgency ? (f.agencyName || undefined) : undefined,
       agencyCommissionPct: f.viaAgency && f.agencyCommissionPct ? Number(f.agencyCommissionPct) : undefined,
       managementCommissionPct: f.viaAgency && f.managementCommissionPct ? Number(f.managementCommissionPct) : undefined,
+      terms: termsFromDraft(terms),
     }
     if (initial) updateOffer(initial.id, patch)
     else addOffer(patch)
@@ -155,7 +168,7 @@ function OfferFormModal({ initial, onClose }: { initial: TourOffer | null; onClo
   }
 
   return (
-    <Modal title={initial ? 'Edit offer' : 'Add an offer'} onClose={onClose} footer={
+    <Modal title={initial ? 'Edit offer' : 'Add an offer'} onClose={onClose} wide footer={
       <>
         {initial && (
           <button onClick={handleDelete} className="px-3 py-1.5 text-sm text-red-400 hover:text-red-500">Delete</button>
@@ -190,6 +203,30 @@ function OfferFormModal({ initial, onClose }: { initial: TourOffer | null; onClo
           )}
         </FormField>
       )}
+      {initial && canSendSheets && initial.status !== 'cancelled' && initial.status !== 'settled' && (
+        <FormField label="Offer sheet">
+          <div className="border border-gray-100 rounded-lg p-2.5 space-y-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { onClose(); onSendSheet(initial.id) }}
+                className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50"
+              >{sheets.length > 0 ? `Send a new version (V${Math.max(...sheets.map(sh => sh.version)) + 1})…` : 'Send to artist…'}</button>
+              <span className="text-[11px] text-gray-400">A snapshot of the deal + budget; they tap Approve or Pass.</span>
+            </div>
+            {[...sheets].sort((a, b) => b.version - a.version).map(sh => (
+              <div key={sh.id} className="flex items-center gap-2 text-xs">
+                <span className="font-semibold w-7">V{sh.version}</span>
+                <span className="text-gray-400">{longDate(sh.sentAt.slice(0, 10))}</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${SHEET_STATUS_STYLE[sh.status]}`}>{SHEET_STATUS_LABEL[sh.status]}</span>
+                <a href={`/api/offer-sheets/${sh.id}/pdf`} target="_blank" rel="noreferrer" className="ml-auto text-blue-500 hover:underline">PDF</a>
+              </div>
+            ))}
+            {sheets.some(sh => sh.responseNote) && (
+              <div className="text-[11px] text-gray-500">Artist note: &ldquo;{[...sheets].sort((a, b) => b.version - a.version).find(sh => sh.responseNote)?.responseNote}&rdquo;</div>
+            )}
+          </div>
+        </FormField>
+      )}
       <FormField label="Venue"><input type="text" className={inputClass} value={f.venue} onChange={e => setF(p => ({...p, venue: e.target.value}))} /></FormField>
       <FormField label="City"><input type="text" className={inputClass} value={f.city} onChange={e => setF(p => ({...p, city: e.target.value}))} /></FormField>
       <FormField label="Country"><input type="text" className={inputClass} value={f.country} onChange={e => setF(p => ({...p, country: e.target.value}))} /></FormField>
@@ -213,6 +250,7 @@ function OfferFormModal({ initial, onClose }: { initial: TourOffer | null; onClo
           <div className="text-[11px] text-gray-400 -mt-2">Only deducted from the expected receivable when booked via agency — leave blank if not taken at the agency level.</div>
         </>
       )}
+      <OfferTermsFields draft={terms} onChange={setTerms} guarantee={Number(f.guarantee) || 0} />
     </Modal>
   )
 }
@@ -267,6 +305,10 @@ function PipelineTab({ offers, editable, onEdit }: { offers: TourOffer[]; editab
 
 function OfferCard({ offer: o, editable, onEdit }: { offer: TourOffer; editable: boolean; onEdit: (o: TourOffer) => void }) {
   const cfg = STATUS_CONFIG[o.status]
+  const sheet = useStore(s => latestSheet(s.getClient()?.tour.offerSheets, o.id))
+  const reply = replyStatus(o.terms?.respondBy, new Date().toISOString().slice(0, 10))
+  const upTo = o.terms?.bonuses?.length ? maxPotential(o.guarantee, o.terms) : undefined
+  const showLine = [o.terms?.billing, o.terms?.capacity ? `${o.terms.capacity.toLocaleString('en-US')} cap` : '', o.terms?.ageLimit].filter(Boolean).join(' · ')
   return (
     <div
       onClick={editable ? () => onEdit(o) : undefined}
@@ -286,10 +328,22 @@ function OfferCard({ offer: o, editable, onEdit }: { offer: TourOffer; editable:
         <span><span className="text-gray-400">Guarantee</span> <span className="font-semibold">{fmt(o.guarantee)}</span></span>
         {o.door   && <span><span className="text-gray-400">Door</span> <span className="font-semibold">{o.door}%</span></span>}
         {o.buyout && <span><span className="text-gray-400">Buyout</span> <span className="font-semibold">{fmt(o.buyout)}</span></span>}
+        {upTo !== undefined && <span><span className="text-gray-400">Up to</span> <span className="font-semibold">{fmt(upTo)}</span></span>}
       </div>
-      <div className="mt-2 text-xs text-gray-400">{o.promoter}</div>
+      <div className="mt-2 text-xs text-gray-400">{o.promoter}{showLine ? ` · ${showLine}` : ''}</div>
+      {reply && (
+        <div className="mt-2">
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${reply.tone === 'late' ? 'bg-red-50 text-red-600' : reply.tone === 'soon' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>{reply.label}</span>
+        </div>
+      )}
       {o.notes && (
         <div className="mt-2 text-xs text-amber-600 bg-amber-50 rounded-lg px-2 py-1">{o.notes}</div>
+      )}
+      {sheet && sheet.status !== 'superseded' && (
+        <div className="mt-2 flex items-center gap-1.5 text-[11px]">
+          <span className="text-gray-400">Sheet V{sheet.version}</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${SHEET_STATUS_STYLE[sheet.status]}`}>{SHEET_STATUS_LABEL[sheet.status]}</span>
+        </div>
       )}
     </div>
   )

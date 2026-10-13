@@ -17,12 +17,14 @@ import type {
   CrewMember, GuestListEntry, TravelItem, Currency, Person, PersonActivity, CatalogWork,
   LegalTemplate, LegalTemplateClause, Stage, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
   Venue, FlightLeg, Vendor, Run, Budget, CrewRate, FinanceSettings, BudgetLine, BudgetCommission, BudgetSnapshot, Currency as Cur,
+  OfferSheet, OfferTerms,
 } from '@/types'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
 import { EMPTY_FANDOM }    from '@/lib/fandom-demo'
 import { EMPTY_AGENT }     from '@/lib/agent-demo'
 import { EMPTY_LEGAL }     from '@/lib/legal-demo'
 import { EMPTY_FINANCE }   from '@/lib/finance-demo'
+import { rowToOfferSheet, type OfferSheetRow } from '@/lib/offer-sheet'
 import { sectionsWithItems, type ItemException, type ItemType, type ItemEffect } from '@/lib/item-access'
 
 // ── Load ───────────────────────────────────────────────────
@@ -52,7 +54,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems, flightLegs, travelItemShows,
     people, bankAccounts, bankTransactions,
     trackRounds, trackNotes, trackNoteReplies, trackCredits, venues, vendors,
-    runsQ, budgetsQ, crewRatesQ, financeSettingsQ, expenseShowsQ,
+    runsQ, budgetsQ, crewRatesQ, financeSettingsQ, expenseShowsQ, offerSheetsQ,
   ] = await Promise.all([
     supabase.from('albums').select('*').in('client_id', clientIds),
     supabase.from('tracks').select('*'),
@@ -92,6 +94,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     supabase.from('crew_rates').select('*').in('client_id', clientIds),
     supabase.from('client_finance_settings').select('*').in('client_id', clientIds),
     supabase.from('expense_shows').select('*'),
+    supabase.from('offer_sheets').select('*').in('client_id', clientIds),
   ])
 
   const albumRows     = albums.data       ?? []
@@ -509,7 +512,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
 
     const cOffers = (tourOffers.data ?? [])
       .filter((o: { client_id: string }) => o.client_id === c.id)
-      .map((o: { id: string; venue: string; city: string; country: string; date: string; promoter: string; guarantee: number; door?: number; buyout?: number; status: string; notes?: string; settled_at?: string; net_payout?: number; show_id?: string; via_agency?: boolean; agency_name?: string; agency_commission_pct?: number; management_commission_pct?: number }) => ({
+      .map((o: { id: string; venue: string; city: string; country: string; date: string; promoter: string; guarantee: number; door?: number; buyout?: number; status: string; notes?: string; settled_at?: string; net_payout?: number; show_id?: string; via_agency?: boolean; agency_name?: string; agency_commission_pct?: number; management_commission_pct?: number; terms?: OfferTerms | null }) => ({
         id: o.id, venue: o.venue, city: o.city, country: o.country,
         date: o.date, promoter: o.promoter, guarantee: o.guarantee,
         door: o.door, buyout: o.buyout, status: o.status as TourOffer['status'],
@@ -518,6 +521,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
         viaAgency: o.via_agency ?? undefined, agencyName: o.agency_name ?? undefined,
         agencyCommissionPct: o.agency_commission_pct ?? undefined,
         managementCommissionPct: o.management_commission_pct ?? undefined,
+        terms: o.terms ?? undefined,
       }))
 
     const cContracts = (contracts.data ?? [])
@@ -562,6 +566,10 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
         lines: b.lines ?? [], commissions: b.commissions ?? [], notes: b.notes ?? undefined,
         original: b.original ?? undefined, lockedAt: b.locked_at ?? undefined, updatedAt: b.updated_at,
       }))
+
+    const cOfferSheets: OfferSheet[] = (offerSheetsQ.data ?? [])
+      .filter((r: { client_id: string }) => r.client_id === c.id)
+      .map(rowToOfferSheet)
 
     const cCrewRates: CrewRate[] = (crewRatesQ.data ?? [])
       .filter((r: { client_id: string }) => r.client_id === c.id)
@@ -645,6 +653,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
         travel:    cTravel,
         venues:    cVenues,
         runs:      cRuns,
+        offerSheets: cOfferSheets,
       },
       content:  { posts: cPosts },
       business: {
@@ -1013,7 +1022,7 @@ export async function deleteShow(showId: string) {
 // ── Tour Offer ───────────────────────────────────────────────
 export async function upsertOffer(offer: TourOffer, clientId: string) {
   const supabase = createClient()
-  await supabase.from('tour_offers').upsert({
+  const { error } = await supabase.from('tour_offers').upsert({
     id: offer.id, client_id: clientId,
     venue: offer.venue, city: offer.city, country: offer.country,
     date: offer.date, promoter: offer.promoter, guarantee: offer.guarantee,
@@ -1024,7 +1033,10 @@ export async function upsertOffer(offer: TourOffer, clientId: string) {
     via_agency: offer.viaAgency ?? null, agency_name: offer.agencyName ?? null,
     agency_commission_pct: offer.agencyCommissionPct ?? null,
     management_commission_pct: offer.managementCommissionPct ?? null,
+    terms: offer.terms ?? null,
   })
+  // A refused save used to look like a successful one on screen.
+  if (error) throw error
 }
 
 export async function deleteOffer(offerId: string) {
@@ -1061,6 +1073,38 @@ export async function upsertExpense(expense: Expense, clientId: string) {
     )
     if (ins.error) throw ins.error
   }
+}
+
+// ── Offer sheets (Stage 4, Part 2) ────────────────────────────
+// Saves a new sheet, then retires the earlier ones for the same offer (one at a time:
+// the new row goes in first, so a failure never leaves the artist with nothing to answer).
+export async function insertOfferSheet(sheet: OfferSheet, clientId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('offer_sheets').insert({
+    id: sheet.id, client_id: clientId, offer_id: sheet.offerId, version: sheet.version, status: sheet.status,
+    detail: sheet.detail, message: sheet.message ?? null, snapshot: sheet.snapshot, sent_at: sheet.sentAt,
+  })
+  if (error) throw error
+  const { error: supersedeError } = await supabase.from('offer_sheets')
+    .update({ status: 'superseded' })
+    .eq('offer_id', sheet.offerId).neq('id', sheet.id).in('status', ['sent', 'approved', 'passed'])
+  if (supersedeError) throw supersedeError
+}
+
+// The artist's answer. Goes through a database function: the artist's login has no
+// permission to edit sheets directly, only to answer one that is still waiting.
+export async function answerOfferSheet(sheetId: string, response: 'approved' | 'passed', note?: string): Promise<OfferSheet> {
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc('respond_to_offer_sheet', { p_sheet_id: sheetId, p_response: response, p_note: note ?? null })
+  if (error) throw error
+  return rowToOfferSheet(data as OfferSheetRow)
+}
+
+// An offer that is cancelled shouldn't keep asking the artist for an answer.
+export async function withdrawOfferSheets(offerId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('offer_sheets').update({ status: 'withdrawn' }).eq('offer_id', offerId).eq('status', 'sent')
+  if (error) throw error
 }
 
 // ── Runs, budgets, crew rates, finance settings (Stage 4) ────

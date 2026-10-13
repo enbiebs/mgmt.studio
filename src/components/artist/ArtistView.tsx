@@ -4,14 +4,16 @@
 //
 //  This is what the artist sees. It shows:
 //    • Their releases (simplified stage progress)
+//    • Offers the manager has sent them an offer sheet for (Approve / Pass)
 //    • Upcoming confirmed shows
 //    • Scheduled content
 //    • Their personal todo list
 //    • A form to submit requests to management
 //
 //  It does NOT show: banking splits, royalty percentages,
-//  internal team assignments, deal negotiations, or any
-//  management operational details.
+//  internal team assignments, deal negotiations (an offer only
+//  appears once a sheet has been sent), or any management
+//  operational details.
 // ──────────────────────────────────────────────────────────
 
 import { useState } from 'react'
@@ -20,6 +22,7 @@ import type { ProjectType } from '@/types'
 import { initials, fmt } from '@/lib/utils'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { STATUS_CONFIG, STAKEHOLDER_TOOLTIPS } from '@/components/manager/ProjectsView'
+import { OfferSheetsCard } from '@/components/artist/OfferSheets'
 
 /** Compact number formatter for big at-a-glance stats: 1.8M, 220K, 940 */
 function fmtCompact(n: number): string {
@@ -135,6 +138,9 @@ export function ArtistView() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-6">
+
+        {/* ── Offers (only the ones the manager has sent an offer sheet for) ── */}
+        <OfferSheetsCard />
 
         {/* ── Releases ── */}
         <div className="bg-canvas rounded-2xl border border-gray-100 p-5">
