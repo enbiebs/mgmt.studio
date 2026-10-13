@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
+import { fromDateStr } from '@/lib/utils'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import type { Show, GuestListCategory, GuestListEntry } from '@/types'
 
@@ -38,7 +39,7 @@ export function GuestListView() {
   const cap = show ? parseInt(advances.find(a => a.showId === show.id)?.guestListCap ?? '', 10) : NaN
   const overCap = !isNaN(cap) && totalQty > cap
 
-  const showDate = show ? new Date(show.date) : null
+  const showDate = show ? fromDateStr(show.date) : null
   const dateStr = showDate?.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 
   return (
@@ -52,7 +53,7 @@ export function GuestListView() {
           {shows.map(s => {
             const items = allGuests.filter(g => g.showId === s.id)
             const qty = items.reduce((sum, g) => sum + g.qty, 0)
-            const d = new Date(s.date)
+            const d = fromDateStr(s.date)
             return (
               <button
                 key={s.id}

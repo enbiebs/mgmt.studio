@@ -3,6 +3,7 @@ import { useStore } from '@/lib/store'
 import { initials } from '@/lib/utils'
 import { useState, useRef, useEffect } from 'react'
 import { useInbox } from '@/lib/useInbox'
+import { SHOW_UNFINISHED_KEY, analyticsHasData } from '@/lib/unfinished'
 import type { MainSection } from '@/types'
 
 const ROLE_LABEL: Record<string, string> = { manager: 'Manager', artist: 'Artist', agent: 'Agent', lawyer: 'Lawyer', team: 'Team' }
@@ -15,6 +16,9 @@ export function AppHeader() {
   const canSwitchRole = authRole === null || authRole === 'manager'
   const client = useStore(s => s.getClient())
   const inboxCount = useInbox().total
+  const showUnfinished = useStore(s => s.showUnfinished)
+  const setShowUnfinished = useStore(s => s.setShowUnfinished)
+  const analyticsVisible = showUnfinished || analyticsHasData(client)
   const [switchOpen, setSwitchOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [userOpen, setUserOpen] = useState(false)
@@ -32,6 +36,16 @@ export function AppHeader() {
         const who = m.role === 'artist' ? m.clientName : m.personName
         return `${ROLE_LABEL[m.role] ?? m.role} — ${who ?? 'Unnamed'}`
       })()
+
+  // Remember the "show unfinished screens" choice on this computer.
+  useEffect(() => {
+    try { if (localStorage.getItem(SHOW_UNFINISHED_KEY) === '1') setShowUnfinished(true) } catch { /* ignore */ }
+  }, [setShowUnfinished])
+
+  // If Analytics gets hidden while it's open, move somewhere that exists.
+  useEffect(() => {
+    if (section === 'analytics' && !analyticsVisible) setSection('calendar')
+  }, [section, analyticsVisible, setSection])
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -69,7 +83,7 @@ export function AppHeader() {
             ['Music', 'songs'], ['Tour', 'tour'], ['Content', 'content'],
             ['Finance', 'finance'], ['Team', 'team'], ['Projects', 'projects'], ['Analytics', 'analytics'], ['Legal', 'legal'],
           ] as [string, MainSection][])
-            .filter(([, key]) => hasAccess(key, clientId ?? undefined))
+            .filter(([, key]) => hasAccess(key, clientId ?? undefined) && (key !== 'analytics' || analyticsVisible))
             .map(([label, key]) => (
             <button
               key={key}
@@ -195,6 +209,12 @@ export function AppHeader() {
           </button>
           {userOpen && (
             <div className="absolute right-0 top-full mt-1 bg-canvas border border-gray-100 rounded-xl shadow-lg min-w-[140px] overflow-hidden z-50 py-1">
+              {authRole === 'manager' && (
+                <label className="flex items-start gap-2 px-3 py-2 text-xs text-gray-500 cursor-pointer hover:bg-gray-50 max-w-[220px]">
+                  <input type="checkbox" className="mt-0.5 rounded" checked={showUnfinished} onChange={e => setShowUnfinished(e.target.checked)} />
+                  <span>Show unfinished screens<span className="block text-[10px] text-gray-400">Analytics, Content Lab. Only on this computer.</span></span>
+                </label>
+              )}
               <button
                 onClick={() => { setUserOpen(false); signOut() }}
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left text-gray-600 hover:bg-gray-50 transition-colors"

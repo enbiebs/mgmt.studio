@@ -11,6 +11,7 @@ import { Modal, inputClass } from '@/components/ui/Modal'
 import { OfferSheetDocument } from '@/components/tour/OfferSheetDocument'
 import { sheetsForArtist, longDate } from '@/lib/offer-sheet'
 import type { OfferSheet } from '@/types'
+import { today as localToday, localDateOf } from '@/lib/utils'
 
 type Tone = { label: string; cls: string }
 
@@ -26,7 +27,7 @@ export function OfferSheetsCard() {
   const [openId, setOpenId] = useState<string | null>(null)
   if (!client) return null
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localToday()
   const confirmedOfferIds = new Set(client.tour.shows.map(s => s.tourOfferId).filter(Boolean))
   const sheets = sheetsForArtist(client.tour.offerSheets).filter(s => s.snapshot.offer.date >= today)
   if (sheets.length === 0) return null
@@ -110,13 +111,13 @@ function ArtistOfferSheetModal({ sheetId, onClose }: { sheetId: string; onClose:
 
       {!confirmed && sheet.status === 'approved' && (
         <div className="text-sm rounded-lg bg-green-50 text-green-800 px-3 py-2.5">
-          You approved this{sheet.respondedAt ? ` on ${longDate(sheet.respondedAt.slice(0, 10))}` : ''}. Your manager will confirm it with the promoter.
+          You approved this{sheet.respondedAt ? ` on ${longDate(localDateOf(sheet.respondedAt))}` : ''}. Your manager will confirm it with the promoter.
           {sheet.responseNote && <div className="mt-1 text-xs">Your note: &ldquo;{sheet.responseNote}&rdquo;</div>}
         </div>
       )}
       {!confirmed && sheet.status === 'passed' && (
         <div className="text-sm rounded-lg bg-gray-100 text-gray-700 px-3 py-2.5">
-          You passed on this{sheet.respondedAt ? ` on ${longDate(sheet.respondedAt.slice(0, 10))}` : ''}.
+          You passed on this{sheet.respondedAt ? ` on ${longDate(localDateOf(sheet.respondedAt))}` : ''}.
           {sheet.responseNote && <div className="mt-1 text-xs">Your note: &ldquo;{sheet.responseNote}&rdquo;</div>}
         </div>
       )}

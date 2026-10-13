@@ -19,10 +19,11 @@
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import type { ProjectType } from '@/types'
-import { initials, fmt } from '@/lib/utils'
+import { initials, fmt, today as localToday } from '@/lib/utils'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { STATUS_CONFIG, STAKEHOLDER_TOOLTIPS } from '@/components/manager/ProjectsView'
 import { OfferSheetsCard } from '@/components/artist/OfferSheets'
+import { analyticsHasData } from '@/lib/unfinished'
 
 /** Compact number formatter for big at-a-glance stats: 1.8M, 220K, 940 */
 function fmtCompact(n: number): string {
@@ -56,7 +57,7 @@ export function ArtistView() {
 
   if (!client) return null
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localToday()
 
   // Releases
   const album = client.songs.albums[0]
@@ -260,22 +261,24 @@ export function ArtistView() {
           </div>
         </div>
 
-        {/* ── Analytics ── */}
-        <div className="bg-canvas rounded-2xl border border-gray-100 p-5">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">Analytics</div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="font-serif text-2xl font-medium">{fmtCompact(a?.streaming?.monthlyListeners ?? 0)}</div>
-              <div className={`text-xs mt-0.5 ${listenersUp ? 'text-green-600' : 'text-red-500'}`}>
-                {listenersUp ? '↑' : '↓'} {Math.abs(a?.streaming?.monthlyListenersPct ?? 0)}% monthly listeners
+        {/* ── Analytics (only once there are real numbers to show) ── */}
+        {analyticsHasData(client) && (
+          <div className="bg-canvas rounded-2xl border border-gray-100 p-5">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">Analytics</div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="font-serif text-2xl font-medium">{fmtCompact(a?.streaming?.monthlyListeners ?? 0)}</div>
+                <div className={`text-xs mt-0.5 ${listenersUp ? 'text-green-600' : 'text-red-500'}`}>
+                  {listenersUp ? '↑' : '↓'} {Math.abs(a?.streaming?.monthlyListenersPct ?? 0)}% monthly listeners
+                </div>
+              </div>
+              <div>
+                <div className="font-serif text-2xl font-medium">{a?.momentumScore ?? 0}<span className="text-sm text-gray-300">/100</span></div>
+                <div className="text-xs text-gray-400 mt-0.5">momentum score</div>
               </div>
             </div>
-            <div>
-              <div className="font-serif text-2xl font-medium">{a?.momentumScore ?? 0}<span className="text-sm text-gray-300">/100</span></div>
-              <div className="text-xs text-gray-400 mt-0.5">momentum score</div>
-            </div>
           </div>
-        </div>
+        )}
 
         {/* ── My Todos ── */}
         <div className="bg-canvas rounded-2xl border border-gray-100 p-5">

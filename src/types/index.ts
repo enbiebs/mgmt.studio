@@ -970,6 +970,7 @@ export type OfferSheetDetail = 'full' | 'summary'
 export interface OfferSheetSnapshot {
   artistName:  string
   currency:    Currency
+  sentOn?:     string       // the sender's own calendar day when it was sent (YYYY-MM-DD)
   // The offer's own internal notes are deliberately never included.
   offer: {
     venue: string; city: string; country: string; date: string; promoter: string

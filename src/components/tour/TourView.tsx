@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
-import { MONTH_NAMES, MONTH_SHORT } from '@/lib/utils'
+import { MONTH_NAMES, MONTH_SHORT, today } from '@/lib/utils'
 import { STATUS_CONFIG as INVOICE_STATUS_CONFIG, isOverdue } from '@/components/business/InvoicesView'
 import type { Currency, Show } from '@/types'
 
@@ -20,7 +20,7 @@ export function TourView() {
 
   if (!client) return null
   const shows    = client.tour.shows
-  const upcoming = shows.filter(s => new Date(s.date) >= new Date())
+  const upcoming = shows.filter(s => s.date >= today())
   const selected = shows.find(s => s.id === selectedShowId)
 
   // "Advance Dashboard" lite — flags upcoming shows with something outstanding,

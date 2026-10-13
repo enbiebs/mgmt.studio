@@ -9,7 +9,7 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import type { ShowAdvance, AdvanceStatus, AdvanceContact, AdvanceSchedule, Show, Venue } from '@/types'
-import { uid, shiftTime } from '@/lib/utils'
+import { uid, shiftTime, fromDateStr, today as localToday } from '@/lib/utils'
 
 // Fields shared between a Venue and a ShowAdvance — copied straight across
 // in both directions when saving to or loading from the venue library.
@@ -255,7 +255,7 @@ export function AdvanceView() {
 
   function markStatus(status: AdvanceStatus) {
     if (!advance) return
-    setAdvance({ ...advance, status, sentAt: status === 'sent' ? new Date().toISOString().slice(0, 10) : advance.sentAt })
+    setAdvance({ ...advance, status, sentAt: status === 'sent' ? localToday() : advance.sentAt })
   }
 
   const selectedShow = shows.find(s => s.id === selectedShowId)
@@ -320,7 +320,7 @@ export function AdvanceView() {
               const adv = advances.find(a => a.showId === show.id)
               const st = adv?.status ?? 'draft'
               const cfg = STATUS[st]
-              const d = new Date(show.date)
+              const d = fromDateStr(show.date)
               const isSelected = show.id === selectedShowId
               return (
                 <button
@@ -362,7 +362,7 @@ export function AdvanceView() {
                 {selectedShow?.venue} · {selectedShow?.city}
               </div>
               <div className="text-xs text-gray-400">
-                {selectedShow && new Date(selectedShow.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                {selectedShow && fromDateStr(selectedShow.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
               </div>
             </div>
             <div className="flex items-center gap-2">

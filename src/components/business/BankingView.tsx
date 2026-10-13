@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 import { useStore } from '@/lib/store'
-import { fmt } from '@/lib/utils'
+import { fmt, today as localToday } from '@/lib/utils'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import type { Currency } from '@/types'
 
@@ -259,7 +259,7 @@ export function BankingView() {
 function AddDepositModal({ onClose }: { onClose: () => void }) {
   const { addDeposit } = useStore()
   const [name, setName] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(localToday())
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState<Currency>('USD')
   const [mgmtPct, setMgmtPct] = useState('')

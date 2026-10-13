@@ -19,5 +19,8 @@ export async function GET(req: NextRequest) {
   const admin = createAdminClient()
   const { data } = await admin.from('google_calendar_connections').select('id').eq('client_id', clientId).maybeSingle()
 
-  return NextResponse.json({ connected: !!data })
+  // `configured` is only whether the Google keys exist on the server (never their values), so the
+  // screen can hide a Connect button that could only lead to a Google error page.
+  const configured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REDIRECT_URI)
+  return NextResponse.json({ connected: !!data, configured })
 }

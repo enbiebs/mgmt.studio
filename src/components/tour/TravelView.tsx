@@ -3,16 +3,17 @@
 //  Travel Booking View
 //  Per-show travel management: flights, hotels, ground transport.
 //  Shows booking status at a glance, inline add forms,
-//  and mock search results (real API integration ready).
+//  and hand-entered bookings.
 // ──────────────────────────────────────────────────────────
 
 import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
-import { uid } from '@/lib/utils'
+import { uid, fromDateStr } from '@/lib/utils'
 import type {
   Show, TravelItem, TravelFlight, TravelHotel, TravelGround,
   TravelStatus, Currency, Person, FlightLeg,
 } from '@/types'
+import { AddFlightForm, AddHotelForm, AddGroundForm } from '@/components/tour/TravelEntryForms'
 
 // ── Shows editor — links a booking to zero, one, or several Shows ──
 // Structural copy of TravelersEditor below, same chip-list + "+ Link"
@@ -177,7 +178,7 @@ const SHOW_DOT: Record<string, string> = {
 // ── Format helpers ───────────────────────────────────────────
 function fmtDate(iso: string | undefined) {
   if (!iso) return ''
-  const d = new Date(iso)
+  const d = fromDateStr(iso)
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 function fmtDateTime(iso: string | undefined) {
@@ -543,24 +544,6 @@ function GroundCard({ item, onRemove, onLink, onLinkShows }: {
   )
 }
 
-// ── Mock search results ──────────────────────────────────────
-const MOCK_FLIGHTS = [
-  { airline: 'Delta', number: 'DL 402', cabin: 'Economy', departure: '08:15', arrival: '11:30', duration: '5h 15m', price: 380, stops: 'Nonstop' },
-  { airline: 'United', number: 'UA 208', cabin: 'Economy', departure: '10:45', arrival: '14:20', duration: '5h 35m', price: 310, stops: 'Nonstop' },
-  { airline: 'American', number: 'AA 719', cabin: 'Business', departure: '07:00', arrival: '10:10', duration: '5h 10m', price: 1240, stops: 'Nonstop' },
-  { airline: 'JetBlue', number: 'B6 1045', cabin: 'Economy', departure: '14:30', arrival: '18:55', duration: '6h 25m', price: 265, stops: '1 stop (BOS)' },
-]
-const MOCK_HOTELS = [
-  { name: 'Marriott Downtown', stars: 4, price: 289, perNight: true, distance: '0.3mi to venue' },
-  { name: 'Hyatt Place', stars: 4, price: 219, perNight: true, distance: '0.8mi to venue' },
-  { name: 'The Autograph Collection', stars: 5, price: 445, perNight: true, distance: '0.5mi to venue' },
-]
-const MOCK_GROUND = [
-  { type: 'Sprinter Van', provider: 'Executive Limo', capacity: 12, price: 450 },
-  { type: 'Sedan', provider: 'Uber Charter', capacity: 4, price: 120 },
-  { type: 'SUV', provider: 'Black Car Co', capacity: 6, price: 280 },
-]
-
 // ── Add form types ───────────────────────────────────────────
 type AddMode = null | 'flight' | 'hotel' | 'ground'
 
@@ -612,291 +595,21 @@ function EmptySlot({ kind, onAdd }: { kind: string; onAdd: () => void }) {
   )
 }
 
-// ── Quick add form ───────────────────────────────────────────
-function AddFlightForm({
-  initialShowId, onSave, onCancel,
-}: {
-  initialShowId?: string;
-  onSave: (item: TravelFlight) => void;
-  onCancel: () => void;
-}) {
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
-  const [departure, setDeparture] = useState('')
-  const [searching, setSearching] = useState(false)
-  const [results, setResults] = useState<typeof MOCK_FLIGHTS | null>(null)
-
-  function doSearch() {
-    if (!from || !to) return
-    setSearching(true)
-    setTimeout(() => { setSearching(false); setResults(MOCK_FLIGHTS) }, 800)
-  }
-
-  function pickResult(r: typeof MOCK_FLIGHTS[0]) {
-    const dateStr = departure || new Date().toISOString().slice(0, 10)
-    onSave({
-      id: uid(), showIds: initialShowId ? [initialShowId] : [], kind: 'flight', status: 'booked',
-      traveler: 'Full Party',
-      legs: [{
-        id: uid(), airline: r.airline, flightNumber: r.number,
-        from: from.toUpperCase(), to: to.toUpperCase(),
-        departure: `${dateStr}T${r.departure}`,
-        arrival: `${dateStr}T${r.arrival}`,
-        duration: r.duration, cabin: r.cabin,
-      }],
-      cost: r.price, currency: 'USD',
-    })
-  }
-
-  return (
-    <div className="border border-blue-100 rounded-xl p-4 bg-blue-50/30">
-      <div className="text-xs font-bold text-gray-700 mb-3">✈️ Find Flights</div>
-      <div className="grid grid-cols-3 gap-2 mb-2">
-        <div>
-          <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">From</label>
-          <input
-            value={from} onChange={e => setFrom(e.target.value)}
-            placeholder="JFK"
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-400 bg-canvas uppercase"
-          />
-        </div>
-        <div>
-          <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">To</label>
-          <input
-            value={to} onChange={e => setTo(e.target.value)}
-            placeholder="LHR"
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-400 bg-canvas uppercase"
-          />
-        </div>
-        <div>
-          <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Date</label>
-          <input
-            type="date" value={departure} onChange={e => setDeparture(e.target.value)}
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-400 bg-canvas"
-          />
-        </div>
-      </div>
-      <div className="flex gap-2 mb-3">
-        <button
-          onClick={doSearch}
-          disabled={searching || !from || !to}
-          className="px-3 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-        >
-          {searching ? 'Searching…' : 'Search Flights'}
-        </button>
-        <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700">Cancel</button>
-        <div className="ml-auto text-[10px] text-gray-400 italic self-center">Demo — shows sample results</div>
-      </div>
-
-      {results && (
-        <div className="space-y-2">
-          {results.map((r, i) => (
-            <button
-              key={i}
-              onClick={() => pickResult(r)}
-              className="w-full text-left border border-gray-200 rounded-lg p-3 bg-canvas hover:border-blue-400 hover:bg-blue-50/30 transition-colors"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div>
-                    <div className="text-xs font-semibold text-gray-800">{r.airline} {r.number}</div>
-                    <div className="text-[11px] text-gray-400">{r.stops} · {r.duration} · {r.cabin}</div>
-                  </div>
-                  <div className="text-[11px] text-gray-600 font-mono">
-                    {r.departure} → {r.arrival}
-                  </div>
-                </div>
-                <div className="text-sm font-bold text-gray-900">${r.price}<span className="text-[10px] font-normal text-gray-400">/person</span></div>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function AddHotelForm({
-  initialShowId, onSave, onCancel,
-}: {
-  initialShowId?: string;
-  onSave: (item: TravelHotel) => void;
-  onCancel: () => void;
-}) {
-  const [city, setCity] = useState('')
-  const [checkIn, setCheckIn] = useState('')
-  const [checkOut, setCheckOut] = useState('')
-  const [searching, setSearching] = useState(false)
-  const [results, setResults] = useState<typeof MOCK_HOTELS | null>(null)
-
-  function doSearch() {
-    if (!city) return
-    setSearching(true)
-    setTimeout(() => { setSearching(false); setResults(MOCK_HOTELS) }, 700)
-  }
-
-  function pickResult(r: typeof MOCK_HOTELS[0]) {
-    onSave({
-      id: uid(), showIds: initialShowId ? [initialShowId] : [], kind: 'hotel', status: 'pending',
-      name: r.name, checkIn, checkOut,
-      cost: r.price, currency: 'USD',
-      notes: r.distance,
-    })
-  }
-
-  return (
-    <div className="border border-purple-100 rounded-xl p-4 bg-purple-50/20">
-      <div className="text-xs font-bold text-gray-700 mb-3">🏨 Find Hotels</div>
-      <div className="grid grid-cols-3 gap-2 mb-2">
-        <div>
-          <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">City</label>
-          <input
-            value={city} onChange={e => setCity(e.target.value)}
-            placeholder="London, UK"
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-purple-400 bg-canvas"
-          />
-        </div>
-        <div>
-          <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Check-In</label>
-          <input type="date" value={checkIn} onChange={e => setCheckIn(e.target.value)}
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-purple-400 bg-canvas" />
-        </div>
-        <div>
-          <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Check-Out</label>
-          <input type="date" value={checkOut} onChange={e => setCheckOut(e.target.value)}
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-purple-400 bg-canvas" />
-        </div>
-      </div>
-      <div className="flex gap-2 mb-3">
-        <button
-          onClick={doSearch}
-          disabled={searching || !city}
-          className="px-3 py-1.5 text-xs font-semibold bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
-        >
-          {searching ? 'Searching…' : 'Search Hotels'}
-        </button>
-        <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700">Cancel</button>
-        <div className="ml-auto text-[10px] text-gray-400 italic self-center">Demo — shows sample results</div>
-      </div>
-      {results && (
-        <div className="space-y-2">
-          {results.map((r, i) => (
-            <button
-              key={i}
-              onClick={() => pickResult(r)}
-              className="w-full text-left border border-gray-200 rounded-lg p-3 bg-canvas hover:border-purple-400 hover:bg-purple-50/30 transition-colors"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-semibold text-gray-800">
-                    {'⭐'.repeat(r.stars)} {r.name}
-                  </div>
-                  <div className="text-[11px] text-gray-400">{r.distance}</div>
-                </div>
-                <div className="text-sm font-bold text-gray-900">${r.price}<span className="text-[10px] font-normal text-gray-400">/night</span></div>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function AddGroundForm({
-  initialShowId, onSave, onCancel,
-}: {
-  initialShowId?: string;
-  onSave: (item: TravelGround) => void;
-  onCancel: () => void;
-}) {
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
-  const [pickupTime, setPickupTime] = useState('')
-  const [searching, setSearching] = useState(false)
-  const [results, setResults] = useState<typeof MOCK_GROUND | null>(null)
-
-  function doSearch() {
-    setSearching(true)
-    setTimeout(() => { setSearching(false); setResults(MOCK_GROUND) }, 600)
-  }
-
-  function pickResult(r: typeof MOCK_GROUND[0]) {
-    onSave({
-      id: uid(), showIds: initialShowId ? [initialShowId] : [], kind: 'ground', status: 'pending',
-      type: r.type === 'Sprinter Van' ? 'transfer' : r.type === 'Sedan' ? 'transfer' : 'rental-car',
-      vehicleType: r.type,
-      provider: r.provider,
-      from, to, pickupTime,
-      cost: r.price, currency: 'USD',
-    })
-  }
-
-  return (
-    <div className="border border-green-100 rounded-xl p-4 bg-green-50/20">
-      <div className="text-xs font-bold text-gray-700 mb-3">🚐 Ground Transport</div>
-      <div className="grid grid-cols-3 gap-2 mb-2">
-        <div>
-          <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">From</label>
-          <input value={from} onChange={e => setFrom(e.target.value)} placeholder="Airport / Hotel"
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-400 bg-canvas" />
-        </div>
-        <div>
-          <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">To</label>
-          <input value={to} onChange={e => setTo(e.target.value)} placeholder="Venue / Hotel"
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-400 bg-canvas" />
-        </div>
-        <div>
-          <label className="text-[10px] text-gray-400 uppercase tracking-wide block mb-1">Pickup Time</label>
-          <input type="datetime-local" value={pickupTime} onChange={e => setPickupTime(e.target.value)}
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-green-400 bg-canvas" />
-        </div>
-      </div>
-      <div className="flex gap-2 mb-3">
-        <button
-          onClick={doSearch}
-          disabled={searching}
-          className="px-3 py-1.5 text-xs font-semibold bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
-        >
-          {searching ? 'Searching…' : 'Find Options'}
-        </button>
-        <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700">Cancel</button>
-        <div className="ml-auto text-[10px] text-gray-400 italic self-center">Demo — shows sample options</div>
-      </div>
-      {results && (
-        <div className="space-y-2">
-          {results.map((r, i) => (
-            <button
-              key={i}
-              onClick={() => pickResult(r)}
-              className="w-full text-left border border-gray-200 rounded-lg p-3 bg-canvas hover:border-green-400 hover:bg-green-50/30 transition-colors"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-semibold text-gray-800">{r.type}</div>
-                  <div className="text-[11px] text-gray-400">{r.provider} · Up to {r.capacity} passengers</div>
-                </div>
-                <div className="text-sm font-bold text-gray-900">${r.price}</div>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── Cost summary ─────────────────────────────────────────────
 function CostSummary({ items }: { items: TravelItem[] }) {
   const booked = items.filter(i => i.status === 'booked' || i.status === 'pending')
-  const total = booked.reduce((sum, i) => sum + (i.cost ?? 0), 0)
-  if (!total) return null
+  // One total per currency: adding pounds to dollars would be a made-up number.
+  const totals = new Map<Currency, number>()
+  for (const i of booked) if (i.cost) totals.set(i.currency ?? 'USD', (totals.get(i.currency ?? 'USD') ?? 0) + i.cost)
+  if (totals.size === 0) return null
   return (
     <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
       <span className="text-xs text-gray-400">
         Total booked/pending ({booked.length} item{booked.length !== 1 ? 's' : ''})
       </span>
-      <span className="text-sm font-semibold text-gray-800">${total.toLocaleString()}</span>
+      <span className="text-sm font-semibold text-gray-800">
+        {[...totals].map(([cur, amt]) => fmtCost(amt, cur)).join(' + ')}
+      </span>
     </div>
   )
 }
@@ -1012,7 +725,7 @@ export function TravelView() {
     setTimeout(() => setSynced(false), 2000)
   }
 
-  const showDate = show ? new Date(show.date) : null
+  const showDate = show ? fromDateStr(show.date) : null
   const dateStr = showDate?.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
   const generalStatus = showTravelStatus(generalTravel)
 
@@ -1042,7 +755,7 @@ export function TravelView() {
           {shows.map(s => {
             const items = allTravel.filter(t => t.showIds?.includes(s.id))
             const tStatus = showTravelStatus(items)
-            const d = new Date(s.date)
+            const d = fromDateStr(s.date)
             const needed = items.filter(i => i.status === 'needed').length
             const total = items.length
             return (

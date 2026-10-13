@@ -11,6 +11,7 @@ import type {
 } from '@/types'
 import { computeBudget, COMMISSION_BASE_LABEL } from '@/lib/budget'
 import { bonusLabel, clock, maxPotential, merchLabel, paymentAmounts, radiusLabel, setTimeLabel } from '@/lib/offer-terms'
+import { today } from '@/lib/utils'
 
 // ── Reading a saved sheet back ───────────────────────────────
 export interface OfferSheetRow {
@@ -34,6 +35,7 @@ export function buildOfferSheetSnapshot(args: {
   const snap: OfferSheetSnapshot = {
     artistName: client.name,
     currency: budget.currency,
+    sentOn: today(),
     offer: {
       venue: offer.venue, city: offer.city, country: offer.country, date: offer.date, promoter: offer.promoter,
       guarantee: offer.guarantee, door: offer.door, buyout: offer.buyout, terms: offer.terms,

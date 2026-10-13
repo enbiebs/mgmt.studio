@@ -24,7 +24,8 @@ export function Subnav() {
   const allowed = shareOnly ? shareOnlyTabs(section, client ?? undefined) : undefined
   // Budgets and settlements are money: management side only (Finance access, never the artist).
   const canSeeBudgets = useStore(s => s.role !== 'artist' && s.hasAccess('finance'))
-  const subs = (SUBNAV[section] ?? []).filter(([, key]) => (!allowed || allowed.includes(key)) && ((key !== 'budget' && key !== 'settlements') || canSeeBudgets))
+  const showUnfinished = useStore(s => s.showUnfinished)
+  const subs = (SUBNAV[section] ?? []).filter(([, key]) => (!allowed || allowed.includes(key)) && ((key !== 'budget' && key !== 'settlements') || canSeeBudgets) && (key !== 'lab' || showUnfinished))
 
   function isActive(key: string) {
     if (section === 'songs')     return effectiveSub(songsSub, allowed) === key

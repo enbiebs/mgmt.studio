@@ -55,8 +55,10 @@ const styles = StyleSheet.create({
   footer: { position: 'absolute', bottom: 28, left: 48, right: 48, flexDirection: 'row', justifyContent: 'space-between', fontSize: 8, color: MUTED },
 })
 
-function sentOn(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+// A server runs on UTC, so it can't tell the sender's own day from the exact time: the sheet remembers it.
+function sentOn(sheet: OfferSheet) {
+  const day = sheet.snapshot.sentOn
+  return (day ? new Date(day + 'T12:00:00') : new Date(sheet.sentAt)).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 }
 
 function OfferSheetPdf({ sheet }: { sheet: OfferSheet }) {
@@ -125,7 +127,7 @@ function OfferSheetPdf({ sheet }: { sheet: OfferSheet }) {
         )}
 
         <View style={styles.footer} fixed>
-          <Text>{t(`Sent ${sentOn(sheet.sentAt)} · Version ${sheet.version}`)}</Text>
+          <Text>{t(`Sent ${sentOn(sheet)} · Version ${sheet.version}`)}</Text>
           <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
       </Page>

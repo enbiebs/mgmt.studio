@@ -32,10 +32,11 @@ import { EMPTY_AGENT } from '@/lib/agent-demo'
 import { EMPTY_LEGAL } from '@/lib/legal-demo'
 import { EMPTY_FINANCE } from '@/lib/finance-demo'
 import { EMPTY_TOUR } from '@/lib/advance-demo'
-import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE } from '@/lib/utils'
+import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE, today as localToday } from '@/lib/utils'
 import { buildNewBudget, snapshotOf, newLine, frozenRates, makeConverter, settlementEarned, BUCKET_LABEL, type FxRates } from '@/lib/budget'
 import { balanceOf } from '@/lib/settlement-math'
 import type { InboxChoice } from '@/lib/inbox'
+import { SHOW_UNFINISHED_KEY } from '@/lib/unfinished'
 import { buildOfferSheetSnapshot } from '@/lib/offer-sheet'
 import {
   SECTION_TO_GRANT_KEY, findException, filterClientForViewer,
@@ -190,6 +191,9 @@ interface StudioState {
   previewBackup: AppData | null
   /** This person's Done / Snoozed choices in the Inbox, by item key. */
   inboxState: Record<string, InboxChoice>
+  /** Show screens that aren't connected to real data yet (kept per browser). */
+  showUnfinished: boolean
+  setShowUnfinished: (on: boolean) => void
   // Tour budgets (Stage 4): which budget is open, and live exchange rates (USD per unit)
   selectedBudgetId: string | null
   fxRates: FxRates
@@ -466,6 +470,11 @@ export const useStore = create<StudioState>((set, get) => ({
   memberGrants: {},
   previewBackup: null,
   inboxState: {},
+  showUnfinished: false,
+  setShowUnfinished: (on) => {
+    try { localStorage.setItem(SHOW_UNFINISHED_KEY, on ? '1' : '0') } catch { /* private window: it just won't be remembered */ }
+    set({ showUnfinished: on })
+  },
   selectedBudgetId: null,
   fxRates: {},
 
@@ -2038,15 +2047,14 @@ export const useStore = create<StudioState>((set, get) => ({
     const linkedOffer = show.tourOfferId ? client.agentData?.offers.find(o => o.id === show.tourOfferId) : undefined
     const to = show.viaAgency && show.agencyName ? show.agencyName : (linkedOffer?.promoter ?? show.venue)
 
-    const dueDate = new Date(show.date + 'T00:00:00')
-    dueDate.setDate(dueDate.getDate() + 30)
+    const dueDate = addDays(show.date, 30)
 
     const invoice: Invoice = {
       id: 'inv-' + uid(),
       number: 'INV-' + Date.now().toString().slice(-6),
       to, category: 'touring', status: 'draft',
-      issuedDate: new Date().toISOString().slice(0, 10),
-      dueDate: dueDate.toISOString().slice(0, 10),
+      issuedDate: localToday(),
+      dueDate,
       items: [{ description: `Guarantee — ${show.venue}, ${show.city} (${show.date})`, quantity: 1, rate: net }],
       currency: show.currency ?? 'USD',
     }
@@ -2448,7 +2456,7 @@ export const useStore = create<StudioState>((set, get) => ({
     // Current so the real number shows up in Actual without changing the budget.
     const toUsd = makeConverter(frozenRates(settlement)).convert
     const sharePerShow = settlementEarned(settlement) / showIds.length
-    const settledAt = settlement.preparedOn ?? new Date().toISOString().slice(0, 10)
+    const settledAt = settlement.preparedOn ?? localToday()
     for (const showId of showIds) {
       const show = client.tour.shows.find(s => s.id === showId)
       if (show?.tourOfferId) {
@@ -2750,7 +2758,7 @@ export const useStore = create<StudioState>((set, get) => ({
       title, type,
       status: fromArtist ? 'submitted' : 'in-progress',
       assignee, dueDate,
-      createdAt: new Date().toISOString().slice(0, 10),
+      createdAt: localToday(),
       fromArtist,
     }
     const updated = {
@@ -2822,7 +2830,7 @@ export const useStore = create<StudioState>((set, get) => ({
     const { data, clientId } = get()
     const newTodo: ArtistTodo = {
       id: 'todo-' + uid(), title, done: false,
-      dueDate, createdAt: new Date().toISOString().slice(0, 10),
+      dueDate, createdAt: localToday(),
     }
     const updated = {
       clients: data.clients.map(c => {
@@ -2874,7 +2882,7 @@ export const useStore = create<StudioState>((set, get) => ({
       name,
       description,
       clauses: [],
-      updatedAt: new Date().toISOString().slice(0, 10),
+      updatedAt: localToday(),
     }
     const updated = [...legalTemplates, newTemplate]
     set({ legalTemplates: updated })
@@ -2887,7 +2895,7 @@ export const useStore = create<StudioState>((set, get) => ({
     let updatedTemplate: LegalTemplate | undefined
     const updated = legalTemplates.map(t => {
       if (t.id !== templateId) return t
-      updatedTemplate = { ...t, ...patch, updatedAt: new Date().toISOString().slice(0, 10) }
+      updatedTemplate = { ...t, ...patch, updatedAt: localToday() }
       return updatedTemplate
     })
     set({ legalTemplates: updated })

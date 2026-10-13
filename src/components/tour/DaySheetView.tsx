@@ -8,6 +8,7 @@
 
 import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
+import { fromDateStr } from '@/lib/utils'
 import type { ShowAdvance, Show } from '@/types'
 
 function Row({ label, value }: { label: string; value?: string }) {
@@ -67,7 +68,7 @@ export function DaySheetView() {
     ? advances.find(a => a.showId === show.id)
     : undefined
 
-  const showDate = show ? new Date(show.date) : new Date()
+  const showDate = show ? fromDateStr(show.date) : new Date()
   const dateStr = showDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
 
   return (
@@ -80,7 +81,7 @@ export function DaySheetView() {
         <div className="flex-1 overflow-y-auto">
           {shows.map(s => {
             const adv = advances.find(a => a.showId === s.id)
-            const d = new Date(s.date)
+            const d = fromDateStr(s.date)
             return (
               <button
                 key={s.id}

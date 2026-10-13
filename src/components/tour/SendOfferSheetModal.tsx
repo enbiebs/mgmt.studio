@@ -11,6 +11,7 @@ import { Modal, FormField, inputClass } from '@/components/ui/Modal'
 import { OfferSheetDocument } from '@/components/tour/OfferSheetDocument'
 import { buildOfferSheetSnapshot, latestSheet, longDate, SHEET_STATUS_LABEL } from '@/lib/offer-sheet'
 import type { OfferSheetDetail } from '@/types'
+import { localDateOf } from '@/lib/utils'
 
 const DETAIL_OPTIONS: { value: OfferSheetDetail; label: string; hint: string }[] = [
   { value: 'full', label: 'Full breakdown', hint: 'Every line of the budget, each commission, and the notes.' },
@@ -96,7 +97,7 @@ export function SendOfferSheetModal({ offerId, onClose }: { offerId: string; onC
     }>
       {previous && (previous.status === 'sent' || previous.status === 'approved' || previous.status === 'passed') && (
         <div className="text-xs rounded-lg bg-amber-50 text-amber-800 px-3 py-2">
-          V{previous.version} was sent {longDate(previous.sentAt.slice(0, 10))} and is currently <b>{SHEET_STATUS_LABEL[previous.status].toLowerCase()}</b>.
+          V{previous.version} was sent {longDate(localDateOf(previous.sentAt))} and is currently <b>{SHEET_STATUS_LABEL[previous.status].toLowerCase()}</b>.
           Sending V{version} replaces it, and {client.name} will need to answer again.
         </div>
       )}
