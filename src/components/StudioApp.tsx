@@ -37,7 +37,6 @@ import { InvoicesView }  from '@/components/business/InvoicesView'
 import { PaymentsView }  from '@/components/business/PaymentsView'
 import { ProjectsView }  from '@/components/manager/ProjectsView'
 import { AnalyticsView } from '@/components/analytics/AnalyticsView'
-import { FandomView }    from '@/components/fandom/FandomView'
 import { LegalView }     from '@/components/legal/LegalView'
 
 // Artist portal
@@ -159,7 +158,6 @@ export function StudioApp() {
               {section === 'calendar'   && <CalendarView />}
               {section === 'projects'   && <ProjectsView />}
               {section === 'analytics'  && <AnalyticsView />}
-              {section === 'fandom'     && <FandomView />}
               {section === 'team'       && <TeamView />}
               {section === 'legal'      && <LegalView />}
             </div>

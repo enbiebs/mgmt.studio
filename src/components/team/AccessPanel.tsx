@@ -13,7 +13,6 @@ const SECTIONS: { key: string; label: string }[] = [
   { key: 'team', label: 'Team' },
   { key: 'projects', label: 'Projects' },
   { key: 'analytics', label: 'Analytics' },
-  { key: 'fandom', label: 'Fandom' },
   { key: 'legal', label: 'Legal' },
 ]
 

@@ -20,7 +20,6 @@ import type {
   OfferSheet, OfferTerms, Settlement,
 } from '@/types'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
-import { EMPTY_FANDOM }    from '@/lib/fandom-demo'
 import { EMPTY_AGENT }     from '@/lib/agent-demo'
 import { EMPTY_LEGAL }     from '@/lib/legal-demo'
 import { EMPTY_FINANCE }   from '@/lib/finance-demo'
@@ -35,7 +34,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
   // Fetch clients
   const { data: clientRows, error } = await supabase
     .from('clients')
-    .select('id, name, genre, color, calendar_token, analytics, fandom')
+    .select('id, name, genre, color, calendar_token, analytics')
     .eq('workspace_id', workspaceId)
 
   if (error) throw error
@@ -675,13 +674,11 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       agentData:   { offers: cOffers },
       legal:       { contracts: cContracts },
       finance:     { invoices: cInvoices, expenses: cExpenses, vendors: cVendors, plMonths: cPLMonths, budgets: cBudgets, crewRates: cCrewRates, settings: cFinanceSettings, settlements: cSettlements },
-      // Analytics and fandom come from the JSONB column (external API data)
+      // Analytics comes from the JSONB column (external API data). (clients.fandom is left
+      // in the database untouched: the Fandom tab moved to its own product.)
       analytics: (c.analytics && Object.keys(c.analytics).length > 0)
         ? c.analytics
         : EMPTY_ANALYTICS,
-      fandom: (c.fandom && Object.keys(c.fandom).length > 0)
-        ? c.fandom
-        : EMPTY_FANDOM,
     } as Client
   })
 

@@ -95,9 +95,6 @@ export function ArtistView() {
   const a = client.analytics
   const listenersUp = a?.streaming?.monthlyListenersPct >= 0
 
-  // Fandom snapshot
-  const f = client.fandom
-
   function handleAddTodo(e: React.FormEvent) {
     e.preventDefault()
     if (!newTodo.trim()) return
@@ -276,21 +273,6 @@ export function ArtistView() {
             <div>
               <div className="font-serif text-2xl font-medium">{a?.momentumScore ?? 0}<span className="text-sm text-gray-300">/100</span></div>
               <div className="text-xs text-gray-400 mt-0.5">momentum score</div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Fandom ── */}
-        <div className="bg-canvas rounded-2xl border border-gray-100 p-5">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">Fandom</div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="font-serif text-2xl font-medium">{fmtCompact(f?.totalFans ?? 0)}</div>
-              <div className="text-xs text-gray-400 mt-0.5">total fans</div>
-            </div>
-            <div>
-              <div className="font-serif text-2xl font-medium">{f?.avgEngagement ?? 0}%</div>
-              <div className="text-xs text-gray-400 mt-0.5">avg engagement</div>
             </div>
           </div>
         </div>

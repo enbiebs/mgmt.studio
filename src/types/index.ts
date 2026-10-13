@@ -278,7 +278,6 @@ export interface Client {
   projects:    Project[]
   artistTodos: ArtistTodo[]
   analytics:   AnalyticsData
-  fandom:      FanEngagement
   agentData:   AgentData
   legal:       LegalData
   finance:     ClientFinance
@@ -323,61 +322,6 @@ export interface ArtistTodo {
   done: boolean
   dueDate?: string
   createdAt: string
-}
-
-// ── Fandom / Fan Loyalty Platform ───────────────────────────
-// Based on the Fandom deck — 5 tiers, points engine, affiliate tree
-export type FanTier = 'listener' | 'follower' | 'supporter' | 'devotee' | 'founder'
-
-export interface Fan {
-  id:               string
-  name:             string
-  handle?:          string
-  location:         string
-  tier:             FanTier
-  points:           number
-  fanSince:         string       // ISO date
-  referredBy?:      string       // fan id who referred them
-  referralCount:    number       // direct referrals they made
-  totalDescendants: number       // total network they've grown
-  streamsTotal:     number
-  ticketsPurchased: number
-  merchPurchased:   number
-  lastActive:       string
-  passNumber:       number       // unique fan pass number
-}
-
-export interface FanActivity {
-  id:     string
-  fanId:  string
-  fan:    string
-  type:   'stream' | 'ticket' | 'merch' | 'referral' | 'share'
-  detail: string
-  pts:    number
-  date:   string
-}
-
-export interface FanMessage {
-  id:        string
-  subject:   string
-  body:      string
-  segment:   string     // "all" | tier name | custom
-  sentAt:    string
-  openRate:  number
-  clickRate: number
-  recipients: number
-}
-
-export interface FanEngagement {
-  totalFans:       number
-  pointsIssued:    number
-  avgEngagement:   number    // 0–100
-  referralPct:     number    // % who joined via referral
-  liveAttendeeMultiplier: number  // LTV multiple for show-goers
-  tierBreakdown: { tier: FanTier; count: number; pct: number; label: string }[]
-  topFans:         Fan[]
-  recentActivity:  FanActivity[]
-  messages:        FanMessage[]
 }
 
 // ── Analytics ───────────────────────────────────────────────
@@ -474,13 +418,12 @@ export interface AnalyticsData {
 }
 
 // ── Section / view routing ──────────────────────────────────
-export type MainSection  = 'calendar' | 'songs' | 'tour' | 'content' | 'finance' | 'projects' | 'analytics' | 'fandom' | 'team' | 'legal'
+export type MainSection  = 'calendar' | 'songs' | 'tour' | 'content' | 'finance' | 'projects' | 'analytics' | 'team' | 'legal'
 export type SongsSub     = 'tracks' | 'labelcopy' | 'checklist' | 'status'
 export type ContentSub   = 'manage' | 'studio' | 'lab'
 export type BizSub       = 'royalties' | 'banking' | 'catalog' | 'pl' | 'invoices' | 'payments'
 export type TourSub      = 'tour' | 'stage-plot' | 'advance' | 'daysheet' | 'crew' | 'guests' | 'travel' | 'offers' | 'budget' | 'settlements'
 export type AnalyticsSub = 'overview' | 'streaming' | 'playlists' | 'social' | 'tiktok' | 'audience' | 'charts'
-export type FandomSub    = 'overview' | 'fans' | 'referrals' | 'messaging'
 export type LegalSub     = 'pipeline' | 'alerts' | 'register' | 'templates'
 
 // ── Tour Management — Advance System ────────────────────────

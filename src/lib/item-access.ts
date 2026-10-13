@@ -51,7 +51,7 @@ export const ARTIST_PORTAL_ITEM_TYPES: ItemType[] = ['show', 'album', 'post', 'p
 // access_grants.section uses 'music' where the app's MainSection uses 'songs'.
 export const SECTION_TO_GRANT_KEY: Record<MainSection, string> = {
   calendar: 'calendar', songs: 'music', tour: 'tour', content: 'content', finance: 'finance',
-  team: 'team', projects: 'projects', analytics: 'analytics', fandom: 'fandom', legal: 'legal',
+  team: 'team', projects: 'projects', analytics: 'analytics', legal: 'legal',
 }
 
 // Which section holds each kind of item - for "does this person have anything

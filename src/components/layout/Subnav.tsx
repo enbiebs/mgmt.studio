@@ -9,14 +9,13 @@ const SUBNAV: Record<string, [string, string][]> = {
   content:   [['Manage', 'manage'], ['Studio', 'studio'], ['Lab', 'lab']],
   finance:   [['Royalties', 'royalties'], ['Banking', 'banking'], ['Catalog', 'catalog'], ['P&L', 'pl'], ['Invoices', 'invoices'], ['Payments', 'payments']],
   analytics: [['Overview', 'overview'], ['Streaming', 'streaming'], ['Playlists', 'playlists'], ['Social', 'social'], ['TikTok', 'tiktok'], ['Audience', 'audience'], ['Charts', 'charts']],
-  fandom:    [['Overview', 'overview'], ['Fans', 'fans'], ['Referrals', 'referrals'], ['Messaging', 'messaging']],
   legal:     [['Contract Pipeline', 'pipeline'], ['Alerts', 'alerts'], ['Rights Register', 'register'], ['Templates', 'templates']],
 }
 
 export function Subnav() {
   const {
-    section, songsSub, contentSub, bizSub, tourSub, analyticsSub, fandomSub, legalSub,
-    setSongsSub, setContentSub, setBizSub, setTourSub, setAnalyticsSub, setFandomSub, setLegalSub,
+    section, songsSub, contentSub, bizSub, tourSub, analyticsSub, legalSub,
+    setSongsSub, setContentSub, setBizSub, setTourSub, setAnalyticsSub, setLegalSub,
   } = useStore()
   const client = useStore(s => s.getClient())
   // Someone with no grant for this section but a shared item in it gets only
@@ -33,7 +32,6 @@ export function Subnav() {
     if (section === 'finance')   return effectiveSub(bizSub, allowed) === key
     if (section === 'tour')      return effectiveSub(tourSub, allowed) === key
     if (section === 'analytics') return analyticsSub === key
-    if (section === 'fandom')    return fandomSub === key
     if (section === 'legal')     return legalSub === key
     return false
   }
@@ -44,7 +42,6 @@ export function Subnav() {
     if (section === 'finance')   setBizSub(key as typeof bizSub)
     if (section === 'tour')      setTourSub(key as typeof tourSub)
     if (section === 'analytics') setAnalyticsSub(key as typeof analyticsSub)
-    if (section === 'fandom')    setFandomSub(key as typeof fandomSub)
     if (section === 'legal')     setLegalSub(key as typeof legalSub)
   }
 

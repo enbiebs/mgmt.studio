@@ -6,7 +6,6 @@
 
 import type { AppData, Person } from '@/types'
 import { MASCOLO_ANALYTICS, NIMINO_ANALYTICS, SIERRA_ANALYTICS } from '@/lib/analytics-demo'
-import { MASCOLO_FANDOM, NIMINO_FANDOM, SIERRA_FANDOM } from '@/lib/fandom-demo'
 import { MASCOLO_AGENT, NIMINO_AGENT, SIERRA_AGENT } from '@/lib/agent-demo'
 import { MASCOLO_LEGAL, NIMINO_LEGAL, SIERRA_LEGAL } from '@/lib/legal-demo'
 import { MASCOLO_FINANCE, NIMINO_FINANCE, SIERRA_FINANCE } from '@/lib/finance-demo'
@@ -119,7 +118,6 @@ export const DEMO_DATA: AppData = {
         },
       },
       analytics:  MASCOLO_ANALYTICS,
-      fandom:     MASCOLO_FANDOM,
       agentData:  MASCOLO_AGENT,
       legal:      MASCOLO_LEGAL,
       finance:    MASCOLO_FINANCE,
@@ -192,7 +190,6 @@ export const DEMO_DATA: AppData = {
         },
       },
       analytics:  NIMINO_ANALYTICS,
-      fandom:     NIMINO_FANDOM,
       agentData:  NIMINO_AGENT,
       legal:      NIMINO_LEGAL,
       finance:    NIMINO_FINANCE,
@@ -257,7 +254,6 @@ export const DEMO_DATA: AppData = {
         },
       },
       analytics:  SIERRA_ANALYTICS,
-      fandom:     SIERRA_FANDOM,
       agentData:  SIERRA_AGENT,
       legal:      SIERRA_LEGAL,
       finance:    SIERRA_FINANCE,
