@@ -1033,7 +1033,7 @@ export async function deletePerson(personId: string) {
 // ── Show ───────────────────────────────────────────────────
 export async function upsertShow(show: Show, clientId: string) {
   const supabase = createClient()
-  await supabase.from('shows').upsert({
+  const { error } = await supabase.from('shows').upsert({
     id: show.id, client_id: clientId,
     date: show.date, city: show.city,
     venue: show.venue, time: show.time,
@@ -1047,6 +1047,7 @@ export async function upsertShow(show: Show, clientId: string) {
     run_id: show.runId ?? null,
     updated_at: new Date().toISOString(),
   })
+  if (error) throw error
 }
 
 export async function deleteShow(showId: string) {

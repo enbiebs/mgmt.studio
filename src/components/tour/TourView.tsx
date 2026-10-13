@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
+import { CalendarImportModal } from '@/components/tour/CalendarImportModal'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { MONTH_NAMES, MONTH_SHORT, today } from '@/lib/utils'
 import { STATUS_CONFIG as INVOICE_STATUS_CONFIG, isOverdue } from '@/components/business/InvoicesView'
@@ -15,6 +16,7 @@ export function TourView() {
     enableCalendarFeed, disableCalendarFeed,
   } = useStore()
   const [addOpen, setAddOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -58,12 +60,21 @@ export function TourView() {
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Tour</span>
           {editable && (
-            <button
-              onClick={() => setAddOpen(true)}
-              className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
-            >
-              + Show
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setImportOpen(true)}
+                title="Add many shows at once from an Excel calendar"
+                className="px-2.5 py-1 text-xs text-gray-500 hover:text-gray-800 transition-colors"
+              >
+                Import
+              </button>
+              <button
+                onClick={() => setAddOpen(true)}
+                className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+              >
+                + Show
+              </button>
+            </div>
           )}
         </div>
 
@@ -72,6 +83,11 @@ export function TourView() {
             <div className="flex flex-col items-center justify-center gap-2 py-12 text-gray-300">
               <span className="text-4xl">🎤</span>
               <span className="text-sm">No shows yet</span>
+              {editable && (
+                <button onClick={() => setImportOpen(true)} className="mt-1 text-xs text-blue-600 hover:underline">
+                  Import them from a spreadsheet
+                </button>
+              )}
             </div>
           ) : shows.map(s => {
             const d = new Date(s.date + 'T00:00:00')
@@ -268,6 +284,7 @@ export function TourView() {
 
       {/* Add show modal */}
       {addOpen && <AddShowModal onClose={() => setAddOpen(false)} />}
+      {importOpen && <CalendarImportModal onClose={() => setImportOpen(false)} />}
     </div>
   )
 }
