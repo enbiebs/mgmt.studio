@@ -15,7 +15,7 @@
 import { create } from 'zustand'
 import type {
   AppData, Client, Track, Show, ShowStatus, Post, Album,
-  MainSection, SongsSub, ContentSub, BizSub, TourSub, Stage, AnalyticsSub, FandomSub, LegalSub,
+  MainSection, SongsSub, ContentSub, BizSub, TourSub, Stage, AnalyticsSub, LegalSub,
   UserRole, ProjectStatus, ProjectType, Stakeholder, Project, ArtistTodo,
   TrackLabelCopy, ReleaseLabelCopy, ChecklistItemKey, ChecklistItem, TrackPriority,
   GuestListEntry, GuestListCategory, ReleaseStakeholder, StakeholderRole,
@@ -28,7 +28,6 @@ import type {
 import { DEMO_DATA } from '@/lib/demo-data'
 import { DEFAULT_LEGAL_TEMPLATES } from '@/lib/legal-templates-demo'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
-import { EMPTY_FANDOM } from '@/lib/fandom-demo'
 import { EMPTY_AGENT } from '@/lib/agent-demo'
 import { EMPTY_LEGAL } from '@/lib/legal-demo'
 import { EMPTY_FINANCE } from '@/lib/finance-demo'
@@ -152,7 +151,7 @@ function pushDeleteToGoogleCalendar(clientId: string, recordType: 'show' | 'post
 // 'calendar' has no grant of its own (see hasAccess) — it's a read-only aggregate
 // view gated per-event by the underlying section's own access, not a section
 // anyone can be granted.
-const ALL_SECTIONS: MainSection[] = ['songs', 'tour', 'content', 'finance', 'team', 'projects', 'analytics', 'fandom', 'legal']
+const ALL_SECTIONS: MainSection[] = ['songs', 'tour', 'content', 'finance', 'team', 'projects', 'analytics', 'legal']
 
 // ── State shape ─────────────────────────────────────────────
 interface StudioState {
@@ -204,7 +203,6 @@ interface StudioState {
   bizSub: BizSub
   tourSub: TourSub
   analyticsSub: AnalyticsSub
-  fandomSub: FandomSub
   legalSub: LegalSub
   selectedShowId: string | null
   // Which release (single/EP/album) the Label Copy / Checklist / Status
@@ -262,7 +260,6 @@ interface StudioState {
   setBizSub: (sub: BizSub) => void
   setTourSub: (sub: TourSub) => void
   setAnalyticsSub: (sub: AnalyticsSub) => void
-  setFandomSub: (sub: FandomSub) => void
   setLegalSub: (sub: LegalSub) => void
   setSelectedShow: (id: string | null) => void
   setSelectedAlbum: (id: string | null) => void
@@ -480,7 +477,6 @@ export const useStore = create<StudioState>((set, get) => ({
   bizSub:        'royalties',
   tourSub:       'tour',
   analyticsSub:  'overview',
-  fandomSub:     'overview',
   legalSub:      'pipeline',
   selectedShowId: null,
   selectedAlbumId: null,
@@ -693,7 +689,6 @@ export const useStore = create<StudioState>((set, get) => ({
   setBizSub:       (sub) => set({ bizSub: sub }),
   setTourSub:      (sub) => set({ tourSub: sub }),
   setAnalyticsSub: (sub) => set({ analyticsSub: sub }),
-  setFandomSub:    (sub) => set({ fandomSub: sub }),
   setLegalSub:     (sub) => set({ legalSub: sub }),
   setSelectedShow: (id) => set({ selectedShowId: id }),
   setSelectedAlbum: (id) => set({ selectedAlbumId: id }),
@@ -735,7 +730,6 @@ export const useStore = create<StudioState>((set, get) => ({
       projects:    [],
       artistTodos: [],
       analytics:   EMPTY_ANALYTICS,
-      fandom:      EMPTY_FANDOM,
       agentData:   EMPTY_AGENT,
       legal:       EMPTY_LEGAL,
       finance:     EMPTY_FINANCE,

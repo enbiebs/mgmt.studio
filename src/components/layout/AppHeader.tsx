@@ -67,7 +67,7 @@ export function AppHeader() {
           {([
             ['Calendar', 'calendar'],
             ['Music', 'songs'], ['Tour', 'tour'], ['Content', 'content'],
-            ['Finance', 'finance'], ['Team', 'team'], ['Projects', 'projects'], ['Analytics', 'analytics'], ['Fandom', 'fandom'], ['Legal', 'legal'],
+            ['Finance', 'finance'], ['Team', 'team'], ['Projects', 'projects'], ['Analytics', 'analytics'], ['Legal', 'legal'],
           ] as [string, MainSection][])
             .filter(([, key]) => hasAccess(key, clientId ?? undefined))
             .map(([label, key]) => (
