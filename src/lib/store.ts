@@ -23,6 +23,7 @@ import type {
   CatalogWork, RegStatus, Invoice, InvoiceLineItem, InvoiceStatus, RevenueStream,
   LegalTemplate, LegalTemplateClause, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
   ReleaseType, Venue, TourOffer, Expense, Vendor, Run, Budget, CrewRate, FinanceSettings,
+  OfferSheet, OfferSheetDetail, OfferTerms,
 } from '@/types'
 import { DEMO_DATA } from '@/lib/demo-data'
 import { DEFAULT_LEGAL_TEMPLATES } from '@/lib/legal-templates-demo'
@@ -34,6 +35,7 @@ import { EMPTY_FINANCE } from '@/lib/finance-demo'
 import { EMPTY_TOUR } from '@/lib/advance-demo'
 import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE } from '@/lib/utils'
 import { buildNewBudget, snapshotOf, type FxRates } from '@/lib/budget'
+import { buildOfferSheetSnapshot } from '@/lib/offer-sheet'
 import {
   SECTION_TO_GRANT_KEY, findException, filterClientForViewer,
   type ItemException, type ItemType, type ItemEffect, type Viewer,
@@ -49,6 +51,7 @@ import {
   upsertStakeholder, deleteStakeholder as dbDeleteStakeholder,
   upsertShow, deleteShow as dbDeleteShow,
   upsertOffer, deleteOffer as dbDeleteOffer,
+  insertOfferSheet, answerOfferSheet as dbAnswerOfferSheet, withdrawOfferSheets,
   upsertExpense, deleteExpense as dbDeleteExpense,
   upsertVendor, deleteVendor as dbDeleteVendor,
   upsertRun, deleteRun as dbDeleteRun, upsertBudget, deleteBudget as dbDeleteBudget, upsertCrewRate, upsertFinanceSettings,
@@ -360,10 +363,14 @@ interface StudioState {
   deleteShow: (showId: string) => void
 
   // ── Tour offers ──
-  addOffer: (patch: { venue: string; city: string; country: string; date: string; promoter: string; guarantee: number; door?: number; buyout?: number; notes?: string; viaAgency?: boolean; agencyName?: string; agencyCommissionPct?: number; managementCommissionPct?: number }) => void
+  addOffer: (patch: { venue: string; city: string; country: string; date: string; promoter: string; guarantee: number; door?: number; buyout?: number; notes?: string; viaAgency?: boolean; agencyName?: string; agencyCommissionPct?: number; managementCommissionPct?: number; terms?: OfferTerms }) => void
   /** Editing an offer's status into 'confirmed' also creates the matching Show. */
   updateOffer: (offerId: string, patch: Partial<Omit<TourOffer, 'id'>>) => void
   deleteOffer: (offerId: string) => void
+  /** Freezes the offer + its budget into a numbered sheet for the artist. Resolves once it is saved. */
+  sendOfferSheet: (offerId: string, opts: { detail: OfferSheetDetail; message?: string }) => Promise<{ ok: true; sheetId: string } | { ok: false; error: string }>
+  /** The artist's own answer to a sheet that is waiting for one. */
+  answerOfferSheet: (sheetId: string, response: 'approved' | 'passed', note?: string) => Promise<{ ok: true } | { ok: false; error: string }>
 
   // ── Expenses ──
   addExpense: (patch: Omit<Expense, 'id'>) => void
@@ -2101,6 +2108,7 @@ export const useStore = create<StudioState>((set, get) => ({
     let updatedOffer: TourOffer | undefined
     let newShow: Show | undefined
     let lockedBudget: Budget | undefined
+    let withdrewSheets = false
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId || !c.agentData) return c
@@ -2135,18 +2143,20 @@ export const useStore = create<StudioState>((set, get) => ({
               }),
             }
           : c.finance
-        return {
-          ...c,
-          agentData: { ...c.agentData, offers },
-          finance,
-          tour: newShow
-            ? { ...c.tour, shows: [...c.tour.shows, newShow].sort((a, b) => a.date.localeCompare(b.date)) }
-            : c.tour,
+        let tour = newShow
+          ? { ...c.tour, shows: [...c.tour.shows, newShow].sort((a, b) => a.date.localeCompare(b.date)) }
+          : c.tour
+        // A cancelled offer shouldn't keep asking the artist for an answer.
+        if (patch.status === 'cancelled' && (tour.offerSheets ?? []).some(sh => sh.offerId === offerId && sh.status === 'sent')) {
+          tour = { ...tour, offerSheets: (tour.offerSheets ?? []).map(sh => sh.offerId === offerId && sh.status === 'sent' ? { ...sh, status: 'withdrawn' as const } : sh) }
+          withdrewSheets = true
         }
+        return { ...c, agentData: { ...c.agentData, offers }, finance, tour }
       }),
     }
     set({ data: updated })
     saveData(updated)
+    if (workspaceId && withdrewSheets) withdrawOfferSheets(offerId).catch(console.error)
     if (clientId && newShow) {
       // The offer's row references the new show's id via a foreign key, so
       // the show must land in the DB first — write them in sequence, not
@@ -2167,12 +2177,84 @@ export const useStore = create<StudioState>((set, get) => ({
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId || !c.agentData) return c
-        return { ...c, agentData: { ...c.agentData, offers: c.agentData.offers.filter(o => o.id !== offerId) } }
+        return {
+          ...c,
+          agentData: { ...c.agentData, offers: c.agentData.offers.filter(o => o.id !== offerId) },
+          tour: { ...c.tour, offerSheets: (c.tour.offerSheets ?? []).filter(sh => sh.offerId !== offerId) },
+        }
       }),
     }
     set({ data: updated })
     saveData(updated)
     dbDeleteOffer(offerId).catch(console.error)
+  },
+
+  sendOfferSheet: async (offerId, { detail, message }) => {
+    const { data, clientId, workspaceId } = get()
+    const client = data.clients.find(c => c.id === clientId)
+    const offer = client?.agentData?.offers.find(o => o.id === offerId)
+    const budget = client?.finance.budgets?.find(b => b.offerId === offerId)
+    if (!client || !clientId || !offer) return { ok: false, error: 'Could not find that offer.' }
+    if (!budget) return { ok: false, error: 'This offer has no budget yet - open its budget first.' }
+
+    const existing = client.tour.offerSheets ?? []
+    const version = existing.filter(sh => sh.offerId === offerId).reduce((m, sh) => Math.max(m, sh.version), 0) + 1
+    const sheet: OfferSheet = {
+      id: 'osh-' + uid(), offerId, version, status: 'sent', detail,
+      message: message?.trim() || undefined,
+      snapshot: buildOfferSheetSnapshot({ client, offer, budget, detail }),
+      sentAt: new Date().toISOString(),
+    }
+
+    // The artist is being asked a question, so wait until it is really saved before saying "sent".
+    if (workspaceId) {
+      try { await insertOfferSheet(sheet, clientId) }
+      catch (e) { console.error(e); return { ok: false, error: 'Could not send the sheet - nothing was sent. Please try again.' } }
+    }
+
+    const updated = {
+      clients: get().data.clients.map(c => {
+        if (c.id !== clientId) return c
+        const sheets = (c.tour.offerSheets ?? []).map(sh =>
+          sh.offerId === offerId && (sh.status === 'sent' || sh.status === 'approved' || sh.status === 'passed')
+            ? { ...sh, status: 'superseded' as const } : sh)
+        return { ...c, tour: { ...c.tour, offerSheets: [...sheets, sheet] } }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    return { ok: true, sheetId: sheet.id }
+  },
+
+  answerOfferSheet: async (sheetId, response, note) => {
+    const { clientId, workspaceId } = get()
+    if (!clientId) return { ok: false, error: 'Something went wrong - please reload the page.' }
+    let answered: OfferSheet | undefined
+    if (workspaceId) {
+      try { answered = await dbAnswerOfferSheet(sheetId, response, note) }
+      catch (e) {
+        console.error(e)
+        const msg = e instanceof Error ? e.message : (e as { message?: string })?.message
+        return { ok: false, error: msg?.includes('already answered') ? msg : 'Your answer could not be saved - please try again.' }
+      }
+    }
+    const updated = {
+      clients: get().data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          tour: {
+            ...c.tour,
+            offerSheets: (c.tour.offerSheets ?? []).map(sh => sh.id !== sheetId ? sh : (answered ?? {
+              ...sh, status: response, respondedAt: new Date().toISOString(), responseNote: note?.trim() || undefined,
+            })),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    return { ok: true }
   },
 
   // ── Runs, budgets, crew pay (Stage 4) ──

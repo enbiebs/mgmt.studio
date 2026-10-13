@@ -10,19 +10,21 @@
 
 import type { Client, MainSection, UserRole } from '@/types'
 
-export type CalendarEventDomain = 'show' | 'release' | 'post' | 'invoice' | 'contract' | 'project' | 'bill'
+export type CalendarEventDomain = 'show' | 'release' | 'post' | 'invoice' | 'contract' | 'project' | 'bill' | 'offer'
 
 // Which section's access grant gates seeing each domain's events — shared
 // by CalendarView.tsx and any other consumer that needs to permission-check
 // getCalendarEvents (e.g. ClientCard.tsx's dashboard stats).
 export const DOMAIN_SECTION: Record<CalendarEventDomain, MainSection> = {
   show: 'tour', release: 'songs', post: 'content',
-  invoice: 'finance', contract: 'legal', project: 'projects', bill: 'finance',
+  invoice: 'finance', contract: 'legal', project: 'projects', bill: 'finance', offer: 'tour',
 }
 
 // Bills live in Finance, which the artist's own login can otherwise view -
 // but bills are management-side only, so the artist never sees their dates.
-const MANAGEMENT_ONLY_DOMAINS: CalendarEventDomain[] = ['bill']
+// Offers are deal negotiations: the artist hears about one only through a sheet
+// sent to them, which their portal shows as an "Offers" card, not on this calendar.
+const MANAGEMENT_ONLY_DOMAINS: CalendarEventDomain[] = ['bill', 'offer']
 
 // The one place that decides whether a viewer may see a domain's events;
 // CalendarView and the roster cards both go through it.
@@ -44,6 +46,7 @@ export interface CalendarEvent {
   subtitle?: string
   showId?: string
   albumId?: string
+  offerId?: string
 }
 
 export function getCalendarEvents(
@@ -103,12 +106,25 @@ export function getCalendarEvents(
     }
   }
 
+  // Open offers: on the calendar the moment they come in. A confirmed offer is a
+  // show by then, so it's left out rather than shown twice.
+  if (canSee('offer')) {
+    const offerIdsWithShow = new Set(client.tour.shows.map(s => s.tourOfferId).filter(Boolean))
+    for (const o of client.agentData?.offers ?? []) {
+      if ((o.status !== 'inquiry' && o.status !== 'hold') || o.showId || offerIdsWithShow.has(o.id)) continue
+      events.push({
+        id: `offer-${o.id}`, date: o.date, domain: 'offer', title: o.venue,
+        subtitle: `${o.status === 'hold' ? 'Hold' : 'Inquiry'} · ${o.city}`, offerId: o.id,
+      })
+    }
+  }
+
   return events
 }
 
 export const CALENDAR_DOMAIN_LABEL: Record<CalendarEventDomain, string> = {
   show: 'Shows', release: 'Releases', post: 'Posts',
-  invoice: 'Invoices', contract: 'Contracts', project: 'Projects', bill: 'Bills',
+  invoice: 'Invoices', contract: 'Contracts', project: 'Projects', bill: 'Bills', offer: 'Offers',
 }
 
 export const CALENDAR_DOMAIN_STYLE: Record<CalendarEventDomain, string> = {
@@ -119,4 +135,5 @@ export const CALENDAR_DOMAIN_STYLE: Record<CalendarEventDomain, string> = {
   contract: 'bg-red-50 border-red-400 text-red-600',
   project:  'bg-green-50 border-green-400 text-green-700',
   bill:     'bg-orange-50 border-orange-400 text-orange-700',
+  offer:    'bg-teal-50 border-teal-400 text-teal-700',
 }
