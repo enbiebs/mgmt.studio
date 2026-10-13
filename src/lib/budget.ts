@@ -13,13 +13,15 @@
 
 import type {
   Budget, BudgetBucket, BudgetCommission, BudgetLine, BudgetSection, BudgetSnapshot, Client,
-  CommissionBase, CrewMember, CrewRate, Currency, ExpenseCategory, FinanceSettings, Person, Show, TourOffer,
+  CommissionBase, CrewMember, CrewRate, Currency, ExpenseCategory, FinanceSettings, PayoutKind, Person, Settlement, Show, TourOffer,
 } from '@/types'
 import { uid } from '@/lib/utils'
 
 export const BUCKET_LABEL: Record<BudgetBucket, string> = {
   guarantee: 'Guarantee',
   overage: 'Overage',
+  bonus: 'Bonuses',
+  buyout: 'Production buyouts',
   sound_lights: 'Sound & lights',
   labor: 'Labor',
   filming_editing: 'Filming & editing',
@@ -34,11 +36,13 @@ export const BUCKET_LABEL: Record<BudgetBucket, string> = {
 }
 
 export const BUCKET_SECTION: Record<BudgetBucket, BudgetSection> = {
-  guarantee: 'income', overage: 'income', sound_lights: 'sound_lights',
+  guarantee: 'income', overage: 'income', bonus: 'income', buyout: 'income', sound_lights: 'sound_lights',
   labor: 'production', filming_editing: 'production', social_content: 'production', airfare: 'production',
   hotels: 'production', local_transport: 'production', insurance: 'production', payroll_taxes: 'production',
   per_diems: 'production', supplies: 'production',
 }
+
+export const INCOME_BUCKETS: BudgetBucket[] = ['guarantee', 'overage', 'bonus', 'buyout']
 
 export const PRODUCTION_BUCKETS: BudgetBucket[] = [
   'labor', 'filming_editing', 'social_content', 'airfare', 'hotels', 'local_transport',
@@ -224,9 +228,32 @@ export function costWeight(item: { showIds?: string[]; runId?: string }, show: S
   return 0
 }
 
+// ── Settlements: the real income, once the promoter's statement is in ──
+export const settlementForShow = (client: Client, showId: string): Settlement | undefined =>
+  (client.finance.settlements ?? []).find(s => s.showIds.includes(showId))
+
+// A settled show is worked out at the exchange rates frozen when its settlement was confirmed.
+export const frozenRates = (s: Settlement): FxRates => ({ USD: 1, EUR: s.fx.EUR, GBP: s.fx.GBP })
+
+// Which budget income line each kind of payout line counts toward. (Deposits, withholding
+// tax and deductions are not income: they are timing and money taken back out.)
+const EARNING_BUCKET: Partial<Record<PayoutKind, BudgetBucket>> = {
+  guarantee: 'guarantee', overage: 'overage', bonus: 'bonus', buyout: 'buyout', other_income: 'overage',
+}
+export const isEarning = (kind: PayoutKind) => EARNING_BUCKET[kind] !== undefined
+
+// Everything earned on a settlement (the artist's income), in the settlement's own currency.
+export const settlementEarned = (s: Settlement) =>
+  s.payout.filter(l => isEarning(l.kind)).reduce((sum, l) => sum + l.amount, 0)
+
+// Costs by budget bucket. When the show has been settled, the by-bucket totals also hold its
+// settled INCOME (guarantee / overage / bonuses / production buyouts), and every conversion
+// uses the rates frozen at settlement, so settled figures never drift.
 export function actualCostsForShow(
-  client: Client, show: Show, toCurrency: Currency, rates: FxRates,
-): { byBucket: Partial<Record<BudgetBucket, number>>; missingRates: string[] } {
+  client: Client, show: Show, toCurrency: Currency, liveRates: FxRates,
+): { byBucket: Partial<Record<BudgetBucket, number>>; missingRates: string[]; settlement?: Settlement } {
+  const settlement = settlementForShow(client, show.id)
+  const rates = settlement ? frozenRates(settlement) : liveRates
   const { convert, missing } = makeConverter(rates)
   const runShowCount = show.runId ? client.tour.shows.filter(s => s.runId === show.runId).length : 0
   const out: Partial<Record<BudgetBucket, number>> = {}
@@ -244,7 +271,17 @@ export function actualCostsForShow(
     if (w === 0) continue
     add(e.bucket ?? categoryBucket(e.category), convert(e.amount * w, e.currency, toCurrency))
   }
-  return { byBucket: out, missingRates: [...missing] }
+  if (settlement) {
+    // One settlement can cover several shows (a two-night run on one statement): split evenly.
+    const share = 1 / Math.max(1, settlement.showIds.length)
+    for (const l of settlement.payout) {
+      const bucket = EARNING_BUCKET[l.kind]
+      if (bucket) add(bucket, convert(l.amount * share, settlement.currency, toCurrency))
+      // Money taken off the payout for things bought (e.g. a ticket purchase) is a real cost.
+      else if (l.kind === 'deduction') add('supplies', convert(-l.amount * share, settlement.currency, toCurrency))
+    }
+  }
+  return { byBucket: out, missingRates: [...missing], settlement }
 }
 
 // Add up the "actual" amount for each budget line: costs in a bucket are
@@ -263,37 +300,71 @@ export function actualByLine(lines: BudgetLine[], byBucket: Partial<Record<Budge
 
 // ── Per-show money figures, in the artist's home currency (for lists and run roll-ups) ──
 export interface ShowFigures {
-  gross: number
+  gross: number                // the settled income if the show has been settled, otherwise the Current budget's
   budgetCosts: number | null   // sound & lights + production, Current
   actualCosts: number
   netCurrent: number | null    // Current budget's net after commissions
-  netActual: number            // net after commissions using the real costs so far
+  netActual: number            // net after commissions using the real costs (and real income once settled)
+  settled: boolean             // income and rates come from the show's settlement
 }
 
-export function showFigures(client: Client, show: Show, budget: Budget | undefined, home: Currency, rates: FxRates): ShowFigures {
-  const { convert } = makeConverter(rates)
-  const sumActual = (byBucket: Partial<Record<BudgetBucket, number>>) => Object.values(byBucket).reduce((a, v) => a + (v ?? 0), 0)
+export function showFigures(client: Client, show: Show, budget: Budget | undefined, home: Currency, liveRates: FxRates): ShowFigures {
+  const settlement = settlementForShow(client, show.id)
+  const { convert } = makeConverter(settlement ? frozenRates(settlement) : liveRates)
+  const sumWhere = (byBucket: Partial<Record<BudgetBucket, number>>, income: boolean) =>
+    Object.entries(byBucket)
+      .filter(([bucket]) => (BUCKET_SECTION[bucket as BudgetBucket] === 'income') === income)
+      .reduce((a, [, v]) => a + (v ?? 0), 0)
 
   if (!budget) {
-    const actual = actualCostsForShow(client, show, home, rates)
-    const gross = convert(show.guarantee ?? 0, show.currency ?? home, home)
-    const actualCosts = sumActual(actual.byBucket)
-    return { gross, budgetCosts: null, actualCosts, netCurrent: null, netActual: gross - actualCosts }
+    const actual = actualCostsForShow(client, show, home, liveRates)
+    const gross = settlement ? sumWhere(actual.byBucket, true) : convert(show.guarantee ?? 0, show.currency ?? home, home)
+    const actualCosts = sumWhere(actual.byBucket, false)
+    return { gross, budgetCosts: null, actualCosts, netCurrent: null, netActual: gross - actualCosts, settled: !!settlement }
   }
 
   const cur = budget.currency
   const now = computeBudget(budget.lines, budget.commissions)
-  const actual = actualCostsForShow(client, show, cur, rates)
+  const actual = actualCostsForShow(client, show, cur, liveRates)
+  // Once settled, the by-bucket totals already hold the real income; before that, income stays at Current.
   const actualLines: BudgetLine[] = [
-    ...budget.lines.filter(l => l.section === 'income'),
+    ...(settlement ? [] : budget.lines.filter(l => l.section === 'income')),
     ...Object.entries(actual.byBucket).map(([bucket, amount]) => newLine(bucket as BudgetBucket, bucket, amount ?? 0)),
   ]
   const afterActual = computeBudget(actualLines, budget.commissions)
   return {
-    gross: convert(now.gross, cur, home),
+    gross: convert(settlement ? afterActual.gross : now.gross, cur, home),
     budgetCosts: convert(now.soundLights + now.production, cur, home),
-    actualCosts: convert(sumActual(actual.byBucket), cur, home),
+    actualCosts: convert(sumWhere(actual.byBucket, false), cur, home),
     netCurrent: convert(now.net, cur, home),
     netActual: convert(afterActual.net, cur, home),
+    settled: !!settlement,
+  }
+}
+
+// ── The settled P&L for one show: Original vs Current vs Settled ──
+export interface PnlColumn { gross: number; soundLights: number; production: number; commissions: number; net: number }
+
+const toColumn = (t: ReturnType<typeof computeBudget>): PnlColumn => ({
+  gross: t.gross, soundLights: t.soundLights, production: t.production, commissions: t.totalCommissions, net: t.net,
+})
+
+// "Settled" uses the real income from the settlement and the real costs recorded against the
+// show (travel + expenses), with commissions worked out by the budget's own rules - all at the
+// exchange rates frozen when the settlement was confirmed. Returns null for a show with no budget.
+export function settledPnl(client: Client, show: Show, budget: Budget | undefined, liveRates: FxRates) {
+  if (!budget) return null
+  const cur = budget.currency
+  const actual = actualCostsForShow(client, show, cur, liveRates)
+  const lines: BudgetLine[] = [
+    ...(actual.settlement ? [] : budget.lines.filter(l => l.section === 'income')),
+    ...Object.entries(actual.byBucket).map(([bucket, amount]) => newLine(bucket as BudgetBucket, bucket, amount ?? 0)),
+  ]
+  return {
+    currency: cur,
+    original: budget.original ? toColumn(computeBudget(budget.original.lines, budget.original.commissions)) : null,
+    current: toColumn(computeBudget(budget.lines, budget.commissions)),
+    settled: toColumn(computeBudget(lines, budget.commissions)),
+    missingRates: actual.missingRates,
   }
 }

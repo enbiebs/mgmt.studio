@@ -172,7 +172,7 @@ function RunSummary({ run, client, home }: { run: Run; client: Client; home: Cur
     <div className="max-w-4xl">
       <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Run</div>
       <h2 className="font-serif text-xl font-medium mb-1">{run.name}</h2>
-      <div className="text-xs text-gray-400 mb-4">{shows.length} show{shows.length === 1 ? '' : 's'} · all figures in {home}, at today&apos;s exchange rates</div>
+      <div className="text-xs text-gray-400 mb-4">{shows.length} show{shows.length === 1 ? '' : 's'} · all figures in {home}, at today&apos;s exchange rates (settled shows use the rates frozen at settlement)</div>
       {rows.length === 0 ? (
         <div className="text-sm text-gray-400">No shows in this run yet. Use “Runs” to add some.</div>
       ) : (
@@ -189,7 +189,7 @@ function RunSummary({ run, client, home }: { run: Run; client: Client; home: Cur
               {rows.map(({ show, f }) => (
                 <tr key={show.id} className="border-t border-gray-100">
                   <td className="px-3 py-2 text-sm">
-                    <div className="font-medium">{show.venue}</div>
+                    <div className="font-medium">{show.venue}{f.settled && <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-blue-50 text-blue-700 align-middle">SETTLED</span>}</div>
                     <div className="text-[11px] text-gray-400">{show.city} · {shortDate(show.date)}</div>
                   </td>
                   <td className={td}>{money(f.gross, home)}</td>
@@ -214,7 +214,7 @@ function RunSummary({ run, client, home }: { run: Run; client: Client; home: Cur
         </div>
       )}
       <p className="text-[11px] text-gray-400 mt-3">
-        Costs shared across the run (like an international flight assigned to the whole run) are split evenly across its shows. Income for “Net (actual)” stays at the budgeted amount until a settlement is recorded.
+        Costs shared across the run (like an international flight assigned to the whole run) are split evenly across its shows. For shows not yet settled, income in “Net (actual)” stays at the budgeted amount; once a settlement is recorded (SETTLED) it uses the real income, at the exchange rates frozen when the settlement was confirmed.
       </p>
     </div>
   )

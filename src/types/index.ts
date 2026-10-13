@@ -478,7 +478,7 @@ export type MainSection  = 'calendar' | 'songs' | 'tour' | 'content' | 'finance'
 export type SongsSub     = 'tracks' | 'labelcopy' | 'checklist' | 'status'
 export type ContentSub   = 'manage' | 'studio' | 'lab'
 export type BizSub       = 'royalties' | 'banking' | 'catalog' | 'pl' | 'invoices' | 'payments'
-export type TourSub      = 'tour' | 'stage-plot' | 'advance' | 'daysheet' | 'crew' | 'guests' | 'travel' | 'offers' | 'budget'
+export type TourSub      = 'tour' | 'stage-plot' | 'advance' | 'daysheet' | 'crew' | 'guests' | 'travel' | 'offers' | 'budget' | 'settlements'
 export type AnalyticsSub = 'overview' | 'streaming' | 'playlists' | 'social' | 'tiktok' | 'audience' | 'charts'
 export type FandomSub    = 'overview' | 'fans' | 'referrals' | 'messaging'
 export type LegalSub     = 'pipeline' | 'alerts' | 'register' | 'templates'
@@ -896,6 +896,7 @@ export interface ClientFinance {
   budgets:   Budget[]
   crewRates: CrewRate[]
   settings?: FinanceSettings   // home currency + default commissions; absent = defaults
+  settlements?: Settlement[]   // management side with Finance access only
 }
 
 // ── Runs & tour budgets (Stage 4) ───────────────────────────
@@ -909,7 +910,7 @@ export interface Run {
 // costs → Commissions → Net, every commission with its own % and its own base.
 export type BudgetSection = 'income' | 'sound_lights' | 'production'
 export type BudgetBucket =
-  | 'guarantee' | 'overage' | 'sound_lights' | 'labor' | 'filming_editing' | 'social_content'
+  | 'guarantee' | 'overage' | 'bonus' | 'buyout' | 'sound_lights' | 'labor' | 'filming_editing' | 'social_content'
   | 'airfare' | 'hotels' | 'local_transport' | 'insurance' | 'payroll_taxes' | 'per_diems' | 'supplies'
 
 export interface BudgetLine {
@@ -971,6 +972,50 @@ export interface FinanceSettings {
   homeCurrency:       Currency
   defaultCommissions: Omit<BudgetCommission, 'id'>[]
 }
+
+// ── Settlements (Stage 4, Part 3) ───────────────────────────
+// What the promoter sends after a show: tickets, their costs, the deal math and what is
+// due to the artist. Read from an uploaded statement and confirmed by the manager; it
+// then supplies the real income for the settled P&L. Management side only.
+export type PayoutKind =
+  | 'guarantee' | 'overage' | 'bonus' | 'buyout' | 'other_income'   // money earned (income)
+  | 'deposit' | 'withholding_tax' | 'deduction'                      // taken off the payout
+
+export interface PayoutLine { label: string; amount: number; kind: PayoutKind }
+export interface SettlementTicketTier { show?: string; tier: string; capacity?: number; comps?: number; sold?: number; price?: number; gross?: number }
+export interface SettlementExpense { group: string; label: string; budget?: number; actual?: number; note?: string }
+export interface SettlementPayment { label: string; amount: number; note?: string }
+
+// Exchange rates (USD per one unit) frozen when the settlement is confirmed.
+export interface FrozenRates { USD: 1; EUR: number; GBP: number; at: string }
+
+export interface Settlement {
+  id:           string
+  showIds:      string[]
+  filePath?:    string
+  fileName?:    string
+  eventName?:   string
+  venue?:       string
+  promoter?:    string
+  preparedOn?:  string
+  preparedBy?:  string
+  currency:     Currency
+  fx:           FrozenRates
+  attendance?:  { sold?: number; comps?: number; capacity?: number }
+  summary?:     { gross?: number; taxesAndFees?: number; netGross?: number; totalExpenses?: number; netShowReceipts?: number; promoterEarnings?: number; adjustments?: { label: string; amount: number }[] }
+  deal?:        { description?: string; guarantee?: number; percentage?: number }
+  boxOffice:    SettlementTicketTier[]
+  expenses:     SettlementExpense[]
+  payout:       PayoutLine[]
+  totalDue:     number
+  payments:     SettlementPayment[]
+  balanceDue?:  number
+  notes?:       string
+  confirmedAt:  string
+}
+
+// What the reader hands the confirm screen: a settlement before it is confirmed and saved.
+export type SettlementDraft = Omit<Settlement, 'id' | 'fx' | 'confirmedAt' | 'showIds'> & { showDates: string[] }
 
 // ── Offer sheets (Stage 4, Part 2) ──────────────────────────
 // What the manager sends the artist for one offer: a SNAPSHOT of the deal and

@@ -10,7 +10,7 @@ import { Fragment, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { inputClass } from '@/components/ui/Modal'
 import {
-  BUCKET_LABEL, BUCKET_SECTION, COMMISSION_BASE_LABEL, PRODUCTION_BUCKETS, actualCostsForShow, computeBudget,
+  BUCKET_LABEL, BUCKET_SECTION, COMMISSION_BASE_LABEL, INCOME_BUCKETS, PRODUCTION_BUCKETS, actualCostsForShow, computeBudget,
   crewLineAmount, crewPerDiem, crewRoleShort, newCommission, newLine, pctOfGross, type CrewDays,
 } from '@/lib/budget'
 import type { Budget, BudgetBucket, BudgetCommission, BudgetLine, BudgetSection, Client, CommissionBase, Currency } from '@/types'
@@ -108,17 +108,23 @@ export function BudgetEditor({ budget, client }: { budget: Budget; client: Clien
   const was = original ? computeBudget(original.lines, original.commissions) : null
   const origLine = (id: string) => original?.lines.find(l => l.id === id)
 
-  // Actual costs are real travel costs + expenses assigned to this show (income
-  // stays at Current until the settlement is recorded).
+  // Actual costs are real travel costs + expenses assigned to this show. Income stays at
+  // Current until a settlement is recorded; after that the settlement supplies it (and the
+  // exchange rates frozen when it was confirmed are used throughout).
   const actual = show ? actualCostsForShow(client, show, cur, fxRates) : null
+  const settlement = actual?.settlement
   const actualLines: BudgetLine[] = actual
     ? [
-        ...budget.lines.filter(l => l.section === 'income'),
+        ...(settlement ? [] : budget.lines.filter(l => l.section === 'income')),
         ...Object.entries(actual.byBucket).map(([bucket, amount]) => newLine(bucket as BudgetBucket, bucket, amount ?? 0)),
       ]
     : []
   const act = actual ? computeBudget(actualLines, budget.commissions) : null
-  const actualOf = (bucket: BudgetBucket) => (actual ? actual.byBucket[bucket] ?? 0 : null)
+  const actualOf = (bucket: BudgetBucket) => {
+    if (!actual) return null
+    if (BUCKET_SECTION[bucket] === 'income') return settlement ? actual.byBucket[bucket] ?? 0 : null
+    return actual.byBucket[bucket] ?? 0
+  }
 
   const patchLine = (id: string, patch: Partial<BudgetLine>) =>
     updateBudget(budget.id, { lines: budget.lines.map(l => l.id === id ? { ...l, ...patch } : l) })
@@ -250,6 +256,11 @@ export function BudgetEditor({ budget, client }: { budget: Budget; client: Clien
         {original
           ? `Original locked ${budget.lockedAt ? new Date(budget.lockedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''} when the offer was confirmed. Edits now change “Current” only.`
           : 'Draft — you can edit freely. The Original locks automatically when this offer is confirmed.'}
+        {settlement && (
+          <span className="ml-2 font-semibold text-blue-700">
+            Settled{settlement.preparedOn ? ` (statement of ${new Date(settlement.preparedOn + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})` : ''}: Actual income is from the settlement, at the exchange rates frozen when it was confirmed.
+          </span>
+        )}
         {actual && actual.missingRates.length > 0 && <span className="ml-2 text-amber-700">Some costs are in {actual.missingRates.join(', ')} and no exchange rate was available, so they are counted 1:1.</span>}
       </div>
 
@@ -259,8 +270,8 @@ export function BudgetEditor({ budget, client }: { budget: Budget; client: Clien
         </div>
 
         <SectionTitle>Income</SectionTitle>
-        {renderGroups('income', ['guarantee', 'overage'])}
-        <TotalRow label="Total gross income" orig={was?.gross ?? null} cur={now.gross} act={null} gross={now.gross} currency={cur} />
+        {renderGroups('income', INCOME_BUCKETS)}
+        <TotalRow label="Total gross income" orig={was?.gross ?? null} cur={now.gross} act={settlement && act ? act.gross : null} gross={now.gross} currency={cur} />
 
         <SectionTitle>Sound &amp; lights</SectionTitle>
         {renderGroups('sound_lights', ['sound_lights'])}

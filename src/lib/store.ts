@@ -22,8 +22,8 @@ import type {
   CrewMember, ShowAdvance, TravelItem, Person, PersonActivity, Currency,
   CatalogWork, RegStatus, Invoice, InvoiceLineItem, InvoiceStatus, RevenueStream,
   LegalTemplate, LegalTemplateClause, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
-  ReleaseType, Venue, TourOffer, Expense, Vendor, Run, Budget, CrewRate, FinanceSettings,
-  OfferSheet, OfferSheetDetail, OfferTerms,
+  ReleaseType, Venue, TourOffer, Expense, Vendor, Run, Budget, BudgetBucket, CrewRate, FinanceSettings,
+  OfferSheet, OfferSheetDetail, OfferTerms, Settlement, SettlementDraft, SettlementPayment,
 } from '@/types'
 import { DEMO_DATA } from '@/lib/demo-data'
 import { DEFAULT_LEGAL_TEMPLATES } from '@/lib/legal-templates-demo'
@@ -34,7 +34,8 @@ import { EMPTY_LEGAL } from '@/lib/legal-demo'
 import { EMPTY_FINANCE } from '@/lib/finance-demo'
 import { EMPTY_TOUR } from '@/lib/advance-demo'
 import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE } from '@/lib/utils'
-import { buildNewBudget, snapshotOf, type FxRates } from '@/lib/budget'
+import { buildNewBudget, snapshotOf, newLine, frozenRates, makeConverter, settlementEarned, BUCKET_LABEL, type FxRates } from '@/lib/budget'
+import { balanceOf } from '@/lib/settlement-math'
 import { buildOfferSheetSnapshot } from '@/lib/offer-sheet'
 import {
   SECTION_TO_GRANT_KEY, findException, filterClientForViewer,
@@ -52,6 +53,7 @@ import {
   upsertShow, deleteShow as dbDeleteShow,
   upsertOffer, deleteOffer as dbDeleteOffer,
   insertOfferSheet, answerOfferSheet as dbAnswerOfferSheet, withdrawOfferSheets,
+  insertSettlement, updateSettlementPayments, deleteSettlementRow,
   upsertExpense, deleteExpense as dbDeleteExpense,
   upsertVendor, deleteVendor as dbDeleteVendor,
   upsertRun, deleteRun as dbDeleteRun, upsertBudget, deleteBudget as dbDeleteBudget, upsertCrewRate, upsertFinanceSettings,
@@ -394,6 +396,12 @@ interface StudioState {
   deleteBudget: (budgetId: string) => void
   setSelectedBudget: (id: string | null) => void
   loadFxRates: () => Promise<void>
+
+  // ── Settlements (Stage 4, Part 3) ──
+  /** Saves a confirmed settlement for the chosen shows, freezing today's exchange rates into it. */
+  confirmSettlement: (draft: SettlementDraft, opts: { showIds: string[]; filePath?: string; fileName?: string }) => Promise<{ ok: true; settlementId: string } | { ok: false; error: string }>
+  addSettlementPayment: (settlementId: string, payment: SettlementPayment) => Promise<{ ok: true } | { ok: false; error: string }>
+  deleteSettlement: (settlementId: string) => Promise<{ ok: true } | { ok: false; error: string }>
 
   // ── Venue library (reusable across shows at the same room) ──
   addVenue: (patch: Omit<Venue, 'id' | 'createdAt'>) => string
@@ -2376,6 +2384,115 @@ export const useStore = create<StudioState>((set, get) => ({
       const body = await res.json() as { rates?: FxRates }
       if (body.rates) set({ fxRates: body.rates })
     } catch (e) { console.error(e) }
+  },
+
+  confirmSettlement: async (draft, { showIds, filePath, fileName }) => {
+    const { clientId, workspaceId } = get()
+    const client = get().data.clients.find(c => c.id === clientId)
+    if (!client || !clientId) return { ok: false, error: 'Something went wrong - please reload the page.' }
+    if (showIds.length === 0) return { ok: false, error: 'Pick the show (or shows) this settlement is for.' }
+
+    // Freeze the exchange rates as of right now, so settled figures never drift afterwards.
+    await get().loadFxRates()
+    const rates = get().fxRates
+    const { showDates, ...rest } = draft
+    void showDates
+    const settlement: Settlement = {
+      ...rest, id: 'stl-' + uid(), showIds, filePath, fileName,
+      fx: { USD: 1, EUR: rates.EUR ?? 0, GBP: rates.GBP ?? 0, at: new Date().toISOString() },
+      confirmedAt: new Date().toISOString(),
+    }
+    settlement.balanceDue = balanceOf(settlement)
+
+    if (workspaceId) {
+      try { await insertSettlement(settlement, clientId) }
+      catch (e) { console.error(e); return { ok: false, error: 'Could not save the settlement - nothing was saved. Please try again.' } }
+    }
+
+    set({
+      data: {
+        clients: get().data.clients.map(c => c.id !== clientId ? c : {
+          ...c, finance: { ...c.finance, settlements: [...(c.finance.settlements ?? []), settlement] },
+        }),
+      },
+    })
+    saveData(get().data)
+
+    // Each linked offer is now settled (its net payout = this show's share, in USD); each budget
+    // gets a line for any kind of income it didn't have yet (bonuses, production buyouts), at $0
+    // Current so the real number shows up in Actual without changing the budget.
+    const toUsd = makeConverter(frozenRates(settlement)).convert
+    const sharePerShow = settlementEarned(settlement) / showIds.length
+    const settledAt = settlement.preparedOn ?? new Date().toISOString().slice(0, 10)
+    for (const showId of showIds) {
+      const show = client.tour.shows.find(s => s.id === showId)
+      if (show?.tourOfferId) {
+        get().updateOffer(show.tourOfferId, { status: 'settled', settledAt, netPayout: Math.round(toUsd(sharePerShow, settlement.currency, 'USD')) })
+      }
+      const budget = (get().data.clients.find(c => c.id === clientId)?.finance.budgets ?? []).find(b => b.showId === showId)
+      if (budget) {
+        const missing = new Set<BudgetBucket>()
+        for (const l of settlement.payout) {
+          const bucket = l.kind === 'bonus' ? 'bonus' : l.kind === 'buyout' ? 'buyout' : null
+          if (bucket && l.amount !== 0 && !budget.lines.some(x => x.section === 'income' && x.bucket === bucket)) missing.add(bucket)
+        }
+        if (missing.size > 0) get().updateBudget(budget.id, { lines: [...budget.lines, ...[...missing].map(b => newLine(b, BUCKET_LABEL[b], 0))] })
+      }
+    }
+    return { ok: true, settlementId: settlement.id }
+  },
+
+  addSettlementPayment: async (settlementId, payment) => {
+    const { clientId, workspaceId } = get()
+    const current = get().data.clients.find(c => c.id === clientId)?.finance.settlements?.find(x => x.id === settlementId)
+    if (!clientId || !current) return { ok: false, error: 'Could not find that settlement.' }
+    const payments = [...current.payments, payment]
+    const updated: Settlement = { ...current, payments, balanceDue: balanceOf({ ...current, payments, balanceDue: undefined }) }
+    if (workspaceId) {
+      try { await updateSettlementPayments(updated) }
+      catch (e) { console.error(e); return { ok: false, error: 'Could not save the payment - please try again.' } }
+    }
+    set({
+      data: {
+        clients: get().data.clients.map(c => c.id !== clientId ? c : {
+          ...c, finance: { ...c.finance, settlements: (c.finance.settlements ?? []).map(x => x.id === settlementId ? updated : x) },
+        }),
+      },
+    })
+    saveData(get().data)
+    return { ok: true }
+  },
+
+  deleteSettlement: async (settlementId) => {
+    const { clientId, workspaceId } = get()
+    const client = get().data.clients.find(c => c.id === clientId)
+    const current = client?.finance.settlements?.find(x => x.id === settlementId)
+    if (!client || !clientId || !current) return { ok: false, error: 'Could not find that settlement.' }
+    if (workspaceId) {
+      try { await deleteSettlementRow(settlementId) }
+      catch (e) { console.error(e); return { ok: false, error: 'Could not delete the settlement - please try again.' } }
+      if (current.filePath) {
+        fetch('/api/settlements/file', {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId, path: current.filePath }),
+        }).catch(console.error)
+      }
+    }
+    set({
+      data: {
+        clients: get().data.clients.map(c => c.id !== clientId ? c : {
+          ...c, finance: { ...c.finance, settlements: (c.finance.settlements ?? []).filter(x => x.id !== settlementId) },
+        }),
+      },
+    })
+    saveData(get().data)
+    // The offers it settled go back to Confirmed.
+    for (const showId of current.showIds) {
+      const offerId = client.tour.shows.find(s => s.id === showId)?.tourOfferId
+      const offer = offerId ? client.agentData.offers.find(o => o.id === offerId) : undefined
+      if (offer?.status === 'settled') get().updateOffer(offer.id, { status: 'confirmed', settledAt: undefined, netPayout: undefined })
+    }
+    return { ok: true }
   },
 
   // ── Venue library ──

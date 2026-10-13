@@ -175,6 +175,7 @@ export function filterClientForViewer(c: Client, v: Viewer, exceptions: ItemExce
       budgets: vendorsVisible ? c.finance.budgets : [],
       crewRates: vendorsVisible ? c.finance.crewRates : [],
       settings: vendorsVisible ? c.finance.settings : undefined,
+      settlements: vendorsVisible ? c.finance.settlements : [],
     },
     agentData: { ...c.agentData, offers: offersVisible ? c.agentData.offers : [] },
   }

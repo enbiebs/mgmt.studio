@@ -17,7 +17,7 @@ import type {
   CrewMember, GuestListEntry, TravelItem, Currency, Person, PersonActivity, CatalogWork,
   LegalTemplate, LegalTemplateClause, Stage, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
   Venue, FlightLeg, Vendor, Run, Budget, CrewRate, FinanceSettings, BudgetLine, BudgetCommission, BudgetSnapshot, Currency as Cur,
-  OfferSheet, OfferTerms,
+  OfferSheet, OfferTerms, Settlement,
 } from '@/types'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
 import { EMPTY_FANDOM }    from '@/lib/fandom-demo'
@@ -54,7 +54,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems, flightLegs, travelItemShows,
     people, bankAccounts, bankTransactions,
     trackRounds, trackNotes, trackNoteReplies, trackCredits, venues, vendors,
-    runsQ, budgetsQ, crewRatesQ, financeSettingsQ, expenseShowsQ, offerSheetsQ,
+    runsQ, budgetsQ, crewRatesQ, financeSettingsQ, expenseShowsQ, offerSheetsQ, settlementsQ, settlementShowsQ,
   ] = await Promise.all([
     supabase.from('albums').select('*').in('client_id', clientIds),
     supabase.from('tracks').select('*'),
@@ -95,6 +95,8 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     supabase.from('client_finance_settings').select('*').in('client_id', clientIds),
     supabase.from('expense_shows').select('*'),
     supabase.from('offer_sheets').select('*').in('client_id', clientIds),
+    supabase.from('settlements').select('*').in('client_id', clientIds),
+    supabase.from('settlement_shows').select('*'),
   ])
 
   const albumRows     = albums.data       ?? []
@@ -567,6 +569,12 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
         original: b.original ?? undefined, lockedAt: b.locked_at ?? undefined, updatedAt: b.updated_at,
       }))
 
+    const cSettlements: Settlement[] = (settlementsQ.data ?? [])
+      .filter((r: { client_id: string }) => r.client_id === c.id)
+      .map((r: SettlementRow) => rowToSettlement(
+        r, (settlementShowsQ.data ?? []).filter((l: { settlement_id: string }) => l.settlement_id === r.id).map((l: { show_id: string }) => l.show_id),
+      ))
+
     const cOfferSheets: OfferSheet[] = (offerSheetsQ.data ?? [])
       .filter((r: { client_id: string }) => r.client_id === c.id)
       .map(rowToOfferSheet)
@@ -665,7 +673,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       artistTodos: cTodos,
       agentData:   { offers: cOffers },
       legal:       { contracts: cContracts },
-      finance:     { invoices: cInvoices, expenses: cExpenses, vendors: cVendors, plMonths: cPLMonths, budgets: cBudgets, crewRates: cCrewRates, settings: cFinanceSettings },
+      finance:     { invoices: cInvoices, expenses: cExpenses, vendors: cVendors, plMonths: cPLMonths, budgets: cBudgets, crewRates: cCrewRates, settings: cFinanceSettings, settlements: cSettlements },
       // Analytics and fandom come from the JSONB column (external API data)
       analytics: (c.analytics && Object.keys(c.analytics).length > 0)
         ? c.analytics
@@ -1073,6 +1081,63 @@ export async function upsertExpense(expense: Expense, clientId: string) {
     )
     if (ins.error) throw ins.error
   }
+}
+
+// ── Settlements (Stage 4, Part 3) ─────────────────────────────
+interface SettlementRow {
+  id: string; file_path: string | null; file_name: string | null; event_name: string | null; venue: string | null
+  promoter: string | null; prepared_on: string | null; prepared_by: string | null; currency: string
+  fx: Settlement['fx']; attendance: Settlement['attendance'] | null; summary: Settlement['summary'] | null
+  deal: Settlement['deal'] | null; box_office: Settlement['boxOffice'] | null; expenses: Settlement['expenses'] | null
+  payout: Settlement['payout']; total_due: number | string; payments: Settlement['payments'] | null
+  balance_due: number | string | null; notes: string | null; confirmed_at: string
+}
+
+function rowToSettlement(r: SettlementRow, showIds: string[]): Settlement {
+  return {
+    id: r.id, showIds, filePath: r.file_path ?? undefined, fileName: r.file_name ?? undefined,
+    eventName: r.event_name ?? undefined, venue: r.venue ?? undefined, promoter: r.promoter ?? undefined,
+    preparedOn: r.prepared_on ?? undefined, preparedBy: r.prepared_by ?? undefined,
+    currency: r.currency as Cur, fx: r.fx,
+    attendance: r.attendance ?? undefined, summary: r.summary ?? undefined, deal: r.deal ?? undefined,
+    boxOffice: r.box_office ?? [], expenses: r.expenses ?? [], payout: r.payout,
+    totalDue: Number(r.total_due), payments: r.payments ?? [],
+    balanceDue: r.balance_due === null ? undefined : Number(r.balance_due),
+    notes: r.notes ?? undefined, confirmedAt: r.confirmed_at,
+  }
+}
+
+function settlementToRow(st: Settlement, clientId: string) {
+  return {
+    id: st.id, client_id: clientId, file_path: st.filePath ?? null, file_name: st.fileName ?? null,
+    event_name: st.eventName ?? null, venue: st.venue ?? null, promoter: st.promoter ?? null,
+    prepared_on: st.preparedOn ?? null, prepared_by: st.preparedBy ?? null, currency: st.currency, fx: st.fx,
+    attendance: st.attendance ?? null, summary: st.summary ?? null, deal: st.deal ?? null,
+    box_office: st.boxOffice, expenses: st.expenses, payout: st.payout, total_due: st.totalDue,
+    payments: st.payments, balance_due: st.balanceDue ?? null, notes: st.notes ?? null, confirmed_at: st.confirmedAt,
+  }
+}
+
+// Saves a confirmed settlement, then links it to its shows (the settlement row goes first: the links point at it).
+export async function insertSettlement(st: Settlement, clientId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('settlements').insert(settlementToRow(st, clientId))
+  if (error) throw error
+  const { error: linkError } = await supabase.from('settlement_shows').insert(st.showIds.map(showId => ({ settlement_id: st.id, show_id: showId })))
+  if (linkError) throw linkError
+}
+
+// Payments recorded later (the balance changes; the statement itself never does).
+export async function updateSettlementPayments(st: Settlement) {
+  const supabase = createClient()
+  const { error } = await supabase.from('settlements').update({ payments: st.payments, balance_due: st.balanceDue ?? null }).eq('id', st.id)
+  if (error) throw error
+}
+
+export async function deleteSettlementRow(settlementId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('settlements').delete().eq('id', settlementId)
+  if (error) throw error
 }
 
 // ── Offer sheets (Stage 4, Part 2) ────────────────────────────
