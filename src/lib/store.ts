@@ -36,6 +36,7 @@ import { EMPTY_TOUR } from '@/lib/advance-demo'
 import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE } from '@/lib/utils'
 import { buildNewBudget, snapshotOf, newLine, frozenRates, makeConverter, settlementEarned, BUCKET_LABEL, type FxRates } from '@/lib/budget'
 import { balanceOf } from '@/lib/settlement-math'
+import type { InboxChoice } from '@/lib/inbox'
 import { buildOfferSheetSnapshot } from '@/lib/offer-sheet'
 import {
   SECTION_TO_GRANT_KEY, findException, filterClientForViewer,
@@ -44,6 +45,7 @@ import {
 import {
   loadWorkspaceData, getMyMembership, getGrantsForMember, getPreviewableMembers,
   loadItemAccess, upsertItemAccess, deleteItemAccess,
+  loadInboxState, saveInboxChoice, clearInboxChoice,
   type AccessGrant, type PreviewMember,
   upsertClient, deleteClient as dbDeleteClient, setCalendarToken,
   upsertTrack, deleteTrack as dbDeleteTrack,
@@ -187,6 +189,8 @@ interface StudioState {
   memberGrants: Record<string, AccessGrant[]>
   // The manager's full data, set aside while previewing as someone else.
   previewBackup: AppData | null
+  /** This person's Done / Snoozed choices in the Inbox, by item key. */
+  inboxState: Record<string, InboxChoice>
   // Tour budgets (Stage 4): which budget is open, and live exchange rates (USD per unit)
   selectedBudgetId: string | null
   fxRates: FxRates
@@ -397,6 +401,11 @@ interface StudioState {
   setSelectedBudget: (id: string | null) => void
   loadFxRates: () => Promise<void>
 
+  // ── Inbox (Stage 5) ──
+  markInboxDone: (key: string) => void
+  snoozeInboxItem: (key: string, untilIso: string) => void
+  restoreInboxItem: (key: string) => void
+
   // ── Settlements (Stage 4, Part 3) ──
   /** Saves a confirmed settlement for the chosen shows, freezing today's exchange rates into it. */
   confirmSettlement: (draft: SettlementDraft, opts: { showIds: string[]; filePath?: string; fileName?: string }) => Promise<{ ok: true; settlementId: string } | { ok: false; error: string }>
@@ -459,6 +468,7 @@ export const useStore = create<StudioState>((set, get) => ({
   itemAccess: [],
   memberGrants: {},
   previewBackup: null,
+  inboxState: {},
   selectedBudgetId: null,
   fxRates: {},
 
@@ -568,6 +578,8 @@ export const useStore = create<StudioState>((set, get) => ({
       let grants: AccessGrant[] = []
       let previewMembers: PreviewMember[] = []
       let itemAccess: ItemException[] = []
+      // Everyone except the artist has an inbox (the artist's login never sees money alerts).
+      const inboxState = role === 'artist' ? {} : await loadInboxState().catch(e => { console.error(e); return {} as Record<string, InboxChoice> })
       if (role === 'agent' || role === 'lawyer' || role === 'team') {
         grants = await getGrantsForMember(memberId)
       } else if (role === 'manager') {
@@ -583,6 +595,7 @@ export const useStore = create<StudioState>((set, get) => ({
         grants,
         previewMembers,
         itemAccess,
+        inboxState,
         data: hasClients ? appData : { clients: [] },
         legalTemplates,
         // Artists land straight in their own client — no roster to pick from.
@@ -2384,6 +2397,24 @@ export const useStore = create<StudioState>((set, get) => ({
       const body = await res.json() as { rates?: FxRates }
       if (body.rates) set({ fxRates: body.rates })
     } catch (e) { console.error(e) }
+  },
+
+  markInboxDone: (key) => {
+    const before = get().inboxState
+    set({ inboxState: { ...before, [key]: { state: 'done' } } })
+    saveInboxChoice(key, { state: 'done' }).catch(e => { console.error(e); set({ inboxState: before }) })
+  },
+  snoozeInboxItem: (key, untilIso) => {
+    const before = get().inboxState
+    set({ inboxState: { ...before, [key]: { state: 'snoozed', until: untilIso } } })
+    saveInboxChoice(key, { state: 'snoozed', until: untilIso }).catch(e => { console.error(e); set({ inboxState: before }) })
+  },
+  restoreInboxItem: (key) => {
+    const before = get().inboxState
+    const { [key]: _removed, ...rest } = before
+    void _removed
+    set({ inboxState: rest })
+    clearInboxChoice(key).catch(e => { console.error(e); set({ inboxState: before }) })
   },
 
   confirmSettlement: async (draft, { showIds, filePath, fileName }) => {

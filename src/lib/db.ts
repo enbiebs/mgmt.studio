@@ -25,6 +25,7 @@ import { EMPTY_AGENT }     from '@/lib/agent-demo'
 import { EMPTY_LEGAL }     from '@/lib/legal-demo'
 import { EMPTY_FINANCE }   from '@/lib/finance-demo'
 import { rowToOfferSheet, type OfferSheetRow } from '@/lib/offer-sheet'
+import type { InboxChoice } from '@/lib/inbox'
 import { sectionsWithItems, type ItemException, type ItemType, type ItemEffect } from '@/lib/item-access'
 
 // ── Load ───────────────────────────────────────────────────
@@ -690,6 +691,34 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
 // ── Per-item sharing exceptions (manager-only; see item-access.ts) ──
 // Other logins get no rows back (the database hides the table from them) -
 // their own limits are applied by the database on every other query.
+// ── Inbox: what this person has marked done or snoozed (their own rows only) ──
+export async function loadInboxState(): Promise<Record<string, InboxChoice>> {
+  const supabase = createClient()
+  const { data, error } = await supabase.from('inbox_state').select('item_key, state, until')
+  if (error) throw error
+  const out: Record<string, InboxChoice> = {}
+  for (const r of (data ?? []) as { item_key: string; state: string; until: string | null }[]) {
+    out[r.item_key] = { state: r.state as InboxChoice['state'], until: r.until ?? undefined }
+  }
+  return out
+}
+
+export async function saveInboxChoice(itemKey: string, choice: InboxChoice) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not signed in')
+  const { error } = await supabase.from('inbox_state').upsert({
+    user_id: user.id, item_key: itemKey, state: choice.state, until: choice.until ?? null, updated_at: new Date().toISOString(),
+  })
+  if (error) throw error
+}
+
+export async function clearInboxChoice(itemKey: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('inbox_state').delete().eq('item_key', itemKey)
+  if (error) throw error
+}
+
 export async function loadItemAccess(): Promise<ItemException[]> {
   const supabase = createClient()
   const { data } = await supabase.from('item_access').select('id, client_id, item_type, item_id, member_id, effect')
