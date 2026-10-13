@@ -52,6 +52,7 @@ import { CrewView }      from '@/components/tour/CrewView'
 import { OffersView }    from '@/components/tour/OffersView'
 import { BudgetView }    from '@/components/tour/BudgetView'
 import { SettlementsView } from '@/components/tour/SettlementsView'
+import { InboxPanel } from '@/components/dashboard/InboxPanel'
 
 export function StudioApp() {
   const { view, section, songsSub: rawSongsSub, contentSub: rawContentSub, bizSub: rawBizSub, tourSub: rawTourSub, clientId, data, role, hasAccess, isShareOnly, accessibleClientIds, openModal, isLoading } = useStore()
@@ -90,6 +91,8 @@ export function StudioApp() {
                 <p className="text-sm text-gray-400 mt-0.5">{roster.length} client{roster.length !== 1 ? 's' : ''}</p>
               </div>
             </div>
+
+            <InboxPanel />
 
             <div className="grid grid-cols-[repeat(auto-fill,minmax(310px,1fr))] gap-4">
               {roster.map(c => <ClientCard key={c.id} client={c} />)}

@@ -4,6 +4,7 @@ import { useStore } from '@/lib/store'
 import { Badge } from '@/components/ui/Badge'
 import { fmt, initials, today } from '@/lib/utils'
 import { getCalendarEvents, canSeeCalendarDomain } from '@/lib/calendar'
+import { useInbox } from '@/lib/useInbox'
 import type { CalendarEventDomain } from '@/lib/calendar'
 import type { Client } from '@/types'
 
@@ -15,6 +16,7 @@ export function ClientCard({ client: c }: { client: Client }) {
   const hasAccess = useStore(s => s.hasAccess)
   const role = useStore(s => s.role)
   const { openClient, openModal, deleteClient } = useStore()
+  const inbox = useInbox().byClient[c.id]
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -106,10 +108,12 @@ export function ClientCard({ client: c }: { client: Client }) {
 
       {/* ── Footer ── */}
       <div className="flex items-center gap-1.5 mt-4 pt-3.5 border-t border-gray-100">
+        {(inbox?.urgent ?? 0) > 0 && <Badge variant="red">{inbox!.urgent} need you now</Badge>}
+        {(inbox?.soon ?? 0) > 0 && <Badge variant="amber">{inbox!.soon} coming up</Badge>}
         {upcoming     > 0 && <Badge variant="green">{upcoming} upcoming</Badge>}
         {pendingSplit > 0 && <Badge variant="amber">{pendingSplit} to split</Badge>}
         {regIssues    > 0 && <Badge variant="red">{regIssues} reg issues</Badge>}
-        {!upcoming && !pendingSplit && !regIssues && <Badge variant="gray">All clear</Badge>}
+        {!upcoming && !pendingSplit && !regIssues && !inbox?.urgent && !inbox?.soon && <Badge variant="gray">All clear</Badge>}
         <button
           className="ml-auto text-sm font-medium px-2.5 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
           onClick={e => { e.stopPropagation(); openClient(c.id) }}

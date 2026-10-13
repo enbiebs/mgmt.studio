@@ -2,6 +2,7 @@
 import { useStore } from '@/lib/store'
 import { initials } from '@/lib/utils'
 import { useState, useRef, useEffect } from 'react'
+import { useInbox } from '@/lib/useInbox'
 import type { MainSection } from '@/types'
 
 const ROLE_LABEL: Record<string, string> = { manager: 'Manager', artist: 'Artist', agent: 'Agent', lawyer: 'Lawyer', team: 'Team' }
@@ -13,6 +14,7 @@ export function AppHeader() {
   } = useStore()
   const canSwitchRole = authRole === null || authRole === 'manager'
   const client = useStore(s => s.getClient())
+  const inboxCount = useInbox().total
   const [switchOpen, setSwitchOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [userOpen, setUserOpen] = useState(false)
@@ -88,6 +90,17 @@ export function AppHeader() {
       {view === 'studio' && role === 'artist' && <div className="flex-1" />}
 
       <div className="flex items-center gap-2 ml-auto">
+        {/* Inbox — what needs attention across every artist; opens the roster, where it lives. */}
+        {role !== 'artist' && (
+          <button
+            onClick={goToDashboard}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+            title="What needs your attention"
+          >
+            Inbox
+            {inboxCount > 0 && <span className="px-1.5 rounded-full bg-red-500 text-white text-[10px] leading-4">{inboxCount}</span>}
+          </button>
+        )}
         {/* Preview — a real manager can simulate any other real workspace
             member's actual role + access_grants. Everyone else is locked
             to the role assigned in workspace_members. */}
