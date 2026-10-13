@@ -94,7 +94,10 @@ export function ClientCard({ client: c }: { client: Client }) {
         </div>
         <div>
           <div className="text-[17px] font-semibold leading-tight">{c.name}</div>
-          <div className="text-xs text-gray-400 mt-0.5">{c.genre}</div>
+          <div className="text-xs text-gray-400 mt-0.5">
+            {c.genre}
+            {c.isDemo && <span title="Practice data. Only you can see it, and it never raises alerts." className="ml-2 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-semibold uppercase tracking-wide">Demo · only you</span>}
+          </div>
         </div>
       </div>
 

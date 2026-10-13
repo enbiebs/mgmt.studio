@@ -262,6 +262,7 @@ export interface Client {
   genre: string
   color: string          // hex color for avatar
   calendarToken?: string  // private, unguessable — enables /api/calendar/[token] ICS subscription
+  isDemo?: boolean        // a made-up client: only its owner can see it (DB-enforced), and it's left out of alerts, forecasts and emails
   people: Person[]        // shared directory — everyone linked from Crew, Stakeholders, etc.
   songs: {
     albums: Album[]
