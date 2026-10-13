@@ -15,7 +15,7 @@ import { CostAssignment, type CostAssignmentValue } from './CostAssignment'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { CAT_LABELS } from '@/lib/expense-categories'
 import { VENDOR_FIELD_LABEL } from '@/lib/vendors'
-import { today } from '@/lib/utils'
+import { today, today as localToday } from '@/lib/utils'
 import type { Expense, ExpenseCategory, Currency } from '@/types'
 
 const CAT_COLORS: Record<ExpenseCategory, string> = {
@@ -305,7 +305,7 @@ function ExpenseFormModal({ onClose }: { onClose: () => void }) {
   const addExpense = useStore(s => s.addExpense)
   const [f, setF] = useState({
     description: '', vendor: '', amount: '', currency: 'USD' as Currency,
-    category: 'other' as ExpenseCategory, date: new Date().toISOString().slice(0, 10), dueDate: '', paid: false,
+    category: 'other' as ExpenseCategory, date: localToday(), dueDate: '', paid: false,
   })
   const [assign, setAssign] = useState<CostAssignmentValue>({ showIds: [] })
 

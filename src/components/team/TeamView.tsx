@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
-import { uid } from '@/lib/utils'
+import { uid, today as localToday } from '@/lib/utils'
 import { Modal, FormField, inputClass } from '@/components/ui/Modal'
 import { CREW_ROLE_LABEL } from '@/components/tour/CrewView'
 import { ROLE_LABEL as STAKEHOLDER_ROLE_LABEL } from '@/components/songs/StatusView'
@@ -135,7 +135,7 @@ function PersonModal({ person, links, onClose }: { person?: Person; links?: stri
 
   function handleLogEntry() {
     if (!person || !newLog.trim()) return
-    const entry = { id: 'act-' + uid(), date: new Date().toISOString().slice(0, 10), text: newLog.trim() }
+    const entry = { id: 'act-' + uid(), date: localToday(), text: newLog.trim() }
     updatePerson(person.id, { activity: [entry, ...(person.activity ?? [])] })
     setNewLog('')
   }

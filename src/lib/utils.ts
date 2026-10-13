@@ -67,14 +67,33 @@ export function uid(): string {
   return Math.random().toString(36).slice(2, 9)
 }
 
-/** ISO date string for a Date object */
+/**
+ * The calendar day (YYYY-MM-DD) of a Date, on the viewer's OWN clock. (toISOString() would give the
+ * UTC day instead: wrong in the evening in the Americas, and a day off for anyone east of London.)
+ */
 export function toDateStr(d: Date): string {
-  return d.toISOString().split('T')[0]
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mm}-${dd}`
 }
 
-/** Today as ISO date string */
+/**
+ * A calendar day ("2026-09-14", a show date or a check-in) as a Date at local midnight, so it prints
+ * as the same day for everyone. (new Date("2026-09-14") is UTC midnight, which shows as the 13th in the
+ * Americas.) Anything longer than a bare date is a real moment in time and is parsed as-is.
+ */
+export function fromDateStr(s: string): Date {
+  return s.length === 10 ? new Date(`${s}T00:00:00`) : new Date(s)
+}
+
+/** Today as an ISO date string, in the viewer's own timezone */
 export function today(): string {
   return toDateStr(new Date())
+}
+
+/** The viewer's local day for an exact moment in time (a timestamp such as "2026-10-13T01:30:00Z") */
+export function localDateOf(timestamp: string): string {
+  return toDateStr(new Date(timestamp))
 }
 
 /** Add (or subtract, with a negative n) days to an ISO date string */

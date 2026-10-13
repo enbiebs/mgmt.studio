@@ -10,6 +10,7 @@ import { SettlementUploadModal } from '@/components/tour/SettlementUploadModal'
 import { SettlementDetail } from '@/components/tour/SettlementDetail'
 import { money2, paidSoFar } from '@/lib/settlement-math'
 import { settlementEarned } from '@/lib/budget'
+import { today as localToday } from '@/lib/utils'
 
 const dateText = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
@@ -22,7 +23,7 @@ export function SettlementsView() {
 
   const settlements = [...(client.finance.settlements ?? [])].sort((a, b) => (b.preparedOn ?? b.confirmedAt).localeCompare(a.preparedOn ?? a.confirmedAt))
   const settledShowIds = new Set(settlements.flatMap(s => s.showIds))
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localToday()
   const waiting = client.tour.shows
     .filter(s => s.status === 'confirmed' && s.date < today && !settledShowIds.has(s.id))
     .sort((a, b) => b.date.localeCompare(a.date))

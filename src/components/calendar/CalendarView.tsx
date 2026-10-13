@@ -193,6 +193,7 @@ export function CalendarView() {
 function GoogleCalendarPanel({ clientId }: { clientId: string }) {
   const [open, setOpen] = useState(false)
   const [connected, setConnected] = useState<boolean | null>(null)
+  const [configured, setConfigured] = useState(true)
   const [busy, setBusy] = useState(false)
   // Lazy initializer (runs once, during render, not as an effect) — reads
   // the one-time redirect params Google's OAuth callback may have left on
@@ -214,7 +215,7 @@ function GoogleCalendarPanel({ clientId }: { clientId: string }) {
     }
     fetch(`/api/google-calendar/status?clientId=${clientId}`)
       .then(res => res.json())
-      .then(json => setConnected(!!json.connected))
+      .then(json => { setConnected(!!json.connected); setConfigured(json.configured !== false) })
       .catch(() => setConnected(false))
   }, [clientId])
 
@@ -258,6 +259,9 @@ function GoogleCalendarPanel({ clientId }: { clientId: string }) {
       setBusy(false)
     }
   }
+
+  // Not set up yet (no Google keys on the server): there is nothing useful to click.
+  if (!configured && !connected) return null
 
   return (
     <div className="relative">

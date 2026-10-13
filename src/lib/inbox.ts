@@ -12,6 +12,7 @@ import type { Client, Currency, Invoice, MainSection } from '@/types'
 import { latestSheet } from '@/lib/offer-sheet'
 import { paidSoFar } from '@/lib/settlement-math'
 import { settlementForShow } from '@/lib/budget'
+import { localDateOf } from '@/lib/utils'
 
 export type InboxSeverity = 'urgent' | 'soon' | 'info'
 export type InboxRule =
@@ -84,7 +85,7 @@ export function buildInbox(client: Client, today: string, access: InboxAccess): 
     for (const s of settlements) {
       const balance = s.balanceDue ?? s.totalDue - paidSoFar(s)
       if (balance <= 0.005) continue
-      const since = s.preparedOn ?? s.confirmedAt.slice(0, 10)
+      const since = s.preparedOn ?? localDateOf(s.confirmedAt)
       const age = days(today, since)
       const severity: InboxSeverity = age > 30 ? 'urgent' : age > 7 ? 'soon' : 'info'
       add('balance', s.id, severity, {
@@ -125,12 +126,12 @@ export function buildInbox(client: Client, today: string, access: InboxAccess): 
       if (access.finance) {
         const sheet = latestSheet(client.tour.offerSheets, o.id)
         if (sheet?.status === 'approved') {
-          add('sheet', sheet.id, 'soon', { title: `${client.name} approved V${sheet.version} for ${o.venue}`, detail: 'Confirm it with the promoter when you are ready', date: sheet.respondedAt?.slice(0, 10), go: { section: 'tour', sub: 'offers' } })
+          add('sheet', sheet.id, 'soon', { title: `${client.name} approved V${sheet.version} for ${o.venue}`, detail: 'Confirm it with the promoter when you are ready', date: sheet.respondedAt ? localDateOf(sheet.respondedAt) : undefined, go: { section: 'tour', sub: 'offers' } })
         } else if (sheet?.status === 'passed') {
-          add('sheet', sheet.id, 'info', { title: `${client.name} passed on ${o.venue}`, detail: sheet.responseNote ? `"${sheet.responseNote}"` : 'You may want to close the offer', date: sheet.respondedAt?.slice(0, 10), go: { section: 'tour', sub: 'offers' } })
+          add('sheet', sheet.id, 'info', { title: `${client.name} passed on ${o.venue}`, detail: sheet.responseNote ? `"${sheet.responseNote}"` : 'You may want to close the offer', date: sheet.respondedAt ? localDateOf(sheet.respondedAt) : undefined, go: { section: 'tour', sub: 'offers' } })
         } else if (sheet?.status === 'sent') {
-          const waiting = days(today, sheet.sentAt.slice(0, 10))
-          if (waiting >= 3) add('sheet', sheet.id, 'soon', { title: `Waiting on ${client.name} to answer V${sheet.version} for ${o.venue}`, detail: `Sent ${plural(waiting, 'day')} ago`, date: sheet.sentAt.slice(0, 10), go: { section: 'tour', sub: 'offers' } })
+          const waiting = days(today, localDateOf(sheet.sentAt))
+          if (waiting >= 3) add('sheet', sheet.id, 'soon', { title: `Waiting on ${client.name} to answer V${sheet.version} for ${o.venue}`, detail: `Sent ${plural(waiting, 'day')} ago`, date: localDateOf(sheet.sentAt), go: { section: 'tour', sub: 'offers' } })
         }
       }
     }

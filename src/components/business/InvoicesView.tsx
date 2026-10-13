@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
-import { addDays } from '@/lib/utils'
+import { addDays, today as localToday } from '@/lib/utils'
 import type { Invoice, InvoiceStatus, Currency, RevenueStream, BankTransaction } from '@/types'
 
 export const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string; bg: string }> = {
@@ -36,7 +36,7 @@ function fmtDate(iso: string) {
 }
 
 export function isOverdue(inv: Invoice) {
-  return inv.status === 'sent' && inv.dueDate < new Date().toISOString().slice(0, 10)
+  return inv.status === 'sent' && inv.dueDate < localToday()
 }
 
 type InvFilter = 'all' | InvoiceStatus
@@ -175,7 +175,7 @@ function AddInvoiceModal({ onClose }: { onClose: () => void }) {
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
   const [currency, setCurrency] = useState<Currency>('USD')
-  const [dueDate, setDueDate] = useState(addDays(new Date().toISOString().slice(0, 10), 30))
+  const [dueDate, setDueDate] = useState(addDays(localToday(), 30))
 
   function handleSave() {
     const rate = Number(amount)
@@ -186,7 +186,7 @@ function AddInvoiceModal({ onClose }: { onClose: () => void }) {
       toEmail: toEmail.trim() || undefined,
       category,
       currency,
-      issuedDate: new Date().toISOString().slice(0, 10),
+      issuedDate: localToday(),
       dueDate,
       items: [{ description: description.trim() || 'Services', quantity: 1, rate }],
     })

@@ -12,6 +12,7 @@ import { OfferTermsFields } from '@/components/tour/OfferTermsFields'
 import { draftFromTerms, termsFromDraft, maxPotential, replyStatus } from '@/lib/offer-terms'
 import { latestSheet, longDate, SHEET_STATUS_LABEL, SHEET_STATUS_STYLE } from '@/lib/offer-sheet'
 import type { TourOffer, OfferStatus } from '@/types'
+import { today as localToday, localDateOf } from '@/lib/utils'
 
 const ALL_STATUSES: OfferStatus[] = ['inquiry', 'hold', 'confirmed', 'settled', 'cancelled']
 
@@ -216,7 +217,7 @@ function OfferFormModal({ initial, onClose, onSendSheet }: { initial: TourOffer 
             {[...sheets].sort((a, b) => b.version - a.version).map(sh => (
               <div key={sh.id} className="flex items-center gap-2 text-xs">
                 <span className="font-semibold w-7">V{sh.version}</span>
-                <span className="text-gray-400">{longDate(sh.sentAt.slice(0, 10))}</span>
+                <span className="text-gray-400">{longDate(localDateOf(sh.sentAt))}</span>
                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${SHEET_STATUS_STYLE[sh.status]}`}>{SHEET_STATUS_LABEL[sh.status]}</span>
                 <a href={`/api/offer-sheets/${sh.id}/pdf`} target="_blank" rel="noreferrer" className="ml-auto text-blue-500 hover:underline">PDF</a>
               </div>
@@ -306,7 +307,7 @@ function PipelineTab({ offers, editable, onEdit }: { offers: TourOffer[]; editab
 function OfferCard({ offer: o, editable, onEdit }: { offer: TourOffer; editable: boolean; onEdit: (o: TourOffer) => void }) {
   const cfg = STATUS_CONFIG[o.status]
   const sheet = useStore(s => latestSheet(s.getClient()?.tour.offerSheets, o.id))
-  const reply = replyStatus(o.terms?.respondBy, new Date().toISOString().slice(0, 10))
+  const reply = replyStatus(o.terms?.respondBy, localToday())
   const upTo = o.terms?.bonuses?.length ? maxPotential(o.guarantee, o.terms) : undefined
   const showLine = [o.terms?.billing, o.terms?.capacity ? `${o.terms.capacity.toLocaleString('en-US')} cap` : '', o.terms?.ageLimit].filter(Boolean).join(' · ')
   return (
@@ -352,8 +353,8 @@ function OfferCard({ offer: o, editable, onEdit }: { offer: TourOffer; editable:
 // ── Routing Calendar (chronological list) ──────────────────
 function RoutingTab({ offers, editable, onEdit }: { offers: TourOffer[]; editable: boolean; onEdit: (o: TourOffer) => void }) {
   const sorted = [...offers].sort((a, b) => a.date.localeCompare(b.date))
-  const past   = sorted.filter(o => o.date < new Date().toISOString().slice(0, 10))
-  const future = sorted.filter(o => o.date >= new Date().toISOString().slice(0, 10))
+  const past   = sorted.filter(o => o.date < localToday())
+  const future = sorted.filter(o => o.date >= localToday())
 
   return (
     <div className="max-w-2xl space-y-8">
