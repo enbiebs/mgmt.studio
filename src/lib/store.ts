@@ -651,7 +651,8 @@ export const useStore = create<StudioState>((set, get) => ({
       authClientId: member.clientId,
       previewMemberId: memberId,
       previewBackup: base,
-      data: { clients: base.clients.map(c => filterClientForViewer(c, viewer, itemAccess)) },
+      // Demo artists belong to their owner alone, so they never appear when previewing as someone else.
+      data: { clients: base.clients.filter(c => !c.isDemo).map(c => filterClientForViewer(c, viewer, itemAccess)) },
       view: member.role === 'artist' ? 'studio' : 'dashboard',
       clientId: member.role === 'artist' ? member.clientId : null,
       section: 'songs',

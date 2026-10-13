@@ -46,6 +46,8 @@ const when = (n: number) => (n === 0 ? 'today' : n === 1 ? 'tomorrow' : `in ${n}
 const RANK: Record<InboxSeverity, number> = { urgent: 0, soon: 1, info: 2 }
 
 export function buildInbox(client: Client, today: string, access: InboxAccess): InboxItem[] {
+  // A demo artist's fake invoices and shows must never raise real alerts.
+  if (client.isDemo) return []
   const items: InboxItem[] = []
   const add = (
     rule: InboxRule, entityId: string, severity: InboxSeverity,

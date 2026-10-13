@@ -145,7 +145,7 @@ export function AccessPanel({ person }: { person: Person }) {
         Click a section to grant view, click again for edit, click again to remove. Default is view-only.
       </div>
       <div className="flex flex-col gap-3">
-        {clients.map(c => (
+        {clients.filter(c => !c.isDemo).map(c => (
           <div key={c.id}>
             <div className="text-xs font-semibold mb-1">{c.name}</div>
             <div className="flex flex-wrap gap-1">
