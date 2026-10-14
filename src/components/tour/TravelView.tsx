@@ -648,7 +648,7 @@ export function TravelView() {
 
   if (!client) return null
 
-  const shows = client.tour.shows
+  const shows = client.tour.shows.filter(s => !s.historyOnly)
   const allTravel = client.tour.travel ?? []
   const generalTravel = allTravel.filter(t => !(t.showIds && t.showIds.length > 0))
 

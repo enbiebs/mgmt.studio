@@ -7,7 +7,7 @@ import { z } from 'zod'
 import readXlsxFile from 'read-excel-file/node'
 import { billReadingConfigured } from '@/lib/bills'
 import {
-  readTab, numberAppearsIn, venueAppearsIn, CURRENCY_WORDS,
+  readTab, numberAppearsIn, venueAppearsIn, flagCarryOvers, CURRENCY_WORDS,
   type Cell, type ImportRow, type SheetTab, type SourceRow,
 } from '@/lib/calendar-import'
 import { toDateStr } from '@/lib/utils'
@@ -88,14 +88,15 @@ export async function readCalendarRows(sources: SourceRow[]): Promise<ImportRow[
   for (let i = 0; i < sources.length; i += CHUNK) chunks.push(sources.slice(i, i + CHUNK))
   const results = (await Promise.all(chunks.map(c => readChunk(client, c)))).flat()
   const byId = new Map(results.map(r => [r.id, r]))
-  return sources.map(src => toImportRow(src, byId.get(src.id)))
+  const todayIso = toDateStr(new Date())
+  return sources.map(src => toImportRow(src, byId.get(src.id), src.date < todayIso))
 }
 
 // ── From the AI's reading to a row the person reviews ────────
-function toImportRow(src: SourceRow, x: ExtractedRow | undefined): ImportRow {
+function toImportRow(src: SourceRow, x: ExtractedRow | undefined, history: boolean): ImportRow {
   const warnings: string[] = []
   if (src.dateNote) warnings.push(src.dateNote)
-  const base = { key: `${src.tab}:${src.id}`, tab: src.tab, sheetRow: src.id, date: src.date, source: src.text }
+  const base = { key: `${src.tab}:${src.id}`, tab: src.tab, sheetRow: src.id, date: src.date, source: src.text, ...(history ? { history: true } : {}) }
 
   // The AI skipped this row: keep it visible so nothing silently disappears.
   if (!x) return { ...base, kind: 'other', venue: '', city: '', status: 'hold', notes: src.text, warnings: [...warnings, "This row couldn't be read automatically"] }
@@ -104,6 +105,7 @@ function toImportRow(src: SourceRow, x: ExtractedRow | undefined): ImportRow {
     ...base, kind: x.kind, venue: x.venue.trim(), city: x.city.trim(), status: x.status, notes: x.notes.trim(), warnings,
   }
   if (x.kind !== 'show') return row
+  if (history && x.status === 'hold') warnings.push('A past date that is still marked as a hold - it probably did not happen, so it is not ticked')
 
   if (!row.venue) warnings.push('No venue was found on this row')
   else if (!venueAppearsIn(row.venue, src.text)) warnings.push("The venue name isn't written on this row - check it")
@@ -138,8 +140,9 @@ export async function readCalendar(buf: Buffer, tabNames: string[], includePast:
       all.push(r)
     }
   }
-  if (all.length > 400) throw new Error('That is a lot of rows at once - pick fewer tabs, or leave out dates that have already passed.')
+  if (all.length > 450) throw new Error('That is a lot of rows at once - pick fewer tabs, or leave out dates that have already passed.')
   const rows = await readCalendarRows(all)
+  flagCarryOvers(rows)
   rows.sort((a, b) => a.date.localeCompare(b.date) || a.sheetRow - b.sheetRow)
   return { rows, skippedPast }
 }

@@ -9,6 +9,7 @@ import { useStore } from '@/lib/store'
 import { Modal, FormField, inputClass } from '@/components/ui/Modal'
 import { SendOfferSheetModal } from '@/components/tour/SendOfferSheetModal'
 import { PasteOfferModal } from '@/components/tour/PasteOfferModal'
+import { OfferIntelligence } from '@/components/tour/OfferIntelligence'
 import type { OfferPrefill } from '@/lib/offer-paste'
 import { OfferTermsFields } from '@/components/tour/OfferTermsFields'
 import { draftFromTerms, termsFromDraft, maxPotential, replyStatus } from '@/lib/offer-terms'
@@ -145,6 +146,7 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
   onSendSheet: (offerId: string) => void
 }) {
   const { addOffer, updateOffer, deleteOffer, addBudget, setSelectedBudget, setTourSub } = useStore()
+  const client = useStore(s => s.getClient())
   const canSeeBudgets = useStore(s => s.role !== 'artist' && s.hasAccess('finance'))
   // Sheets carry budget numbers, so sending needs edit access to both Tour and Finance.
   const canSendSheets = useStore(s => s.role !== 'artist' && s.canEdit('tour') && s.canEdit('finance'))
@@ -270,6 +272,12 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
             )}
           </div>
         </FormField>
+      )}
+      {client && (f.date || f.city.trim()) && (
+        <OfferIntelligence
+          client={client} date={f.date} city={f.city} venue={f.venue} guarantee={Number(f.guarantee) || 0}
+          excludeOfferId={initial?.id} excludeShowId={initial?.showId}
+        />
       )}
       <FormField label="Venue"><input type="text" className={inputClass} value={f.venue} onChange={e => setF(p => ({...p, venue: e.target.value}))} /></FormField>
       <FormField label="City"><input type="text" className={inputClass} value={f.city} onChange={e => setF(p => ({...p, city: e.target.value}))} /></FormField>

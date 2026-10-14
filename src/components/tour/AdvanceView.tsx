@@ -155,7 +155,7 @@ export function AdvanceView() {
 
   if (!client) return null
 
-  const shows = client.tour.shows
+  const shows = client.tour.shows.filter(s => !s.historyOnly)
   const advances = client.tour.advances ?? []
   const guestList = client.tour.guestList ?? []
   const venues = client.tour.venues ?? []

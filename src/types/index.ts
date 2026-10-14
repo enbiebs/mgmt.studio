@@ -210,6 +210,7 @@ export interface Show {
   managementCommissionPct?: number  // management's cut, only deducted when viaAgency
   invoiceId?: string      // → Invoice generated to track this show's receivable, if any
   runId?: string          // → Run this show belongs to (one run per show)
+  historyOnly?: boolean   // already happened; kept for fee comparisons, never raises to-dos (no "settlement missing" etc.)
 }
 
 export interface Post {

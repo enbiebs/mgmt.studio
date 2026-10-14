@@ -31,7 +31,7 @@ export function GuestListView() {
   const pane = useMobilePane()
 
   if (!client) return null
-  const shows = client.tour.shows
+  const shows = client.tour.shows.filter(s => !s.historyOnly)
   const allGuests = client.tour.guestList ?? []
   const advances = client.tour.advances ?? []
   const show: Show | undefined = selectedShowId ? shows.find(s => s.id === selectedShowId) : shows[0]
