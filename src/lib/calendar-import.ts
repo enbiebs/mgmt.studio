@@ -42,6 +42,7 @@ export interface ImportRow {
   venue: string
   city: string
   status: 'confirmed' | 'hold'
+  history?: boolean           // a date that has already passed: kept as history, never a to-do
   guarantee?: number
   currency?: Currency
   currencyAssumed?: boolean   // the sheet didn't say which currency; US dollars were assumed
@@ -121,17 +122,23 @@ const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 /** Reads one tab (rows of cells, first row = headers) into cleaned rows. Returns null for tabs that aren't a day-per-row calendar. */
 export function readTab(name: string, data: Cell[][]): { tab: SheetTab; rows: SourceRow[] } {
   const base: SheetTab = { name, supported: false, year: yearInName(name), rows: 0, upcoming: 0 }
-  const header = data[0]?.map(cellText) ?? []
+  // The heading row is usually the first, but older tabs have a title row ("ARTIST: nimino") above it.
+  let headerAt = -1
+  for (let i = 0; i < Math.min(8, data.length) && headerAt < 0; i++) {
+    const h = (data[i] ?? []).map(cellText).map(norm)
+    if (h.includes('date') && h.includes('venue')) headerAt = i
+  }
+  const header = headerAt >= 0 ? (data[headerAt] ?? []).map(cellText) : []
   const dateCol = header.findIndex(h => norm(h) === 'date')
   const venueCol = header.findIndex(h => norm(h) === 'venue')
-  if (dateCol < 0 || venueCol < 0) {
+  if (headerAt < 0 || dateCol < 0 || venueCol < 0) {
     return { tab: { ...base, reason: "This tab isn't laid out as a day-by-day calendar (it needs DATE and VENUE columns)" }, rows: [] }
   }
   const dayCol = header.findIndex(h => norm(h) === 'day')
 
   const rows: SourceRow[] = []
   let previous: string | null = null
-  for (let i = 1; i < data.length; i++) {
+  for (let i = headerAt + 1; i < data.length; i++) {
     const r = data[i] ?? []
     const resolved = resolveRowDate(base.year, cellToIso(r[dateCol]), dayCol >= 0 ? cellText(r[dayCol]) : '', previous)
     if (resolved) previous = resolved.date
@@ -175,6 +182,23 @@ export function venueAppearsIn(venue: string, rowText: string): boolean {
   return words.length > 0 && words.every(w => text.includes(w))
 }
 
+/**
+ * A year-tab that was copied from last year can keep last year's rows until someone updates them.
+ * A row with the same venue and the same fee within a week of the same day last year gets a
+ * warning (it is not removed: an annual festival really can repeat at the same fee).
+ */
+export function flagCarryOvers(rows: ImportRow[]): void {
+  const key = (r: ImportRow) => `${norm(r.venue)}|${r.guarantee ?? 0}|${r.currency ?? ''}`
+  const dayGap = (a: string, b: string) => Math.abs(Math.round((Date.parse(a + 'T00:00:00Z') - Date.parse(b + 'T00:00:00Z')) / 86_400_000))
+  for (const r of rows) {
+    if (r.kind !== 'show' || !r.guarantee || !r.venue) continue
+    const lastYear = withYear(r.date, Number(r.date.slice(0, 4)) - 1)
+    if (!validIso(lastYear)) continue
+    const twin = rows.find(o => o !== r && o.kind === 'show' && key(o) === key(r) && dayGap(o.date, lastYear) <= 7)
+    if (twin) r.warnings.push(`Same venue and fee as ${twin.date} - the sheet may have copied last year's row. Check that this one happened`)
+  }
+}
+
 // ── From reviewed rows to Shows ──────────────────────────────
 export function findDuplicate(row: Pick<ImportRow, 'date' | 'venue'>, existing: Show[]): Show | undefined {
   const v = norm(row.venue)
@@ -198,6 +222,7 @@ export function rowToShow(row: ImportRow, id: string, sourceLabel: string): Show
     venue: row.venue.trim(),
     time: '20:00',
     status: row.status,
+    historyOnly: row.history ? true : undefined,
     guarantee: row.guarantee && row.guarantee > 0 ? row.guarantee : undefined,
     currency: row.guarantee && row.guarantee > 0 ? (row.currency ?? 'USD') : undefined,
     notes: [row.notes.trim(), stamp].filter(Boolean).join('\n'),

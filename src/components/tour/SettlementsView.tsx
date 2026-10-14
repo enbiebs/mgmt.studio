@@ -25,7 +25,7 @@ export function SettlementsView() {
   const settledShowIds = new Set(settlements.flatMap(s => s.showIds))
   const today = localToday()
   const waiting = client.tour.shows
-    .filter(s => s.status === 'confirmed' && s.date < today && !settledShowIds.has(s.id))
+    .filter(s => s.status === 'confirmed' && !s.historyOnly && s.date < today && !settledShowIds.has(s.id))
     .sort((a, b) => b.date.localeCompare(a.date))
 
   // Money still owed, per currency (never added across currencies).

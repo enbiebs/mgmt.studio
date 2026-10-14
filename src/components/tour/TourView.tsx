@@ -13,7 +13,7 @@ export function TourView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('tour'))
   const {
-    selectedShowId, setSelectedShow, setTourSub, updateShowStatus, deleteShow,
+    selectedShowId, setSelectedShow, setTourSub, updateShowStatus, updateShowFinancials, deleteShow,
     enableCalendarFeed, disableCalendarFeed,
   } = useStore()
   const [addOpen, setAddOpen] = useState(false)
@@ -21,11 +21,14 @@ export function TourView() {
   const pane = useMobilePane()
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
 
   if (!client) return null
-  const shows    = client.tour.shows
+  const allShows = client.tour.shows
+  const shows    = allShows.filter(s => !s.historyOnly)      // shows that still need work
+  const history  = allShows.filter(s => s.historyOnly)       // past shows kept for fee comparisons
   const upcoming = shows.filter(s => s.date >= today())
-  const selected = shows.find(s => s.id === selectedShowId)
+  const selected = allShows.find(s => s.id === selectedShowId)
 
   // "Advance Dashboard" lite — flags upcoming shows with something outstanding,
   // computed entirely from data already in the store (no new tables).
@@ -55,6 +58,28 @@ export function TourView() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const showRow = (s: Show, dim = false) => {
+    const d = new Date(s.date + 'T00:00:00')
+    return (
+      <button
+        key={s.id}
+        onClick={() => { setSelectedShow(s.id); pane.openDetail() }}
+        className={`w-full flex items-center gap-3 px-4 py-3 border-b border-gray-100 text-left transition-colors ${dim ? 'opacity-60' : ''} ${
+          selectedShowId === s.id ? 'bg-blue-50' : 'hover:bg-gray-50'
+        }`}
+      >
+        <div className={`w-10 flex-shrink-0 text-center rounded-lg py-1 ${selectedShowId === s.id ? 'bg-blue-100' : 'bg-gray-100'}`}>
+          <div className="text-[9px] font-bold uppercase tracking-wider text-gray-400">{MONTH_SHORT[d.getMonth()]}</div>
+          <div className="text-lg font-bold font-serif leading-none">{d.getDate()}</div>
+        </div>
+        <div>
+          <div className="text-sm font-medium leading-tight">{s.venue}</div>
+          <div className="text-xs text-gray-400 mt-0.5">{s.city}{dim ? ` · ${d.getFullYear()}` : ''}</div>
+        </div>
+      </button>
+    )
+  }
+
   return (
     <div className="flex-1 flex overflow-hidden">
       {/* Sidebar */}
@@ -81,7 +106,7 @@ export function TourView() {
         </div>
 
         <div className="flex-1 overflow-auto">
-          {shows.length === 0 ? (
+          {allShows.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 py-12 text-gray-300">
               <span className="text-4xl">🎤</span>
               <span className="text-sm">No shows yet</span>
@@ -91,27 +116,22 @@ export function TourView() {
                 </button>
               )}
             </div>
-          ) : shows.map(s => {
-            const d = new Date(s.date + 'T00:00:00')
-            return (
-              <button
-                key={s.id}
-                onClick={() => { setSelectedShow(s.id); pane.openDetail() }}
-                className={`w-full flex items-center gap-3 px-4 py-3 border-b border-gray-100 text-left transition-colors ${
-                  selectedShowId === s.id ? 'bg-blue-50' : 'hover:bg-gray-50'
-                }`}
-              >
-                <div className={`w-10 flex-shrink-0 text-center rounded-lg py-1 ${selectedShowId === s.id ? 'bg-blue-100' : 'bg-gray-100'}`}>
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-gray-400">{MONTH_SHORT[d.getMonth()]}</div>
-                  <div className="text-lg font-bold font-serif leading-none">{d.getDate()}</div>
-                </div>
-                <div>
-                  <div className="text-sm font-medium leading-tight">{s.venue}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">{s.city}</div>
-                </div>
-              </button>
-            )
-          })}
+          ) : (
+            <>
+              {shows.map(s => showRow(s))}
+              {history.length > 0 && (
+                <>
+                  <button
+                    onClick={() => setShowHistory(v => !v)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 border-b border-gray-100 text-left text-[11px] font-bold uppercase tracking-widest text-gray-400 hover:bg-gray-50"
+                  >
+                    <span>History ({history.length})</span><span>{showHistory ? '▴' : '▾'}</span>
+                  </button>
+                  {showHistory && [...history].sort((a, b) => b.date.localeCompare(a.date)).map(s => showRow(s, true))}
+                </>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -249,6 +269,20 @@ export function TourView() {
             </div>
 
             <ShowFinancials key={selected.id} show={selected} editable={editable} onViewOffer={() => setTourSub('offers')} />
+
+            {editable && selected.date < today() && (
+              <label className="flex items-start gap-2 text-xs text-gray-500 mb-4 cursor-pointer">
+                <input
+                  type="checkbox" className="mt-0.5 rounded"
+                  checked={!!selected.historyOnly}
+                  onChange={e => updateShowFinancials(selected.id, { historyOnly: e.target.checked })}
+                />
+                <span>
+                  Keep as history only
+                  <span className="block text-[11px] text-gray-400">Used for fee comparisons; never asks for a settlement or budget. Untick it if this show still needs its money side done.</span>
+                </span>
+              </label>
+            )}
 
             <div className="flex gap-2 flex-wrap mb-4">
               {[

@@ -57,7 +57,7 @@ export function DaySheetView() {
 
   if (!client) return null
 
-  const shows = client.tour.shows
+  const shows = client.tour.shows.filter(s => !s.historyOnly)
   const advances = client.tour.advances ?? []
 
   const show: Show | undefined = selectedShowId

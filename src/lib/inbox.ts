@@ -142,7 +142,7 @@ export function buildInbox(client: Client, today: string, access: InboxAccess): 
   // ── Shows that need their money side finished ─────────
   if (access.tour && access.finance) {
     for (const show of client.tour.shows) {
-      if (show.status !== 'confirmed') continue
+      if (show.status !== 'confirmed' || show.historyOnly) continue
       const since = days(today, show.date)
 
       // The show happened but no settlement has been entered.
@@ -160,7 +160,7 @@ export function buildInbox(client: Client, today: string, access: InboxAccess): 
 
     // Nothing at all entered: an empty inbox here would just mean "nothing recorded".
     const entered = (client.finance.budgets?.length ?? 0) + client.finance.expenses.length + client.finance.invoices.length + settlements.length
-    if (entered === 0 && client.tour.shows.some(s => s.status === 'confirmed')) {
+    if (entered === 0 && client.tour.shows.some(s => s.status === 'confirmed' && !s.historyOnly)) {
       add('empty', 'all', 'info', { title: `Nothing financial is recorded for ${client.name} yet`, detail: 'An empty inbox here means nothing has been entered, not that all is well', go: { section: 'finance', sub: 'payments' } })
     }
   }

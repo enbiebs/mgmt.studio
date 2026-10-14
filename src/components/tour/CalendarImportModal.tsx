@@ -22,6 +22,11 @@ async function postForm(url: string, form: FormData) {
   return json
 }
 
+// A row is ticked on arrival when it is a real show with a venue, isn't already in the app, and
+// isn't a past date still marked "hold" (that one probably never happened).
+const wantedByDefault = (r: ImportRow, existing: Show[]) =>
+  r.kind === 'show' && r.venue.trim() !== '' && !findDuplicate(r, existing) && !(r.history && r.status === 'hold')
+
 const small = 'px-2 py-1.5 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400 bg-canvas transition-colors'
 const longDate = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
@@ -34,7 +39,7 @@ export function CalendarImportModal({ onClose }: { onClose: () => void }) {
   const [file, setFile] = useState<File | null>(null)
   const [tabs, setTabs] = useState<SheetTab[]>([])
   const [picked, setPicked] = useState<string[]>([])
-  const [includePast, setIncludePast] = useState(false)
+  const [includePast, setIncludePast] = useState(true)
   const [rows, setRows] = useState<ReviewRow[]>([])
   const [skippedPast, setSkippedPast] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -51,9 +56,9 @@ export function CalendarImportModal({ onClose }: { onClose: () => void }) {
       const form = new FormData()
       form.append('file', f); form.append('clientId', clientId ?? '')
       const { tabs: found } = await postForm('/api/calendar-import/tabs', form) as { tabs: SheetTab[] }
-      const thisYear = new Date().getFullYear()
       setFile(f); setTabs(found)
-      setPicked(found.filter(t => t.supported && t.upcoming > 0 && (t.year == null || t.year >= thisYear)).map(t => t.name))
+      // Plain year tabs ("2025", "2026") are the calendars; tabs like "Support 2024" are other lists, so they start unticked.
+      setPicked(found.filter(t => t.supported && t.rows > 0 && /^\s*20\d\d\s*$/.test(t.name)).map(t => t.name))
       setStep('tabs')
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not open that file') }
     setBusy(false)
@@ -69,7 +74,7 @@ export function CalendarImportModal({ onClose }: { onClose: () => void }) {
       const out = await postForm('/api/calendar-import/read', form) as { rows: ImportRow[]; skippedPast: number }
       setRows(out.rows.map(r => ({
         ...r,
-        include: r.kind === 'show' && r.venue.trim() !== '' && !findDuplicate(r, existing),
+        include: wantedByDefault(r, existing),
       })))
       setSkippedPast(out.skippedPast)
       setStep('review')
@@ -153,7 +158,7 @@ export function CalendarImportModal({ onClose }: { onClose: () => void }) {
 
       {step === 'tabs' && (
         <div className="space-y-3">
-          <p className="text-sm text-gray-500">Which tabs should I read? I&apos;ve ticked the ones that look like this year or later.</p>
+          <p className="text-sm text-gray-500">Which tabs should I read? I&apos;ve ticked the year tabs (like 2025 and 2026). Tabs with other names start unticked.</p>
           <div className="space-y-1.5">
             {tabs.map(t => (
               <label key={t.name} className={`flex items-start gap-2.5 px-3 py-2 rounded-lg border ${t.supported ? 'border-gray-200 cursor-pointer hover:bg-gray-50' : 'border-gray-100 opacity-50'}`}>
@@ -175,9 +180,9 @@ export function CalendarImportModal({ onClose }: { onClose: () => void }) {
           <label className="flex items-start gap-2.5 text-sm text-gray-600">
             <input type="checkbox" className="mt-0.5" checked={includePast} onChange={e => setIncludePast(e.target.checked)} />
             <span>
-              Also bring in dates that have already passed
+              Also bring in past shows as history
               <span className="block text-xs text-gray-400">
-                Off by default. Past shows will show up in your Inbox as &ldquo;no settlement yet&rdquo; until each one has a settlement.
+                Kept so every new offer can be compared with what this artist was paid before. History never raises to-dos (no &ldquo;settlement missing&rdquo; alerts).
               </span>
             </span>
           </label>
@@ -196,7 +201,8 @@ export function CalendarImportModal({ onClose }: { onClose: () => void }) {
           <div className="text-xs text-gray-500 leading-relaxed">
             I found <b>{shows.length}</b> show{shows.length === 1 ? '' : 's'}
             {others.length > 0 && <> and {others.length} other row{others.length === 1 ? '' : 's'} (travel, days off, notes)</>}
-            {!includePast && skippedPast > 0 && <>; {skippedPast} row{skippedPast === 1 ? '' : 's'} on past dates were left out</>}.
+            {!includePast && skippedPast > 0 && <>; {skippedPast} row{skippedPast === 1 ? '' : 's'} on past dates were left out</>}
+            {shows.some(r => r.history) && <>; {shows.filter(r => r.history && r.include).length} past show{shows.filter(r => r.history && r.include).length === 1 ? '' : 's'} will be kept as history</>}.
             Fix anything that&apos;s wrong, untick what you don&apos;t want, then add them.
           </div>
 
@@ -220,7 +226,7 @@ export function CalendarImportModal({ onClose }: { onClose: () => void }) {
                 <option value="confirmed">Confirmed</option>
                 <option value="hold">On hold</option>
               </select>
-              <button className="ml-auto underline" onClick={() => setRows(prev => prev.map(r => (r.kind === 'show' ? { ...r, include: r.venue.trim() !== '' && !findDuplicate(r, existing) } : r)))}>
+              <button className="ml-auto underline" onClick={() => setRows(prev => prev.map(r => (r.kind === 'show' ? { ...r, include: wantedByDefault(r, existing) } : r)))}>
                 Reset ticks
               </button>
             </div>
@@ -290,6 +296,7 @@ function ReviewRowView({ row, duplicate, sameDay, alsoInFile, onChange }: {
       <div className="flex flex-wrap items-center gap-2">
         <input type="checkbox" checked={row.include} onChange={e => onChange({ include: e.target.checked })} aria-label={`Add ${row.venue || 'this row'}`} />
         <input type="date" value={row.date} onChange={e => onChange({ date: e.target.value })} className={`${small} w-[128px]`} />
+        {row.history && <span title="A past date: kept as history for fee comparisons, never a to-do" className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 text-[10px] font-semibold uppercase tracking-wide">History</span>}
         <input value={row.venue} onChange={e => onChange({ venue: e.target.value })} placeholder="Venue" className={`${small} flex-1 min-w-[170px]`} />
         <input value={row.city} onChange={e => onChange({ city: e.target.value })} placeholder="City" className={`${small} w-[140px]`} />
         <select value={row.status} onChange={e => onChange({ status: e.target.value as 'confirmed' | 'hold' })} className={`${small} w-[98px]`}>

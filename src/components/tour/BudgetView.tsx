@@ -56,7 +56,7 @@ export function BudgetView() {
   const offerHasBudget = (id: string) => budgets.some(b => b.offerId === id)
   const showHasBudget = (id: string) => budgets.some(b => b.showId === id)
   const needOffer = offers.filter(o => (o.status === 'inquiry' || o.status === 'hold' || o.status === 'confirmed') && !offerHasBudget(o.id) && !(o.showId && showHasBudget(o.showId)))
-  const needShow = client.tour.shows.filter(s => !showHasBudget(s.id) && !offers.some(o => o.showId === s.id))
+  const needShow = client.tour.shows.filter(s => !s.historyOnly && !showHasBudget(s.id) && !offers.some(o => o.showId === s.id))
 
   function open(id: string) { setRunId(null); setSelectedBudget(id); pane.openDetail() }
   function create(target: { showId?: string; offerId?: string }) { const id = addBudget(target); if (id) open(id) }
