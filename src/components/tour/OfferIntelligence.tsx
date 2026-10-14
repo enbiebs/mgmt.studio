@@ -9,6 +9,8 @@ import { useEffect, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { financeSettings } from '@/lib/budget'
 import { bookingsOf, conflictsFor, feeHistory, summarize, vsMedian, type Booking } from '@/lib/intelligence'
+import { milesBetween, radiusIssues, travelVerdict } from '@/lib/geo'
+import { useLocated } from '@/lib/places'
 import { fromDateStr, today } from '@/lib/utils'
 import type { Client, Currency } from '@/types'
 
@@ -20,12 +22,13 @@ const gapLabel = (gap: number) => {
   return n === 1 ? (gap < 0 ? 'The day before' : 'The day after') : `${n} days ${gap < 0 ? 'before' : 'after'}`
 }
 
-export function OfferIntelligence({ client, date, city, venue, guarantee, excludeOfferId, excludeShowId }: {
+export function OfferIntelligence({ client, date, city, venue, guarantee, radius, excludeOfferId, excludeShowId }: {
   client: Client
   date: string
   city: string
   venue: string
   guarantee: number          // US dollars, as the offer form holds it
+  radius?: { miles: number; daysAfter: number }     // the radius clause typed into the form, if any
   excludeOfferId?: string
   excludeShowId?: string
 }) {
@@ -34,14 +37,28 @@ export function OfferIntelligence({ client, date, city, venue, guarantee, exclud
   useEffect(() => { loadFxRates().catch(console.error) }, [loadFxRates])
 
   const home = financeSettings(client).homeCurrency
+  const todayIso = today()
+  const all = useMemo(() => bookingsOf(client, { offerId: excludeOfferId, showId: excludeShowId }), [client, excludeOfferId, excludeShowId])
+  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date)
+  const near = useMemo(() => (validDate ? conflictsFor(all, date) : null), [all, date, validDate])
+  // Only look up the cities that matter: this one, the ones within 3 days, and (when a radius clause is
+  // involved either way) every upcoming booking.
+  const upcoming = all.filter(b => b.date >= todayIso)
+  const radiusAtPlay = !!radius || upcoming.some(b => b.radius)
+  const cities = [city, ...(near ? [...near.sameDay, ...near.nearby].map(b => b.city) : []), ...(radiusAtPlay ? upcoming.map(b => b.city) : [])].filter(c => c.trim())
+  const places = useLocated(cities)
+  const radiusResult = useMemo(
+    () => (validDate && city.trim() && radiusAtPlay ? radiusIssues({ date, city, radius }, all, places.where, todayIso) : null),
+    // places.loading flips when the lookup lands, which is what re-runs this
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [validDate, city, date, radius?.miles, radius?.daysAfter, all, radiusAtPlay, todayIso, places.loading],
+  )
   const info = useMemo(() => {
-    const todayIso = today()
     const exclude = { offerId: excludeOfferId, showId: excludeShowId }
-    const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date)
-    const conflicts = validDate ? conflictsFor(bookingsOf(client, exclude), date) : null
+    const conflicts = near
     const hist = feeHistory(client, { city, venue }, fxRates, home, todayIso, exclude)
     return { conflicts, hist, cityStats: summarize(hist.inCity), venueStats: summarize(hist.atVenue), hasAnyFees: client.tour.shows.some(s => s.status === 'confirmed' && (s.guarantee ?? 0) > 0) }
-  }, [client, date, city, venue, fxRates, home, excludeOfferId, excludeShowId])
+  }, [client, near, city, venue, fxRates, home, todayIso, excludeOfferId, excludeShowId])
 
   if (!date && !city.trim()) return null
 
@@ -65,11 +82,54 @@ export function OfferIntelligence({ client, date, city, venue, guarantee, exclud
       {conflicts && conflicts.nearby.length > 0 && (
         <div className="space-y-0.5">
           <div className="font-semibold text-gray-600">Around that date</div>
-          {conflicts.nearby.map(b => (
-            <div key={b.key} className="text-gray-500"><span className="text-gray-400">{gapLabel(b.gap)}:</span> {what(b)}</div>
-          ))}
+          {conflicts.nearby.map(b => {
+            const a = places.where(city), z = places.where(b.city)
+            const tv = a && z ? travelVerdict(milesBetween(a, z), b.gap) : null
+            return (
+              <div key={b.key} className="text-gray-500">
+                <span className="text-gray-400">{gapLabel(b.gap)}:</span> {what(b)}
+                {tv && (
+                  <span className={tv.level === 'unrealistic' ? 'text-red-600 font-medium' : tv.level === 'tight' ? 'text-amber-700 font-medium' : 'text-gray-400'}>
+                    {' '}· {tv.miles.toLocaleString('en-US')} miles
+                    {tv.mode === 'same-city' ? ', same city' : tv.mode === 'drive' ? `, about ${tv.hours}h by road` : `, needs a flight (about ${tv.hours}h)`}
+                    {tv.level === 'unrealistic' ? ' - not realistic in that time' : tv.level === 'tight' ? ' - tight' : ''}
+                  </span>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
+
+      {radiusResult && (
+        <div className="space-y-0.5">
+          <div className="font-semibold text-gray-600">Radius clauses</div>
+          {radiusResult.issues.length === 0 ? (
+            <div className="text-gray-500">No clash found{radius ? ` with this offer's ${radius.miles}-mile clause` : ''}{upcoming.some(b => b.radius) ? ' or with the clauses on your other bookings' : ''}.</div>
+          ) : radiusResult.issues.map((i, n) => (
+            <div key={n} className="rounded-lg border border-red-200 text-red-600 px-2.5 py-1.5">
+              {i.kind === 'this-offer'
+                ? `This offer's ${i.clauseMiles}-mile clause (until ${long(i.until)}) overlaps ${what(i.booking)} on ${long(i.booking.date)}, ${i.miles} miles away.`
+                : `${i.booking.venue}${i.booking.city ? `, ${i.booking.city}` : ''} has a ${i.clauseMiles}-mile clause (until ${long(i.until)}) that covers this city: ${i.miles} miles away.`}
+            </div>
+          ))}
+          <div className="text-[10px] text-gray-300">Straight-line distances. When a deal was confirmed isn&apos;t recorded, so each clause is treated as running from today.</div>
+        </div>
+      )}
+      {(() => {
+        const missing = [...new Set([...(radiusResult?.unlocated ?? []), ...cities.filter(c => places.get(c) === null)])]
+        const guess = city.trim() ? places.get(city) : undefined
+        return (
+          <>
+            {guess && guess.how !== 'exact' && (
+              <div className="text-gray-400">&ldquo;{city}&rdquo; was read as {guess.label}{guess.how === 'fuzzy' ? ' (spelling looked different)' : ''}. If that&apos;s wrong, add the state or country.</div>
+            )}
+            {missing.length > 0 && (
+              <div className="text-gray-400">Couldn&apos;t find on the map: {missing.join('; ')}. Their distances aren&apos;t checked.</div>
+            )}
+          </>
+        )
+      })()}
 
       {city.trim() && (
         <div className="space-y-0.5">
@@ -105,7 +165,7 @@ export function OfferIntelligence({ client, date, city, venue, guarantee, exclud
       )}
 
       <div className="text-[10px] text-gray-300">
-        From the shows recorded in the app. Fees are guarantees{home !== 'USD' ? `, shown in ${home}` : ''}; other currencies are converted at today&apos;s rates{info.hist.missingRates.length > 0 ? ` (no rate yet for ${info.hist.missingRates.join(', ')}, counted 1:1)` : ''}.
+        From the shows recorded in the app; city locations from GeoNames (CC BY 4.0). Fees are guarantees{home !== 'USD' ? `, shown in ${home}` : ''}; other currencies are converted at today&apos;s rates{info.hist.missingRates.length > 0 ? ` (no rate yet for ${info.hist.missingRates.join(', ')}, counted 1:1)` : ''}.
       </div>
     </div>
   )

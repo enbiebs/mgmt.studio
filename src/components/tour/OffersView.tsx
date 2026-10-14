@@ -276,6 +276,7 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
       {client && (f.date || f.city.trim()) && (
         <OfferIntelligence
           client={client} date={f.date} city={f.city} venue={f.venue} guarantee={Number(f.guarantee) || 0}
+          radius={Number(terms.radiusMiles) > 0 ? { miles: Number(terms.radiusMiles), daysAfter: Number(terms.radiusDaysAfter) || 0 } : undefined}
           excludeOfferId={initial?.id} excludeShowId={initial?.showId}
         />
       )}
