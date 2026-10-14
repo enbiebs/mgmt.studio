@@ -123,7 +123,7 @@ function PipelineTab({ contracts }: { contracts: Contract[] }) {
   return (
     <div className="space-y-2">
       {/* Column headers */}
-      <div className="grid grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         {STAGES.map(s => {
           const cfg = STATUS_CONFIG[s]
           const items = contracts.filter(c => c.status === s)
@@ -138,7 +138,7 @@ function PipelineTab({ contracts }: { contracts: Contract[] }) {
           )
         })}
       </div>
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {STAGES.map(s => {
           const items = contracts.filter(c => c.status === s)
           return (

@@ -9,6 +9,7 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import { uid, fromDateStr } from '@/lib/utils'
+import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
 import type {
   Show, TravelItem, TravelFlight, TravelHotel, TravelGround,
   TravelStatus, Currency, Person, FlightLeg,
@@ -626,6 +627,7 @@ export function TravelView() {
   const [viewingGeneral, setViewingGeneral] = useState(false)
   const [addMode, setAddMode] = useState<AddMode>(null)
   const [synced, setSynced] = useState(false)
+  const pane = useMobilePane()
 
   // Jumping here from elsewhere (e.g. Tour's "Flights"/"Hotels" quick
   // links) sets the shared selectedShowId — adopt it once, without
@@ -639,6 +641,7 @@ export function TravelView() {
   }, [sharedSelectedShowId])
 
   function selectShow(showId: string) {
+    pane.openDetail()
     setSelectedShowId(showId)
     setViewingGeneral(false)
   }
@@ -732,13 +735,13 @@ export function TravelView() {
   return (
     <div className="flex-1 flex overflow-hidden">
       {/* ── Sidebar: show list ── */}
-      <div className="w-[220px] flex-shrink-0 border-r border-gray-100 flex flex-col">
+      <div className={`${listPaneClass(pane.detail)} w-full md:w-[220px] flex-shrink-0 border-r border-gray-100 flex-col`}>
         <div className="px-4 py-3 border-b border-gray-100">
           <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Shows</span>
         </div>
         <div className="flex-1 overflow-y-auto">
           <button
-            onClick={() => { setViewingGeneral(true); setSelectedShowId(null); setAddMode(null) }}
+            onClick={() => { setViewingGeneral(true); setSelectedShowId(null); setAddMode(null); pane.openDetail() }}
             className={`w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors ${effectiveGeneral ? 'bg-blue-50' : ''}`}
           >
             <div className="flex items-start gap-2">
@@ -795,11 +798,12 @@ export function TravelView() {
       </div>
 
       {/* ── Main panel ── */}
-      <div className="flex-1 overflow-y-auto">
+      <div className={`${detailPaneClass(pane.detail)} flex-1 overflow-y-auto`}>
+        <BackToList onClick={pane.closeDetail} label="All shows" />
         {!show && !effectiveGeneral ? (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm">No shows available</div>
         ) : (
-          <div className="max-w-2xl mx-auto py-6 px-6">
+          <div className="max-w-2xl mx-auto py-4 md:py-6 px-3 md:px-6">
             {/* Show header */}
             <div className="flex items-start justify-between mb-6">
               <div>

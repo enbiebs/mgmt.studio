@@ -19,7 +19,7 @@ export function RoyaltiesView() {
   return (
     <div className="flex-1 overflow-auto p-6 max-w-3xl">
       {/* Totals */}
-      <div className="flex gap-4 mb-7">
+      <div className="flex flex-wrap gap-4 mb-7">
         {usd > 0 && (
           <div className="bg-gray-50 rounded-2xl px-5 py-5 flex-1">
             <div className="font-serif text-3xl font-medium">{fmt(usd, 'USD')}</div>

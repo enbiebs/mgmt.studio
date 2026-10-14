@@ -65,14 +65,14 @@ export function OffersView() {
   return (
     <div className="flex-1 overflow-auto">
       {/* Header */}
-      <div className="px-6 pt-6 pb-4 border-b border-gray-100">
-        <div className="flex items-end justify-between mb-4">
+      <div className="px-4 md:px-6 pt-4 md:pt-6 pb-4 border-b border-gray-100">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between mb-4">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Booking</div>
             <h2 className="text-xl font-semibold">{client.name} — Tour Offers</h2>
           </div>
-          <div className="flex items-end gap-4">
-            <div className="flex gap-3">
+          <div className="flex flex-wrap items-end gap-3 md:gap-4">
+            <div className="flex gap-3 md:gap-3">
               <StatPill label="Confirmed value" value={fmt(totalGuarantee)} color="text-green-700" />
               <StatPill label="Pending decisions" value={String(pendingCount)} color="text-amber-700" />
               <StatPill label="Settled YTD" value={fmt(settledTotal)} color="text-blue-700" />
@@ -97,12 +97,12 @@ export function OffersView() {
           </div>
         </div>
         {/* Tabs */}
-        <div className="flex gap-0.5">
+        <div className="flex gap-0.5 overflow-x-auto">
           {([['pipeline', 'Active Pipeline'], ['routing', 'Routing Calendar'], ['settled', 'Settled / History']] as const).map(([t, label]) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
                 tab === t ? 'bg-gray-900 text-canvas' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
               }`}
             >
@@ -112,7 +112,7 @@ export function OffersView() {
         </div>
       </div>
 
-      <div className="p-6">
+      <div className="p-4 md:p-6">
         {tab === 'pipeline' && <PipelineTab offers={pipeline} editable={editable} onEdit={setEditingOffer} />}
         {tab === 'routing'  && <RoutingTab  offers={offers.filter(o => o.status !== 'cancelled')} editable={editable} onEdit={setEditingOffer} />}
         {tab === 'settled'  && <HistoryTab  settled={settled} cancelled={cancelled} />}
@@ -313,7 +313,7 @@ function PipelineTab({ offers, editable, onEdit }: { offers: TourOffer[]; editab
   const byStatus = (s: OfferStatus) => offers.filter(o => o.status === s)
 
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       {PIPELINE_STAGES.map(status => {
         const cfg = STATUS_CONFIG[status]
         const items = byStatus(status)

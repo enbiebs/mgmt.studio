@@ -33,11 +33,16 @@ export function ManageView() {
   if (!client) return null
   const days = calendarDays(calYear, calMonth)
   const todayStr = today()
+  // On a phone the month grid is too small to read, so the same posts are shown day by day.
+  const monthPrefix = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`
+  const monthPosts = client.content.posts.filter(p => p.date.startsWith(monthPrefix)).sort((a, b) => a.date.localeCompare(b.date))
+  const agendaDays = [...new Set(monthPosts.map(p => p.date))]
+  const dayLabel = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Calendar header */}
-      <div className="flex-shrink-0 flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-100">
+      <div className="flex-shrink-0 flex flex-wrap items-center gap-2.5 px-3 md:px-5 py-3 md:py-3.5 border-b border-gray-100">
         <button onClick={calPrev} className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors">‹</button>
         <button onClick={calNext} className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors">›</button>
         <span className="font-serif text-[18px] font-medium">{MONTH_NAMES[calMonth]} {calYear}</span>
@@ -47,8 +52,34 @@ export function ManageView() {
         )}
       </div>
 
-      {/* Calendar grid */}
-      <div className="flex-1 overflow-auto p-4">
+      {/* Phone: the month as a day-by-day list */}
+      <div className="md:hidden flex-1 overflow-auto px-3 py-3">
+        {agendaDays.length === 0 && (
+          <div className="py-10 text-center text-sm text-gray-400">No posts planned in {MONTH_NAMES[calMonth]}.</div>
+        )}
+        {agendaDays.map(d => (
+          <div key={d} className="mb-4">
+            <div className={`text-[11px] font-bold uppercase tracking-wider mb-1.5 ${d === todayStr ? 'text-blue-500' : 'text-gray-400'}`}>
+              {dayLabel(d)}{d === todayStr && ' · Today'}
+            </div>
+            <div className="space-y-1.5">
+              {monthPosts.filter(p => p.date === d).map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setEditPost(p)}
+                  className={`w-full text-left border-l-[3px] rounded-r-lg px-3 py-2 ${PLATFORM_STYLE[p.type]}`}
+                >
+                  <div className="text-sm font-semibold leading-snug">{p.title}</div>
+                  <div className="text-[11px] opacity-75">{PLATFORM_LABEL[p.type]} · {p.time}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: the month grid */}
+      <div className="hidden md:block flex-1 overflow-auto p-4">
         <div className="grid grid-cols-7 gap-px bg-gray-100 border border-gray-100 rounded-xl overflow-hidden">
           {DOW_SHORT.map(d => (
             <div key={d} className="bg-gray-50 py-1.5 text-center text-[10px] font-bold uppercase tracking-wider text-gray-400">{d}</div>

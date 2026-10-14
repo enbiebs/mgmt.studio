@@ -78,7 +78,7 @@ export function InvoicesView() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
         <SCard label="Total Paid (YTD)" value={fmt(totalPaid)} color="text-green-700" count={invoices.filter(i => i.status === 'paid').length} />
         <SCard label="Outstanding" value={fmt(totalOut)} color="text-blue-700" count={outstanding.length} />
         <SCard label="Overdue" value={fmt(totalOverdue)} color={totalOverdue > 0 ? 'text-red-600' : 'text-gray-400'} count={overdue.length} />

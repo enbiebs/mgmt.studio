@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { fromDateStr } from '@/lib/utils'
+import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import type { Show, GuestListCategory, GuestListEntry } from '@/types'
 
@@ -27,6 +28,7 @@ export function GuestListView() {
   const [selectedShowId, setSelectedShowId] = useState<string | null>(null)
   const [addOpen, setAddOpen] = useState(false)
   const [editGuest, setEditGuest] = useState<GuestListEntry | null>(null)
+  const pane = useMobilePane()
 
   if (!client) return null
   const shows = client.tour.shows
@@ -45,7 +47,7 @@ export function GuestListView() {
   return (
     <div className="flex-1 flex overflow-hidden">
       {/* ── Sidebar: show list ── */}
-      <div className="w-[220px] flex-shrink-0 border-r border-gray-100 flex flex-col">
+      <div className={`${listPaneClass(pane.detail)} w-full md:w-[220px] flex-shrink-0 border-r border-gray-100 flex-col`}>
         <div className="px-4 py-3 border-b border-gray-100">
           <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Shows</span>
         </div>
@@ -57,7 +59,7 @@ export function GuestListView() {
             return (
               <button
                 key={s.id}
-                onClick={() => setSelectedShowId(s.id)}
+                onClick={() => { setSelectedShowId(s.id); pane.openDetail() }}
                 className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${(show?.id === s.id) ? 'bg-blue-50' : ''}`}
               >
                 <div className="text-xs font-semibold text-gray-800 truncate">{s.venue}</div>
@@ -74,11 +76,12 @@ export function GuestListView() {
       </div>
 
       {/* ── Main panel ── */}
-      <div className="flex-1 overflow-y-auto">
+      <div className={`${detailPaneClass(pane.detail)} flex-1 overflow-y-auto`}>
+        <BackToList onClick={pane.closeDetail} label="All shows" />
         {!show ? (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm">No shows available</div>
         ) : (
-          <div className="max-w-2xl mx-auto py-6 px-6">
+          <div className="max-w-2xl mx-auto py-4 md:py-6 px-3 md:px-6">
             <div className="flex items-start justify-between mb-6">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">{show.venue}</h2>

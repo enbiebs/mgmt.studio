@@ -122,7 +122,7 @@ export function PaymentsView() {
       {billOpen && <BillUploadModal onClose={() => setBillOpen(false)} />}
       {assigning && <AssignExpenseModal expense={assigning} onClose={() => setAssigning(null)} />}
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6">
         <SCard label="Total Expenses" value={fmt(total)} color="text-gray-800" sub={`${expenses.length} line items`} />
         <SCard label="Paid" value={fmt(totalPaid)} color="text-green-700" sub={`${expenses.filter(e => e.paid).length} expenses`} />
         <SCard label="Unpaid / Pending" value={fmt(totalUnpaid)} color={totalUnpaid > 0 ? 'text-red-600' : 'text-gray-400'} sub={`${expenses.filter(e => !e.paid).length} expenses`} />

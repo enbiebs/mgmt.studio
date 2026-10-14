@@ -83,7 +83,7 @@ export function StudioApp() {
         const visibleIds = accessibleClientIds()
         const roster = visibleIds === 'all' ? data.clients : data.clients.filter(c => visibleIds.includes(c.id))
         return (
-          <main className="flex-1 overflow-auto p-8">
+          <main className="flex-1 overflow-auto p-4 md:p-8">
             <div className="flex items-end justify-between mb-7">
               <div>
                 <h1 className="font-serif text-[26px] font-medium leading-tight">Your Roster</h1>
@@ -93,7 +93,7 @@ export function StudioApp() {
 
             <InboxPanel />
 
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(310px,1fr))] gap-4">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(min(310px,100%),1fr))] gap-4">
               {roster.map(c => <ClientCard key={c.id} client={c} />)}
 
               {role === 'manager' && (

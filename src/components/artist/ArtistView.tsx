@@ -112,8 +112,8 @@ export function ArtistView() {
   return (
     <div className="flex-1 overflow-auto bg-gray-50">
       {/* Artist hero */}
-      <div className="bg-canvas border-b border-gray-100 px-6 py-5">
-        <div className="flex items-center gap-4">
+      <div className="bg-canvas border-b border-gray-100 px-4 md:px-6 py-4 md:py-5">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
           <div
             className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-lg font-bold flex-shrink-0"
             style={{ background: client.color }}
@@ -135,7 +135,7 @@ export function ArtistView() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-3 md:p-6">
 
         {/* ── Offers (only the ones the manager has sent an offer sheet for) ── */}
         <OfferSheetsCard />
