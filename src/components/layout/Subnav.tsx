@@ -49,12 +49,12 @@ export function Subnav() {
   if (subs.length === 0) return null
 
   return (
-    <div className="flex-shrink-0 flex items-center gap-0.5 px-4 py-1.5 border-b border-gray-100">
+    <div className="flex-shrink-0 flex items-center gap-0.5 px-3 md:px-4 py-1.5 border-b border-gray-100 overflow-x-auto">
       {subs.map(([label, key]) => (
         <button
           key={key}
           onClick={() => handleClick(key)}
-          className={`px-2.5 py-1 rounded-lg text-sm font-medium transition-colors ${
+          className={`px-2.5 py-1 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
             isActive(key)
               ? 'bg-gray-100 text-gray-900'
               : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
@@ -65,7 +65,7 @@ export function Subnav() {
       ))}
 
       {client && (
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto hidden md:flex items-center gap-2 pl-3">
           <div
             className="w-[22px] h-[22px] rounded-full flex items-center justify-center text-white text-[9px] font-bold"
             style={{ background: client.color }}

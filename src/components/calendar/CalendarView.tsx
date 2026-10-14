@@ -64,6 +64,11 @@ export function CalendarView() {
   const events = getCalendarEvents(client, canSee).filter(e => activeDomains.has(e.domain))
   const days = calendarDays(calYear, calMonth)
   const todayStr = today()
+  // On a phone the month grid is too small to read, so the same events are shown day by day.
+  const monthPrefix = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`
+  const monthEvents = events.filter(e => e.date.startsWith(monthPrefix)).sort((a, b) => a.date.localeCompare(b.date))
+  const agendaDays = [...new Set(monthEvents.map(e => e.date))]
+  const dayLabel = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 
   function toggleDomain(domain: CalendarEventDomain) {
     setActiveDomains(prev => {
@@ -99,20 +104,20 @@ export function CalendarView() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-100">
+      <div className="flex-shrink-0 flex flex-wrap items-center gap-2.5 px-3 md:px-5 py-3 md:py-3.5 border-b border-gray-100">
         <button onClick={calPrev} className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors">‹</button>
         <button onClick={calNext} className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors">›</button>
         <span className="font-serif text-[18px] font-medium">{MONTH_NAMES[calMonth]} {calYear}</span>
         <button onClick={calToday} className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors">Today</button>
 
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="order-last basis-full md:order-none md:basis-auto md:ml-auto flex items-center gap-1.5 overflow-x-auto pb-0.5 md:pb-0">
           {ALL_DOMAINS.filter(canSee).map(domain => {
             const active = activeDomains.has(domain)
             return (
               <button
                 key={domain}
                 onClick={() => toggleDomain(domain)}
-                className={`px-2 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
+                className={`px-2 py-1 rounded-full text-[11px] font-semibold border transition-colors flex-shrink-0 ${
                   active ? CALENDAR_DOMAIN_STYLE[domain] : 'bg-canvas border-gray-200 text-gray-300'
                 }`}
               >
@@ -124,8 +129,47 @@ export function CalendarView() {
         {canEditAny && <GoogleCalendarPanel clientId={client.id} />}
       </div>
 
-      {/* Grid */}
-      <div className="flex-1 overflow-auto p-4">
+      {/* Phone: the month as a day-by-day list */}
+      <div className="md:hidden flex-1 overflow-auto px-3 py-3">
+        {agendaDays.length === 0 && (
+          <div className="py-10 text-center text-sm text-gray-400">Nothing scheduled in {MONTH_NAMES[calMonth]}.</div>
+        )}
+        {agendaDays.map(d => (
+          <div key={d} className="mb-4">
+            <div className={`text-[11px] font-bold uppercase tracking-wider mb-1.5 ${d === todayStr ? 'text-blue-500' : 'text-gray-400'}`}>
+              {dayLabel(d)}{d === todayStr && ' · Today'}
+            </div>
+            <div className="space-y-1.5">
+              {monthEvents.filter(e => e.date === d).map(e => (
+                <button
+                  key={e.id}
+                  onClick={() => openEvent(e)}
+                  className={`w-full text-left border-l-[3px] rounded-r-lg px-3 py-2 ${CALENDAR_DOMAIN_STYLE[e.domain]}`}
+                >
+                  <div className="text-sm font-semibold leading-snug">{e.title}</div>
+                  <div className="text-[11px] opacity-75">{CALENDAR_DOMAIN_LABEL[e.domain]}{e.subtitle ? ` · ${e.subtitle}` : ''}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+        {creatableTypes.length > 0 && (
+          <div className="flex items-center gap-2 pt-2 pb-4">
+            {creatableTypes.map(t => (
+              <button
+                key={t}
+                onClick={() => setCreating({ type: t, date: todayStr.startsWith(monthPrefix) ? todayStr : `${monthPrefix}-01` })}
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium"
+              >
+                + {QUICK_ADD_CONFIG[t].label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Desktop: the month grid */}
+      <div className="hidden md:block flex-1 overflow-auto p-4">
         <div className="grid grid-cols-7 gap-px bg-gray-100 border border-gray-100 rounded-xl overflow-hidden">
           {DOW_SHORT.map(d => (
             <div key={d} className="bg-gray-50 py-1.5 text-center text-[10px] font-bold uppercase tracking-wider text-gray-400">{d}</div>

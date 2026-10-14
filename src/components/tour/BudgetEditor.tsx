@@ -230,7 +230,7 @@ export function BudgetEditor({ budget, client }: { budget: Budget; client: Clien
   return (
     <div className="max-w-4xl">
       {/* Header, like the PDF's title block */}
-      <div className="flex items-start justify-between gap-4 mb-1">
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 mb-1">
         <div className="min-w-0">
           <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Budget · V{budget.version}</div>
           <h2 className="font-serif text-xl font-medium truncate">{budget.name}</h2>
@@ -264,7 +264,8 @@ export function BudgetEditor({ budget, client }: { budget: Budget; client: Clien
         {actual && actual.missingRates.length > 0 && <span className="ml-2 text-amber-700">Some costs are in {actual.missingRates.join(', ')} and no exchange rate was available, so they are counted 1:1.</span>}
       </div>
 
-      <div className="border border-gray-200 rounded-xl overflow-hidden">
+      <div className="border border-gray-200 rounded-xl overflow-x-auto">
+       <div className="min-w-[600px]">
         <div className={`${COLS} px-3 py-2 bg-gray-50 text-[10px] font-bold uppercase tracking-widest text-gray-400 border-b border-gray-200`}>
           <div>Line</div><div className="text-right">Original</div><div className="text-right">Current</div><div className="text-right">Actual</div><div className="text-right">% gross</div>
         </div>
@@ -350,6 +351,7 @@ export function BudgetEditor({ budget, client }: { budget: Budget; client: Clien
         )}
         <TotalRow label="Total commissions" orig={was?.totalCommissions ?? null} cur={now.totalCommissions} act={act?.totalCommissions ?? null} gross={now.gross} currency={cur} />
         <TotalRow label="Net income after commissions" orig={was?.net ?? null} cur={now.net} act={act?.net ?? null} gross={now.gross} currency={cur} strong />
+       </div>
       </div>
 
       <div className="mt-4">

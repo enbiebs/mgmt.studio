@@ -34,9 +34,9 @@ export function InboxPanel() {
     .filter(g => g.items.length > 0)
 
   const row = (item: InboxItem, isHiddenRow = false) => (
-    <div key={item.key} className="flex items-start gap-3 py-2.5 border-t border-gray-50 first:border-t-0">
+    <div key={item.key} className="flex flex-wrap md:flex-nowrap items-start gap-x-3 gap-y-1.5 py-2.5 border-t border-gray-50 first:border-t-0">
       <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${DOT[item.severity]}`} />
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 basis-[calc(100%-1.25rem)] md:basis-auto">
         <div className="text-sm">
           <span className="text-[11px] font-semibold text-gray-400 mr-1.5">{item.clientName}</span>
           <span className="font-medium">{item.title}</span>
@@ -44,9 +44,9 @@ export function InboxPanel() {
         {item.detail && <div className="text-xs text-gray-400 mt-0.5">{item.detail}</div>}
       </div>
       {item.amount !== undefined && item.currency && (
-        <div className="text-sm font-semibold tabular-nums flex-shrink-0">{money2(item.amount, item.currency)}</div>
+        <div className="text-sm font-semibold tabular-nums flex-shrink-0 ml-5 md:ml-0">{money2(item.amount, item.currency)}</div>
       )}
-      <div className="flex items-center gap-1.5 flex-shrink-0">
+      <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto md:ml-0">
         <button onClick={() => open(item)} className="px-2 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50">Open</button>
         {isHiddenRow ? (
           <button onClick={() => restoreInboxItem(item.key)} className="px-2 py-1 text-xs text-blue-500 hover:underline">Bring back</button>
@@ -69,8 +69,8 @@ export function InboxPanel() {
   )
 
   return (
-    <section className="mb-7 bg-canvas border border-gray-100 rounded-2xl p-5">
-      <div className="flex items-center gap-3 mb-1">
+    <section className="mb-7 bg-canvas border border-gray-100 rounded-2xl p-4 md:p-5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-1">
         <h2 className="font-serif text-lg font-medium">Inbox</h2>
         {groups.map(g => (
           <span key={g.sev} className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${g.sev === 'urgent' ? 'bg-red-50 text-red-600' : g.sev === 'soon' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>

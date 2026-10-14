@@ -36,7 +36,7 @@ export function Modal({ title, onClose, children, footer, wide, xwide }: ModalPr
       className={`fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-in duration-150 ${closing ? 'animate-out fade-out' : 'fade-in'}`}
       onClick={(e) => { if (e.target === e.currentTarget) close() }}
     >
-      <div className={`bg-canvas rounded-2xl shadow-2xl ${xwide ? 'w-[980px] max-h-[90vh] overflow-y-auto' : wide ? 'w-[640px] max-h-[90vh] overflow-y-auto' : 'w-[460px]'} max-w-[92vw] p-6 animate-in duration-200 ${closing ? 'animate-out slide-out-to-bottom-3' : 'slide-in-from-bottom-3'}`}>
+      <div className={`bg-canvas rounded-2xl shadow-2xl ${xwide ? 'w-[980px]' : wide ? 'w-[640px]' : 'w-[460px]'} max-w-[94vw] max-h-[92vh] overflow-y-auto p-4 md:p-6 animate-in duration-200 ${closing ? 'animate-out slide-out-to-bottom-3' : 'slide-in-from-bottom-3'}`}>
         <h2 className="font-serif text-lg font-medium mb-5">{title}</h2>
         <div className="space-y-3">{children}</div>
         {footer && <div className="flex gap-2 justify-end mt-6">{footer}</div>}

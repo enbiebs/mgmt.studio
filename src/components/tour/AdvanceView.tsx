@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import type { ShowAdvance, AdvanceStatus, AdvanceContact, AdvanceSchedule, Show, Venue } from '@/types'
 import { uid, shiftTime, fromDateStr, today as localToday } from '@/lib/utils'
+import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
 
 // Fields shared between a Venue and a ShowAdvance — copied straight across
 // in both directions when saving to or loading from the venue library.
@@ -138,6 +139,7 @@ export function AdvanceView() {
   const [bumpCustom, setBumpCustom] = useState('')
   const [bumpMessage, setBumpMessage] = useState('')
   const [venueMessage, setVenueMessage] = useState('')
+  const pane = useMobilePane()
 
   // Jumping here from elsewhere (e.g. Tour's "Advance" quick link) sets the
   // shared selectedShowId — adopt it once, without fighting this view's own
@@ -169,6 +171,7 @@ export function AdvanceView() {
   }
 
   function selectShow(show: Show) {
+    pane.openDetail()
     setSelectedShowId(show.id)
     setAdvance(getAdvance(show.id))
     setTab('schedule')
@@ -308,7 +311,7 @@ export function AdvanceView() {
   return (
     <div className="flex-1 flex overflow-hidden">
       {/* ── Show list ── */}
-      <div className="w-[260px] flex-shrink-0 border-r border-gray-100 flex flex-col">
+      <div className={`${listPaneClass(pane.detail)} w-full md:w-[260px] flex-shrink-0 border-r border-gray-100 flex-col`}>
         <div className="px-4 py-3 border-b border-gray-100">
           <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Shows</span>
         </div>
@@ -350,11 +353,12 @@ export function AdvanceView() {
 
       {/* ── Advance editor ── */}
       {!advance ? (
-        <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
+        <div className="hidden md:flex flex-1 items-center justify-center text-gray-400 text-sm">
           Select a show to view or create its advance
         </div>
       ) : (
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className={`${detailPaneClass(pane.detail, 'flex')} flex-1 flex-col overflow-hidden`}>
+          <BackToList onClick={pane.closeDetail} label="All shows" />
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-3 border-b border-gray-100">
             <div>

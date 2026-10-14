@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { BudgetEditor } from './BudgetEditor'
+import { BackToList, detailPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
 import {
   COMMISSION_BASE_LABEL, DEFAULT_COMMISSIONS, financeSettings, makeConverter, showFigures, computeBudget,
 } from '@/lib/budget'
@@ -31,6 +32,7 @@ export function BudgetView() {
   const [runId, setRunId] = useState<string | null>(null)
   const [runsOpen, setRunsOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const pane = useMobilePane(!!selectedBudgetId)
 
   useEffect(() => { loadFxRates().catch(console.error) }, [loadFxRates])
 
@@ -56,7 +58,7 @@ export function BudgetView() {
   const needOffer = offers.filter(o => (o.status === 'inquiry' || o.status === 'hold' || o.status === 'confirmed') && !offerHasBudget(o.id) && !(o.showId && showHasBudget(o.showId)))
   const needShow = client.tour.shows.filter(s => !showHasBudget(s.id) && !offers.some(o => o.showId === s.id))
 
-  function open(id: string) { setRunId(null); setSelectedBudget(id) }
+  function open(id: string) { setRunId(null); setSelectedBudget(id); pane.openDetail() }
   function create(target: { showId?: string; offerId?: string }) { const id = addBudget(target); if (id) open(id) }
 
   const row = (b: Budget) => (
@@ -83,7 +85,7 @@ export function BudgetView() {
   return (
     <div className="flex-1 min-h-0 flex overflow-hidden">
       {/* ── Left: runs + budgets ── */}
-      <div className="w-[300px] flex-shrink-0 border-r border-gray-100 overflow-auto">
+      <div className={`${pane.detail ? 'hidden md:block' : ''} w-full md:w-[300px] flex-shrink-0 border-r border-gray-100 overflow-auto`}>
         <div className="flex items-center gap-1.5 px-3 py-3 border-b border-gray-100">
           <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 flex-1">Budgets</div>
           {editable && <button onClick={() => setRunsOpen(true)} className="text-[11px] text-blue-500 hover:underline">Runs</button>}
@@ -96,7 +98,7 @@ export function BudgetView() {
           return (
             <div key={r.id}>
               <button
-                onClick={() => { setRunId(r.id); setSelectedBudget(null) }}
+                onClick={() => { setRunId(r.id); setSelectedBudget(null); pane.openDetail() }}
                 className={`w-full text-left px-3 py-2 bg-gray-50 border-y border-gray-100 flex items-center justify-between hover:bg-gray-100 ${runId === r.id ? 'ring-1 ring-inset ring-blue-300' : ''}`}
               >
                 <span className="text-xs font-bold truncate">{r.name}</span>
@@ -139,7 +141,8 @@ export function BudgetView() {
       </div>
 
       {/* ── Right: run roll-up or the budget ── */}
-      <div className="flex-1 overflow-auto p-6">
+      <div className={`${detailPaneClass(pane.detail)} flex-1 min-w-0 overflow-auto p-3 md:p-6`}>
+        <BackToList onClick={pane.closeDetail} label="All budgets" className="-mx-3 -mt-3 mb-3" />
         {selectedRun ? (
           <RunSummary run={selectedRun} client={client} home={home} />
         ) : selected ? (
@@ -176,7 +179,7 @@ function RunSummary({ run, client, home }: { run: Run; client: Client; home: Cur
       {rows.length === 0 ? (
         <div className="text-sm text-gray-400">No shows in this run yet. Use “Runs” to add some.</div>
       ) : (
-        <div className="border border-gray-200 rounded-xl overflow-hidden">
+        <div className="border border-gray-200 rounded-xl overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>

@@ -113,7 +113,7 @@ export function PLView() {
         </div>
       )}
       {/* YTD Summary */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
         <SummaryCard label="YTD Revenue" value={fmt(ytdRev)} color="text-green-700" sub={`${sorted.length} months`} />
         <SummaryCard label="YTD Expenses" value={fmt(ytdExp)} color="text-red-500" sub="All categories" />
         <SummaryCard label="YTD Net Income" value={fmt(ytdNet)} color={ytdNet >= 0 ? 'text-blue-700' : 'text-red-600'} sub={`${((ytdNet / Math.max(ytdRev, 1)) * 100).toFixed(0)}% margin`} />
@@ -139,7 +139,7 @@ export function PLView() {
       </div>
 
       {/* Month detail */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Revenue */}
         <div className="border border-gray-100 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">

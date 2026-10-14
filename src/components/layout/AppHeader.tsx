@@ -58,26 +58,27 @@ export function AppHeader() {
   }, [])
 
   return (
-    <header className="flex-shrink-0 flex items-center h-[50px] px-4 gap-3 border-b border-gray-100">
+    <header className="flex-shrink-0 flex flex-wrap items-center min-h-[50px] px-3 md:px-4 gap-x-2 md:gap-x-3 border-b border-gray-100 md:flex-nowrap">
       {/* Back button (studio mode only — artists have no roster to go back to) */}
       {view === 'studio' && role !== 'artist' && (
         <>
           <button
             onClick={goToDashboard}
+            aria-label="All clients"
             className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-700 hover:bg-gray-50 px-2 py-1 rounded-lg transition-colors"
           >
-            ← All clients
+            ←<span className="hidden md:inline"> All clients</span>
           </button>
-          <div className="w-px h-4 bg-gray-100" />
+          <div className="w-px h-4 bg-gray-100 hidden md:block" />
         </>
       )}
 
       {/* Logo */}
-      <div className="font-serif font-semibold text-base tracking-tight flex-shrink-0">Mgmt Studio</div>
+      <div className={`font-serif font-semibold text-base tracking-tight flex-shrink-0 ${view === 'studio' && role !== 'artist' ? 'hidden md:block' : ''}`}>Mgmt Studio</div>
 
       {/* Main nav (studio mode, everyone except artist — artists get their own dashboard-style view) */}
       {view === 'studio' && role !== 'artist' && (
-        <nav className="flex gap-0.5 flex-1 overflow-x-auto">
+        <nav className="flex gap-0.5 order-last basis-full pb-1.5 md:order-none md:basis-auto md:pb-0 md:flex-1 overflow-x-auto">
           {([
             ['Calendar', 'calendar'],
             ['Music', 'songs'], ['Tour', 'tour'], ['Content', 'content'],
@@ -103,7 +104,7 @@ export function AppHeader() {
       {/* Spacer when artist (no main nav) */}
       {view === 'studio' && role === 'artist' && <div className="flex-1" />}
 
-      <div className="flex items-center gap-2 ml-auto">
+      <div className="flex items-center gap-2 ml-auto py-1.5 md:py-0">
         {/* Inbox — what needs attention across every artist; opens the roster, where it lives. */}
         {role !== 'artist' && (
           <button
@@ -119,7 +120,7 @@ export function AppHeader() {
             member's actual role + access_grants. Everyone else is locked
             to the role assigned in workspace_members. */}
         {canSwitchRole && previewMembers.length > 0 && (
-          <div ref={previewRef} className="relative">
+          <div ref={previewRef} className={`relative ${previewMemberId ? '' : 'hidden md:block'}`}>
             <button
               onClick={() => setPreviewOpen(v => !v)}
               className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
@@ -171,11 +172,11 @@ export function AppHeader() {
               >
                 {initials(client.name)}
               </div>
-              {client.name}
+              <span className="max-w-[110px] md:max-w-none truncate">{client.name}</span>
             </button>
 
             {switchOpen && (
-              <div className="absolute right-0 top-full mt-1 bg-canvas border border-gray-100 rounded-xl shadow-lg min-w-[160px] overflow-hidden z-50">
+              <div className="absolute right-0 top-full mt-1 bg-canvas border border-gray-100 rounded-xl shadow-lg min-w-[160px] max-h-[60vh] overflow-y-auto z-50">
                 {rosterClients.map(c => (
                   <button
                     key={c.id}

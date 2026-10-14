@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { CalendarImportModal } from '@/components/tour/CalendarImportModal'
+import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { MONTH_NAMES, MONTH_SHORT, today } from '@/lib/utils'
 import { STATUS_CONFIG as INVOICE_STATUS_CONFIG, isOverdue } from '@/components/business/InvoicesView'
@@ -17,6 +18,7 @@ export function TourView() {
   } = useStore()
   const [addOpen, setAddOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const pane = useMobilePane()
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -56,7 +58,7 @@ export function TourView() {
   return (
     <div className="flex-1 flex overflow-hidden">
       {/* Sidebar */}
-      <div className="w-[272px] flex-shrink-0 border-r border-gray-100 flex flex-col">
+      <div className={`${listPaneClass(pane.detail)} w-full md:w-[272px] flex-shrink-0 border-r border-gray-100 flex-col`}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Tour</span>
           {editable && (
@@ -94,7 +96,7 @@ export function TourView() {
             return (
               <button
                 key={s.id}
-                onClick={() => setSelectedShow(s.id)}
+                onClick={() => { setSelectedShow(s.id); pane.openDetail() }}
                 className={`w-full flex items-center gap-3 px-4 py-3 border-b border-gray-100 text-left transition-colors ${
                   selectedShowId === s.id ? 'bg-blue-50' : 'hover:bg-gray-50'
                 }`}
@@ -114,7 +116,8 @@ export function TourView() {
       </div>
 
       {/* Main */}
-      <div className="flex-1 overflow-auto p-6">
+      <div className={`${detailPaneClass(pane.detail)} flex-1 overflow-auto p-4 md:p-6`}>
+        <BackToList onClick={pane.closeDetail} label="All shows" className="-mx-4 -mt-4 mb-4" />
         {editable && (
           <div className="flex justify-end mb-3 relative">
             <button
