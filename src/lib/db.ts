@@ -34,7 +34,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
   // Fetch clients
   const { data: clientRows, error } = await supabase
     .from('clients')
-    .select('id, name, genre, color, calendar_token, demo_owner, analytics')
+    .select('id, name, genre, color, calendar_token, demo_owner, setup_skipped, analytics')
     .eq('workspace_id', workspaceId)
 
   if (error) throw error
@@ -652,6 +652,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       color: c.color,
       calendarToken: c.calendar_token ?? undefined,
       isDemo: c.demo_owner ? true : undefined,
+      setupSkipped: Array.isArray(c.setup_skipped) && c.setup_skipped.length > 0 ? c.setup_skipped : undefined,
       people: cPeople,
       songs:    { albums: cAlbums.length ? cAlbums : [{ id: 'alb-default', title: c.name, tracks: [] }] },
       tour:     {
@@ -849,6 +850,13 @@ export async function upsertClient(client: Client, workspaceId: string) {
 export async function deleteClient(clientId: string) {
   const supabase = createClient()
   await supabase.from('clients').delete().eq('id', clientId)
+}
+
+// Which first-day checklist steps the team has marked "doesn't apply".
+export async function saveSetupSkipped(clientId: string, keys: string[]) {
+  const supabase = createClient()
+  const { error } = await supabase.from('clients').update({ setup_skipped: keys }).eq('id', clientId)
+  if (error) throw error
 }
 
 // Pass null to disable/invalidate an existing feed (e.g. if the link leaks).

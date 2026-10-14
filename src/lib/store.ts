@@ -47,7 +47,7 @@ import {
   loadItemAccess, upsertItemAccess, deleteItemAccess,
   loadInboxState, saveInboxChoice, clearInboxChoice,
   type AccessGrant, type PreviewMember,
-  upsertClient, deleteClient as dbDeleteClient, setCalendarToken,
+  upsertClient, deleteClient as dbDeleteClient, setCalendarToken, saveSetupSkipped,
   upsertTrack, deleteTrack as dbDeleteTrack,
   upsertAlbum, deleteAlbum as dbDeleteAlbum, upsertChecklist,
   upsertPerson, deletePerson as dbDeletePerson,
@@ -284,6 +284,8 @@ interface StudioState {
 
   // ── Calendar feed (per-client .ics subscription link) ──
   enableCalendarFeed: (clientId: string) => void
+  // Marks first-day checklist steps as "doesn't apply to this artist" (shared with the team).
+  setSetupSkipped: (clientId: string, keys: string[]) => void
   disableCalendarFeed: (clientId: string) => void
 
   // ── Track actions ──
@@ -786,6 +788,14 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     if (workspaceId) setCalendarToken(clientId, token).catch(console.error)
+  },
+
+  setSetupSkipped: (clientId, keys) => {
+    const { data, workspaceId } = get()
+    const updated = { clients: data.clients.map(c => c.id === clientId ? { ...c, setupSkipped: keys.length > 0 ? keys : undefined } : c) }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId) saveSetupSkipped(clientId, keys).catch(console.error)
   },
 
   disableCalendarFeed: (clientId) => {

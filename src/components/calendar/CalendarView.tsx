@@ -16,6 +16,7 @@ import type { MainSection } from '@/types'
 import { AddShowModal } from '@/components/tour/TourView'
 import { PostModal } from '@/components/content/ManageView'
 import { AddProjectModal } from '@/components/manager/ProjectsView'
+import { SetupChecklist } from '@/components/calendar/SetupChecklist'
 
 const ALL_DOMAINS: CalendarEventDomain[] = ['show', 'offer', 'release', 'post', 'invoice', 'contract', 'project', 'bill']
 
@@ -128,6 +129,8 @@ export function CalendarView() {
         </div>
         {canEditAny && <GoogleCalendarPanel clientId={client.id} />}
       </div>
+
+      <SetupChecklist client={client} />
 
       {/* Phone: the month as a day-by-day list */}
       <div className="md:hidden flex-1 overflow-auto px-3 py-3">
