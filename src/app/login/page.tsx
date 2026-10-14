@@ -7,6 +7,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { PRODUCT_NAME, PRODUCT_TAGLINE } from '@/lib/brand'
 
 type Mode = 'login' | 'signup' | 'magic' | 'reset'
 
@@ -76,8 +77,8 @@ export default function LoginPage() {
     <div className="min-h-screen bg-canvas flex flex-col items-center justify-center px-4">
       {/* Logo */}
       <div className="mb-8 text-center">
-        <div className="font-serif font-semibold text-2xl tracking-tight mb-1">Mgmt Studio</div>
-        <div className="text-sm text-gray-400">Music Management OS</div>
+        <div className="font-serif font-semibold text-2xl tracking-tight mb-1">{PRODUCT_NAME}</div>
+        <div className="text-sm text-gray-400">{PRODUCT_TAGLINE}</div>
       </div>
 
       {/* Card */}
@@ -195,7 +196,7 @@ export default function LoginPage() {
 
       {/* Footer */}
       <div className="mt-12 text-[10px] uppercase tracking-widest text-gray-300">
-        Mgmt Studio · Music Management · v0.1
+        {PRODUCT_NAME} · Music Management · v0.1
       </div>
     </div>
   )

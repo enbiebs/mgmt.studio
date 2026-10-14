@@ -13,6 +13,7 @@
 // ──────────────────────────────────────────────────────────
 
 import type { Show } from '@/types'
+import { PRODUCT_NAME } from '@/lib/brand'
 
 function pad(n: number): string {
   return n < 10 ? '0' + n : String(n)
@@ -46,7 +47,7 @@ export function buildIcsFeed(clientName: string, shows: Show[]): string {
   const lines: string[] = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Mgmt Studio//Tour Calendar//EN',
+    `PRODID:-//${PRODUCT_NAME}//Tour Calendar//EN`,
     'CALSCALE:GREGORIAN',
     `X-WR-CALNAME:${escapeIcsText(clientName)} — Tour Dates`,
   ]

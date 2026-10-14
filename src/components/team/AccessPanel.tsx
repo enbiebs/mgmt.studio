@@ -4,6 +4,7 @@ import { useStore } from '@/lib/store'
 import { uid } from '@/lib/utils'
 import { inputClass, selectClass } from '@/components/ui/Modal'
 import type { Person } from '@/types'
+import { ARTIST_SIDE_NAME } from '@/lib/brand'
 
 const SECTIONS: { key: string; label: string }[] = [
   { key: 'music', label: 'Music' },
@@ -112,7 +113,7 @@ export function AccessPanel({ person }: { person: Person }) {
     return (
       <div className="pt-1 border-t border-gray-100 mt-3">
         <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 mt-3">Access</div>
-        <div className="text-xs text-gray-400 mb-2">No login yet — invite them to access Mgmt Studio directly.</div>
+        <div className="text-xs text-gray-400 mb-2">No login yet — invite them to their own {ARTIST_SIDE_NAME} page.</div>
         <div className="flex gap-2 mb-2">
           <div className="flex-1 min-w-0">
             <input className={inputClass} type="email" placeholder="Email to invite" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} />

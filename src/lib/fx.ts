@@ -8,7 +8,7 @@ export type FxSource = 'yahoo' | 'ecb'
 
 async function fromYahoo(cur: string): Promise<number> {
   const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${cur}USD=X?range=1d&interval=1d`, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MgmtStudio/1.0)' },
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MgmtPath/1.0)' },
     signal: AbortSignal.timeout(6000),
     cache: 'no-store',
   })

@@ -52,6 +52,7 @@ import { OffersView }    from '@/components/tour/OffersView'
 import { BudgetView }    from '@/components/tour/BudgetView'
 import { SettlementsView } from '@/components/tour/SettlementsView'
 import { InboxPanel } from '@/components/dashboard/InboxPanel'
+import { ARTIST_SIDE_NAME, PRODUCT_NAME } from '@/lib/brand'
 
 export function StudioApp() {
   const { view, section, songsSub: rawSongsSub, contentSub: rawContentSub, bizSub: rawBizSub, tourSub: rawTourSub, clientId, data, role, hasAccess, isShareOnly, accessibleClientIds, openModal, isLoading } = useStore()
@@ -67,7 +68,7 @@ export function StudioApp() {
     return (
       <div className="flex items-center justify-center h-screen bg-canvas">
         <div className="text-center">
-          <div className="font-serif font-semibold text-xl tracking-tight mb-3">Mgmt Studio</div>
+          <div className="font-serif font-semibold text-xl tracking-tight mb-3">{PRODUCT_NAME}</div>
           <div className="w-5 h-5 border-2 border-gray-200 border-t-gray-500 rounded-full animate-spin mx-auto" />
         </div>
       </div>
@@ -171,7 +172,7 @@ export function StudioApp() {
 
       {/* Footer */}
       <div className="flex-shrink-0 text-center py-1.5 text-[10px] uppercase tracking-widest text-gray-300 border-t border-gray-100">
-        Mgmt Studio · Music Management · v0.1
+        {role === 'artist' ? `${ARTIST_SIDE_NAME} · powered by ${PRODUCT_NAME}` : `${PRODUCT_NAME} · Music Management · v0.1`}
       </div>
     </div>
   )

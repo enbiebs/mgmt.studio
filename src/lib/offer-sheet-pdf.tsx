@@ -7,6 +7,7 @@
 import { Document, Page, Text, View, StyleSheet, renderToBuffer } from '@react-pdf/renderer'
 import type { OfferSheet } from '@/types'
 import { sheetRows, dealGroups, pctLabel, money } from '@/lib/offer-sheet'
+import { PRODUCT_NAME } from '@/lib/brand'
 
 // The PDF's built-in fonts only carry Western European characters. Anything else is
 // swapped for its plain letter (accents dropped) or a "?", rather than printing garbage.
@@ -65,7 +66,7 @@ function OfferSheetPdf({ sheet }: { sheet: OfferSheet }) {
   const sn = sheet.snapshot
   const t = pdfSafe
   return (
-    <Document title={t(`Offer sheet - ${sn.offer.venue} - V${sheet.version}`)} author="Mgmt Studio">
+    <Document title={t(`Offer sheet - ${sn.offer.venue} - V${sheet.version}`)} author={PRODUCT_NAME}>
       <Page size="LETTER" style={styles.page}>
         <View style={styles.topRow}>
           <View>
