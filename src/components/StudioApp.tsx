@@ -13,6 +13,7 @@
 import { useStore } from '@/lib/store'
 import { effectiveSub, shareOnlyTabs } from '@/lib/item-access'
 import { canOpenSection, visibleTourTabs } from '@/lib/tour-tabs'
+import { CompanyView } from '@/components/company/CompanyView'
 import { AppHeader }  from '@/components/layout/AppHeader'
 import { Subnav }     from '@/components/layout/Subnav'
 import { Rail }       from '@/components/layout/Rail'
@@ -62,7 +63,7 @@ import { ProfileView } from '@/components/profile/ProfileView'
 import { ARTIST_SIDE_NAME, PRODUCT_NAME } from '@/lib/brand'
 
 export function StudioApp() {
-  const { view, section, songsSub: rawSongsSub, contentSub: rawContentSub, bizSub: rawBizSub, tourSub: rawTourSub, clientId, data, role, hasAccess, isShareOnly, accessibleClientIds, openModal, isLoading } = useStore()
+  const { view, section, songsSub: rawSongsSub, contentSub: rawContentSub, bizSub: rawBizSub, tourSub: rawTourSub, clientId, data, role, hasAccess, isShareOnly, accessibleClientIds, openModal, isLoading, goToCompany } = useStore()
   // Someone with only a shared item lands on a tab that shows it, not an empty one.
   const allowedTabs = isShareOnly(section) ? shareOnlyTabs(section, data.clients.find(c => c.id === clientId)) : undefined
   const songsSub = effectiveSub(rawSongsSub, allowedTabs) as typeof rawSongsSub
@@ -106,6 +107,9 @@ export function StudioApp() {
                   <h2 className="font-serif text-xl font-medium leading-tight">Your artists</h2>
                   <p className="text-sm text-gray-400 mt-0.5">{roster.length} client{roster.length !== 1 ? 's' : ''}</p>
                 </div>
+                {role === 'manager' && (
+                  <button onClick={goToCompany} className="text-xs font-medium text-accent hover:underline">Your team and what they can open →</button>
+                )}
               </div>
 
               <div className="grid grid-cols-[repeat(auto-fill,minmax(min(310px,100%),1fr))] gap-4">
@@ -130,6 +134,9 @@ export function StudioApp() {
             </main>
           )
         })()}
+
+        {/* ── Company: everyone's access to every artist (managers) ── */}
+        {view === 'company' && role === 'manager' && <CompanyView />}
 
         {/* ── Studio: Artist portal ── */}
         {view === 'studio' && role === 'artist' && <ArtistView />}

@@ -19,6 +19,8 @@ export function Rail() {
   const data = useStore(s => s.data)
   const accessibleClientIds = useStore(s => s.accessibleClientIds)
   const goToDashboard = useStore(s => s.goToDashboard)
+  const goToCompany = useStore(s => s.goToCompany)
+  const isManager = useStore(s => s.role === 'manager')
   const openClient = useStore(s => s.openClient)
   const setSection = useStore(s => s.setSection)
   const inbox = useInbox().total
@@ -36,12 +38,22 @@ export function Rail() {
 
       <button
         onClick={goToDashboard}
-        aria-current={!inClient ? 'page' : undefined}
-        className={`${ITEM} ${!inClient ? ITEM_ON : ITEM_OFF}`}
+        aria-current={!inClient && view !== 'company' ? 'page' : undefined}
+        className={`${ITEM} ${!inClient && view !== 'company' ? ITEM_ON : ITEM_OFF}`}
       >
         <Icon name="home" /> Home
         {inbox > 0 && <span className="ml-auto px-1.5 rounded-full bg-accent text-white text-[10px] font-semibold leading-4">{inbox}</span>}
       </button>
+
+      {isManager && (
+        <button
+          onClick={goToCompany}
+          aria-current={view === 'company' ? 'page' : undefined}
+          className={`${ITEM} ${view === 'company' ? ITEM_ON : ITEM_OFF}`}
+        >
+          <Icon name="team" /> Company
+        </button>
+      )}
 
       {inClient ? (
         <>

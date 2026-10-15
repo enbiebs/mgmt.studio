@@ -421,6 +421,8 @@ export interface WorkspacePerson {
   invited?: boolean
   /** The directory person (their card on the Team page) this login belongs to, if any. */
   personId?: string
+  /** Their login email, lower-case. Only a manager is given it; it is how a login and a team card are recognised as the same person. */
+  email?: string
 }
 
 // ── Agenda (talking points / steps around one to-do or project) ──

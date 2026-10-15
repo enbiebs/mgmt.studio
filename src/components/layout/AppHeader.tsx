@@ -85,6 +85,12 @@ export function AppHeader() {
                 <span>/</span>
                 <span className="text-gray-900 font-medium">{sectionLabel(section)}</span>
               </>
+            ) : view === 'company' ? (
+              <>
+                <button onClick={goToDashboard} className="hover:text-gray-700 transition-colors">Home</button>
+                <span>/</span>
+                <span className="text-gray-900 font-medium">Company</span>
+              </>
             ) : (
               <span className="text-gray-900 font-medium">Home</span>
             )}

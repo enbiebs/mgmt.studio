@@ -817,8 +817,22 @@ export async function loadWorkspacePeople(): Promise<WorkspacePerson[]> {
   const supabase = createClient()
   const { data, error } = await supabase.rpc('workspace_people')
   if (error) throw error
-  return ((data ?? []) as { member_id: string; user_id: string; label: string; role: string; all_clients: boolean; client_ids: string[]; invited?: boolean; person_id?: string | null }[])
-    .map(r => ({ memberId: r.member_id, userId: r.user_id, label: r.label, role: r.role as UserRole, allClients: r.all_clients, clientIds: r.client_ids ?? [], invited: !!r.invited, personId: r.person_id ?? undefined }))
+  return ((data ?? []) as { member_id: string; user_id: string; label: string; role: string; all_clients: boolean; client_ids: string[]; invited?: boolean; person_id?: string | null; email?: string | null }[])
+    .map(r => ({ memberId: r.member_id, userId: r.user_id, label: r.label, role: r.role as UserRole, allClients: r.all_clients, clientIds: r.client_ids ?? [], invited: !!r.invited, personId: r.person_id ?? undefined, email: r.email ?? undefined }))
+}
+
+/** The company's name (the workspace). Everyone in the company can read it. */
+export async function loadCompanyName(workspaceId: string): Promise<string> {
+  const { data, error } = await createClient().from('workspaces').select('name').eq('id', workspaceId).maybeSingle()
+  if (error) throw error
+  return data?.name ?? ''
+}
+
+/** Renames the company. Only a manager of it can; throws when the database refuses. */
+export async function renameCompany(workspaceId: string, name: string): Promise<void> {
+  const { data, error } = await createClient().from('workspaces').update({ name }).eq('id', workspaceId).select('id')
+  if (error) throw error
+  if (!data || data.length === 0) throw new Error('Only a manager can rename the company')
 }
 
 export async function loadItemAccess(): Promise<ItemException[]> {

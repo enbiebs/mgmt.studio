@@ -74,6 +74,7 @@ export function CommandBar() {
     const current = roster.find(c => c.id === clientId)
 
     out.push({ id: 'home', group: 'Go to', icon: 'home', label: 'Home', hint: 'All artists and what needs you', run: () => useStore.getState().goToDashboard() })
+    if (role === 'manager') out.push({ id: 'company', group: 'Go to', icon: 'team', label: 'Company', hint: 'Your people and what each can open', keywords: 'team people access invite roster', run: () => useStore.getState().goToCompany() })
     if (view === 'studio' && current) {
       for (const g of nav) for (const i of g.items) {
         out.push({ id: `go-${i.key}`, group: 'Go to', icon: i.icon, label: i.label, hint: current.name, run: () => useStore.getState().setSection(i.key) })
