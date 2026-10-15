@@ -167,6 +167,78 @@ export function describeLink(client: Client, link: NonNullable<Task['link']>): s
   }
 }
 
+// ── "About" menu: a to-do can be about anything ─────────────────────────────────────────────────
+
+export interface AboutOption { value: string; label: string }
+export interface AboutGroup { label: string; options: AboutOption[] }
+
+const LINK_TYPES: TaskLinkType[] = ['show', 'offer', 'invoice', 'expense', 'contract', 'song', 'project']
+const ABOUT_CAP = 15
+
+/**
+ * Everything a to-do for this artist could be about, grouped by kind: shows, offers, songs, invoices, bills,
+ * contracts, projects. A kind only appears if the person may EDIT the section such a to-do is saved under (a
+ * to-do about a show is saved under Tour, an invoice under Finance, and so on, which is also what the database
+ * requires). Each list stays short: what is still open, soonest first. Values look like "invoice:abc123".
+ */
+export function aboutOptions(client: Client, canEdit: (section: MainSection) => boolean, today: string): AboutGroup[] {
+  const ok = (type: TaskLinkType) => canEdit(taskDestination({ type, id: '' }).section)
+  const place = (venue?: string, city?: string) => [venue, city].filter(Boolean).join(' · ')
+  const md = (d?: string) => (d ? d.slice(5) : '')
+  const byDate = (a?: string, b?: string) => (a ?? '9999').localeCompare(b ?? '9999')
+  const groups: AboutGroup[] = []
+  const add = (label: string, options: AboutOption[]) => { if (options.length) groups.push({ label, options }) }
+
+  if (ok('show')) {
+    add('Shows', (client.tour?.shows ?? [])
+      .filter(s => s.status !== 'cancelled' && !s.historyOnly && s.date >= today)
+      .sort((a, b) => a.date.localeCompare(b.date)).slice(0, 25)
+      .map(s => ({ value: `show:${s.id}`, label: `${place(s.venue, s.city) || 'Show'} · ${md(s.date)}` })))
+  }
+  if (ok('offer')) {
+    add('Offers', (client.agentData?.offers ?? [])
+      .filter(o => o.status === 'inquiry' || o.status === 'hold')
+      .sort((a, b) => byDate(a.date, b.date)).slice(0, ABOUT_CAP)
+      .map(o => ({ value: `offer:${o.id}`, label: `${place(o.venue, o.city) || 'Offer'} · ${md(o.date)}` })))
+  }
+  if (ok('song')) {
+    add('Songs', (client.songs?.albums ?? []).flatMap(a => a.tracks).slice(0, 30)
+      .map(t => ({ value: `song:${t.id}`, label: t.title || 'Untitled' })))
+  }
+  if (ok('invoice')) {
+    add('Invoices', (client.finance?.invoices ?? [])
+      .filter(i => i.status !== 'paid' && i.status !== 'void')
+      .sort((a, b) => byDate(a.dueDate, b.dueDate)).slice(0, ABOUT_CAP)
+      .map(i => ({ value: `invoice:${i.id}`, label: [i.number, i.to].filter(Boolean).join(' · ') || 'Invoice' })))
+  }
+  if (ok('expense')) {
+    add('Bills', (client.finance?.expenses ?? [])
+      .filter(e => !e.paid)
+      .sort((a, b) => byDate(a.dueDate ?? a.date, b.dueDate ?? b.date)).slice(0, ABOUT_CAP)
+      .map(e => ({ value: `expense:${e.id}`, label: e.vendor || e.description || 'Bill' })))
+  }
+  if (ok('contract')) {
+    add('Contracts', (client.legal?.contracts ?? [])
+      .filter(c => c.status !== 'expired' && c.status !== 'terminated').slice(0, ABOUT_CAP)
+      .map(c => ({ value: `contract:${c.id}`, label: c.title || 'Contract' })))
+  }
+  if (ok('project')) {
+    add('Projects', (client.projects ?? [])
+      .filter(p => p.status !== 'done').slice(0, ABOUT_CAP)
+      .map(p => ({ value: `project:${p.id}`, label: p.title || 'Project' })))
+  }
+  return groups
+}
+
+/** "invoice:abc123" back into a link (undefined for anything that is not a known kind with an id). */
+export function parseAbout(value: string): { type: TaskLinkType; id: string } | undefined {
+  const i = value.indexOf(':')
+  if (i < 1) return undefined
+  const type = value.slice(0, i) as TaskLinkType
+  const id = value.slice(i + 1)
+  return LINK_TYPES.includes(type) && id ? { type, id } : undefined
+}
+
 /** Where "Open" takes you for a to-do that points at something. */
 export function taskDestination(link: NonNullable<Task['link']>): { section: MainSection; sub?: string; showId?: string } {
   const map: Record<TaskLinkType, { section: MainSection; sub?: string }> = {

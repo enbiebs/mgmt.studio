@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
+import { ItemTodos } from '@/components/dashboard/ItemTodos'
 import { stageLabel, stageBadgeClass, isStale, uid, RELEASE_TYPE_LABEL } from '@/lib/utils'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { TrackWaveform } from './TrackWaveform'
@@ -384,7 +385,10 @@ function TrackDetailModal({ track, onClose }: { track: Track; onClose: () => voi
               {stageLabel(track.stage)} · V{track.version} · touched {track.touched}
             </div>
           </div>
-          <button onClick={onClose} className="text-gray-300 hover:text-gray-500 flex-shrink-0 text-lg leading-none">✕</button>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <ItemTodos link={{ type: 'song', id: track.id }} suggest={`Follow up: ${track.title}`} />
+            <button onClick={onClose} className="text-gray-300 hover:text-gray-500 text-lg leading-none">✕</button>
+          </div>
         </div>
 
         <div className="flex gap-0.5 px-6 pt-3 flex-shrink-0">

@@ -1,6 +1,6 @@
 // Checks the to-do logic (grouping, whose list, quick-add words).  Run with:  npx tsx scripts/check-tasks.ts
 import assert from 'node:assert/strict'
-import { BUCKET_ORDER, autoBucket, bucketOf, buildToday, describeLink, dueLabel, isMine, parseQuickTodo, peopleFor, projectBucket, taskDestination, taskSection, todoPrefix } from '../src/lib/tasks'
+import { BUCKET_ORDER, aboutOptions, autoBucket, bucketOf, buildToday, describeLink, dueLabel, isMine, parseAbout, parseQuickTodo, peopleFor, projectBucket, taskDestination, taskSection, todoPrefix } from '../src/lib/tasks'
 import type { InboxItem } from '../src/lib/inbox'
 import type { Client, Project, Task, WorkspacePerson } from '../src/types'
 
@@ -120,6 +120,71 @@ assert.equal(describeLink(rich, { type: 'contract', id: 'c1' }), 'Label deal')
 assert.equal(describeLink(rich, { type: 'project', id: 'p1' }), 'Press photos')
 assert.equal(describeLink(rich, { type: 'song', id: 't1' }), 'Golden Hour')
 assert.equal(describeLink(rich, { type: 'show', id: 'gone' }), undefined)           // the thing was removed: say nothing
+
+// ── the "About" menu: a to-do can be about anything ──
+const artist = {
+  tour: { shows: [
+    { id: 's-late', venue: 'Tresor', city: 'Berlin', date: '2026-11-10', status: 'confirmed' },
+    { id: 's-soon', venue: 'Fabric', city: 'London', date: '2026-10-20', status: 'confirmed' },
+    { id: 's-past', venue: 'Old', city: 'Town', date: '2026-09-01', status: 'confirmed' },
+    { id: 's-off', venue: 'Cancelled', city: 'X', date: '2026-10-25', status: 'cancelled' },
+    { id: 's-hist', venue: 'History', city: 'Y', date: '2026-10-26', status: 'confirmed', historyOnly: true },
+  ] },
+  agentData: { offers: [
+    { id: 'o-open', venue: 'Razzmatazz', city: 'Barcelona', date: '2026-12-01', status: 'inquiry' },
+    { id: 'o-hold', venue: 'Sound', city: 'LA', date: '2026-11-15', status: 'hold' },
+    { id: 'o-done', venue: 'Berghain', city: 'Berlin', date: '2026-10-30', status: 'confirmed' },
+  ] },
+  songs: { albums: [{ tracks: [{ id: 't1', title: 'Golden Hour' }, { id: 't2', title: '' }] }, { tracks: [{ id: 't3', title: 'Long Time' }] }] },
+  finance: {
+    invoices: [
+      { id: 'i-late', number: 'INV-2', to: 'Sound LA', status: 'sent', dueDate: '2026-11-01' },
+      { id: 'i-early', number: 'INV-1', to: 'Fabric', status: 'overdue', dueDate: '2026-10-01' },
+      { id: 'i-paid', number: 'INV-0', to: 'Old', status: 'paid', dueDate: '2026-09-01' },
+      { id: 'i-void', number: 'INV-X', to: 'Nobody', status: 'void', dueDate: '2026-09-02' },
+    ],
+    expenses: [{ id: 'e-open', vendor: 'Hertz', description: 'Van', paid: false, date: '2026-10-10' }, { id: 'e-paid', vendor: 'Done', description: '', paid: true, date: '2026-10-01' }],
+  },
+  legal: { contracts: [{ id: 'c-live', title: 'Label deal', status: 'signed' }, { id: 'c-old', title: 'Old deal', status: 'expired' }, { id: 'c-end', title: 'Ended', status: 'terminated' }] },
+  projects: [{ id: 'p-open', title: 'Press photos', status: 'in-progress' }, { id: 'p-done', title: 'Done thing', status: 'done' }],
+} as unknown as Client
+const everything = () => true
+const groupsOf = (canEdit: (s: Parameters<typeof aboutOptions>[1] extends (s: infer S) => boolean ? S : never) => boolean) => aboutOptions(artist, canEdit, TODAY)
+const all = groupsOf(everything)
+assert.deepEqual(all.map(g => g.label), ['Shows', 'Offers', 'Songs', 'Invoices', 'Bills', 'Contracts', 'Projects'])
+const labelsOf = (group: string) => all.find(g => g.label === group)!.options.map(o => o.label)
+// shows: upcoming only (no cancelled, history-only or past ones), soonest first
+assert.deepEqual(labelsOf('Shows'), ['Fabric · London · 10-20', 'Tresor · Berlin · 11-10'])
+// offers: only the ones still being worked on, soonest first
+assert.deepEqual(labelsOf('Offers'), ['Sound · LA · 11-15', 'Razzmatazz · Barcelona · 12-01'])
+// songs across every release, untitled ones named
+assert.deepEqual(labelsOf('Songs'), ['Golden Hour', 'Untitled', 'Long Time'])
+// invoices not yet paid, earliest due first; bills not yet paid; contracts that are still alive; projects not done
+assert.deepEqual(labelsOf('Invoices'), ['INV-1 · Fabric', 'INV-2 · Sound LA'])
+assert.deepEqual(labelsOf('Bills'), ['Hertz'])
+assert.deepEqual(labelsOf('Contracts'), ['Label deal'])
+assert.deepEqual(labelsOf('Projects'), ['Press photos'])
+// every value turns back into the right link
+for (const g of all) for (const o of g.options) assert.ok(parseAbout(o.value), `${o.value} should parse`)
+assert.deepEqual(parseAbout('invoice:i-early'), { type: 'invoice', id: 'i-early' })
+assert.deepEqual(parseAbout('song:t1'), { type: 'song', id: 't1' })
+assert.deepEqual(parseAbout('expense:e-open'), { type: 'expense', id: 'e-open' })
+assert.equal(parseAbout(''), undefined); assert.equal(parseAbout('vault:x'), undefined); assert.equal(parseAbout('show:'), undefined); assert.equal(parseAbout('nonsense'), undefined)
+// only what the person may edit: Tour covers shows and offers, Finance covers invoices and bills, and so on
+assert.deepEqual(groupsOf(s => s === 'finance').map(g => g.label), ['Invoices', 'Bills'])
+assert.deepEqual(groupsOf(s => s === 'tour').map(g => g.label), ['Shows', 'Offers'])
+assert.deepEqual(groupsOf(s => s === 'songs').map(g => g.label), ['Songs'])
+assert.deepEqual(groupsOf(s => s === 'legal').map(g => g.label), ['Contracts'])
+assert.deepEqual(groupsOf(s => s === 'projects').map(g => g.label), ['Projects'])
+assert.deepEqual(groupsOf(() => false), [])
+// the menu agrees with where each kind is saved, so the database accepts what the menu offers
+for (const t of ['show', 'offer', 'invoice', 'expense', 'contract', 'song', 'project'] as const) {
+  const section = taskSection({ type: t, id: 'x' })
+  assert.ok(groupsOf(s => s === section).some(g => g.options.some(o => o.value.startsWith(t + ':'))), `${t} should be offered to someone who can edit ${section}`)
+}
+// lists stay short
+const many = { ...artist, projects: Array.from({ length: 40 }, (_, i) => ({ id: 'p' + i, title: 'P' + i, status: 'in-progress' })) } as unknown as Client
+assert.equal(aboutOptions(many, everything, TODAY).find(g => g.label === 'Projects')!.options.length, 15)
 
 // ── who a to-do can be given to ──
 const person = (userId: string, label: string, extra: Partial<WorkspacePerson> = {}): WorkspacePerson =>
