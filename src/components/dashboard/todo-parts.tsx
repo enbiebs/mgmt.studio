@@ -1,11 +1,12 @@
 'use client'
 // Small pieces shared by the Today list and the per-item to-do window.
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { describeLink, dueLabel, peopleFor, taskDestination, taskSection } from '@/lib/tasks'
 import { useMe } from '@/lib/useToday'
 import { today } from '@/lib/utils'
+import { AgendaButton, AgendaPanel } from './AgendaPanel'
 import type { BizSub, Task, TourSub } from '@/types'
 
 /**
@@ -57,7 +58,8 @@ export function DueButton({ value, late, disabled, onChange }: { value?: string;
   )
 }
 
-export const ROW = 'flex flex-wrap md:flex-nowrap items-start gap-x-3 gap-y-1.5 py-2.5 border-t border-gray-50 first:border-t-0'
+export const ROW_INNER = 'flex flex-wrap md:flex-nowrap items-start gap-x-3 gap-y-1.5 py-2.5'
+export const ROW = `${ROW_INNER} border-t border-gray-50 first:border-t-0`
 export const ChipName = ({ name }: { name: string }) => <span className="text-[11px] font-semibold text-gray-400 mr-1.5">{name}</span>
 
 // ── A to-do somebody wrote down ───────────────────────────────────────────────
@@ -70,6 +72,7 @@ export function TaskRow({ task, clientId, clientName, me }: { task: Task; client
     const c = s.data.clients.find(x => x.id === clientId)
     return c && task.link ? describeLink(c, task.link) : undefined
   })
+  const [agendaOpen, setAgendaOpen] = useState(false)
   const day = today()
   const late = !!task.dueDate && task.dueDate < day
   const mayChange = task.assigneeId === me || hasAccess(taskSection(task.link), clientId, true)
@@ -91,7 +94,8 @@ export function TaskRow({ task, clientId, clientName, me }: { task: Task; client
   }
 
   return (
-    <div className={ROW}>
+    <div className="border-t border-gray-50 first:border-t-0">
+    <div className={ROW_INNER}>
       <button
         role="checkbox" aria-checked={false} aria-label={`Mark “${task.title}” done`}
         disabled={!mayChange} onClick={() => toggleTask(clientId, task.id)}
@@ -112,6 +116,7 @@ export function TaskRow({ task, clientId, clientName, me }: { task: Task; client
           <option value="">Nobody yet</option>
           {given.map(p => <option key={p.userId} value={p.userId}>{p.userId === me ? 'Me' : p.label}</option>)}
         </select>
+        <AgendaButton clientId={clientId} itemType="task" itemId={task.id} open={agendaOpen} onToggle={() => setAgendaOpen(v => !v)} />
         {task.link && <button onClick={open} className="px-2 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50">Open</button>}
         {mayChange && (
           <button
@@ -123,6 +128,8 @@ export function TaskRow({ task, clientId, clientName, me }: { task: Task; client
           </button>
         )}
       </div>
+    </div>
+    {agendaOpen && <div className="pl-[30px]"><AgendaPanel clientId={clientId} itemType="task" itemId={task.id} canEdit={mayChange} /></div>}
     </div>
   )
 }

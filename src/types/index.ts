@@ -336,6 +336,7 @@ export interface Client {
   }
   projects:    Project[]
   artistTodos: ArtistTodo[]
+  agenda?:     AgendaPoint[]    // the management side's agenda points for this artist's to-dos and projects (never the artist's own login)
   tasks?:      Task[]           // the management side's to-dos for this artist (see lib/tasks.ts); never shown to the artist's own login
   analytics:   AnalyticsData
   agentData:   AgentData
@@ -413,6 +414,17 @@ export interface WorkspacePerson {
   role: UserRole
   allClients: boolean
   clientIds: string[]
+}
+
+// ── Agenda (talking points / steps around one to-do or project) ──
+export type AgendaItemType = 'task' | 'project'
+export interface AgendaPoint {
+  id: string
+  itemType: AgendaItemType
+  itemId: string
+  text: string
+  done: boolean
+  position: number
 }
 
 // ── Analytics ───────────────────────────────────────────────

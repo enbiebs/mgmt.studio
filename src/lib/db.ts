@@ -17,7 +17,7 @@ import type {
   CrewMember, GuestListEntry, TravelItem, Currency, Person, PersonActivity, CatalogWork,
   LegalTemplate, LegalTemplateClause, Stage, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
   ArtistAccount, ArtistProfile, Venue, FlightLeg, Vendor, Run, Budget, CrewRate, FinanceSettings, BudgetLine, BudgetCommission, BudgetSnapshot, Currency as Cur,
-  OfferSheet, OfferTerms, Settlement, Task, TaskLinkType, TaskSource, WorkspacePerson,
+  OfferSheet, OfferTerms, Settlement, Task, TaskLinkType, TaskSource, WorkspacePerson, AgendaPoint, AgendaItemType,
 } from '@/types'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
 import { EMPTY_AGENT }     from '@/lib/agent-demo'
@@ -54,7 +54,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems, flightLegs, travelItemShows,
     people, bankAccounts, bankTransactions,
     trackRounds, trackNotes, trackNoteReplies, trackCredits, venues, vendors,
-    runsQ, budgetsQ, crewRatesQ, financeSettingsQ, expenseShowsQ, offerSheetsQ, settlementsQ, settlementShowsQ, profilesQ, accountsQ, tasksQ,
+    runsQ, budgetsQ, crewRatesQ, financeSettingsQ, expenseShowsQ, offerSheetsQ, settlementsQ, settlementShowsQ, profilesQ, accountsQ, tasksQ, agendaQ,
   ] = await Promise.all([
     supabase.from('albums').select('*').in('client_id', clientIds),
     supabase.from('tracks').select('*'),
@@ -100,6 +100,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     supabase.from('artist_profiles').select('client_id, data').in('client_id', clientIds),
     supabase.from('artist_accounts').select('*').in('client_id', clientIds).order('platform'),
     supabase.from('tasks').select('*').in('client_id', clientIds),
+    supabase.from('agenda_points').select('*').in('client_id', clientIds).order('position').order('created_at'),
   ])
 
   const albumRows     = albums.data       ?? []
@@ -680,6 +681,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       artistTodos: cTodos,
       accounts:    ((accountsQ.data ?? []) as AccountRow[]).filter(r => r.client_id === c.id).map(rowToAccount),
       tasks:       ((tasksQ.data ?? []) as TaskRow[]).filter(r => r.client_id === c.id).map(rowToTask),
+      agenda:      ((agendaQ.data ?? []) as AgendaRow[]).filter(r => r.client_id === c.id).map(rowToAgendaPoint),
       profile:     ((profilesQ.data ?? []) as { client_id: string; data: ArtistProfile }[]).find(p => p.client_id === c.id)?.data,
       agentData:   { offers: cOffers },
       legal:       { contracts: cContracts },
@@ -771,6 +773,36 @@ export async function saveTask(task: Task) {
 export async function deleteTaskRow(taskId: string) {
   const supabase = createClient()
   const { error } = await supabase.from('tasks').delete().eq('id', taskId)
+  if (error) throw error
+}
+
+// ── Agenda points (see lib/agenda.ts) ──────────────────────
+export interface AgendaRow { id: string; client_id: string; item_type: string; item_id: string; text: string; done: boolean; position: number }
+
+export function rowToAgendaPoint(r: AgendaRow): AgendaPoint {
+  return { id: r.id, itemType: r.item_type as AgendaItemType, itemId: r.item_id, text: r.text, done: r.done, position: r.position }
+}
+
+export async function insertAgendaPoints(points: AgendaPoint[], clientId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('agenda_points').insert(points.map(p => ({
+    id: p.id, client_id: clientId, item_type: p.itemType, item_id: p.itemId, text: p.text, done: p.done, position: p.position,
+  })))
+  if (error) throw error
+}
+
+// Ticking or editing an existing point is a plain UPDATE (an upsert is also an insert, which needs edit access).
+// An update that changed nothing comes back with no rows and is reported as a failure.
+export async function saveAgendaPoint(p: AgendaPoint) {
+  const supabase = createClient()
+  const { data, error } = await supabase.from('agenda_points').update({ text: p.text, done: p.done, position: p.position }).eq('id', p.id).select('id')
+  if (error) throw error
+  if (!data || data.length === 0) throw new Error('That agenda point could not be saved')
+}
+
+export async function deleteAgendaPointRow(id: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('agenda_points').delete().eq('id', id)
   if (error) throw error
 }
 
