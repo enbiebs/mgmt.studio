@@ -50,7 +50,7 @@ function ShowsEditor({ item, onChange }: { item: TravelItem; onChange: (showIds:
         <div className="relative">
           <button
             onClick={() => setPickerOpen(v => !v)}
-            className="text-[10px] text-gray-400 hover:text-blue-500 font-medium px-1"
+            className="text-[10px] text-gray-400 hover:text-accent font-medium px-1"
           >+ Link show</button>
           {pickerOpen && (
             <div className="absolute left-0 top-full mt-1 bg-canvas border border-gray-100 rounded-lg shadow-lg min-w-[160px] max-h-40 overflow-auto z-50">
@@ -108,7 +108,7 @@ function TravelersEditor({ item, onChange }: { item: TravelItem; onChange: (pers
             {editable && (
               <button
                 onClick={() => onChange(linkedIds.filter(id => id !== p.id))}
-                className="text-blue-400 hover:text-red-400"
+                className="text-accent hover:text-red-400"
               >✕</button>
             )}
           </span>
@@ -118,7 +118,7 @@ function TravelersEditor({ item, onChange }: { item: TravelItem; onChange: (pers
         <div className="relative">
           <button
             onClick={() => setPickerOpen(v => !v)}
-            className="text-[10px] text-gray-400 hover:text-blue-500 font-medium px-1"
+            className="text-[10px] text-gray-400 hover:text-accent font-medium px-1"
           >+ Link</button>
           {pickerOpen && (
             <div className="absolute left-0 top-full mt-1 bg-canvas border border-gray-100 rounded-lg shadow-lg min-w-[140px] max-h-40 overflow-auto z-50">
@@ -287,7 +287,7 @@ function FlightCard({ item, onRemove, onLink, onLinkShows, onAddLeg }: {
         ) : (
           <button
             onClick={() => setAddingLeg(true)}
-            className="mt-2 text-[11px] text-blue-500 hover:text-blue-600 font-medium"
+            className="mt-2 text-[11px] text-accent hover:text-accent-hover font-medium"
           >
             + Add connecting flight
           </button>
@@ -310,7 +310,7 @@ function FlightCard({ item, onRemove, onLink, onLinkShows, onAddLeg }: {
         {item.confirmationCode && (
           <div>
             <div className="text-[10px] text-gray-400 uppercase tracking-wide">Confirmation</div>
-            <div className="text-xs font-mono font-medium text-blue-600">{item.confirmationCode}</div>
+            <div className="text-xs font-mono font-medium text-accent">{item.confirmationCode}</div>
           </div>
         )}
         {item.cost && (
@@ -358,7 +358,7 @@ function AddLegForm({ onSave, onCancel }: { onSave: (leg: FlightLeg) => void; on
       <input type="datetime-local" value={departure} onChange={e => setDeparture(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-canvas" />
       <input type="datetime-local" value={arrival} onChange={e => setArrival(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-canvas" />
       <div className="col-span-2 flex gap-1.5 mt-0.5">
-        <button onClick={handleSave} disabled={!from || !to} className="flex-1 px-2 py-1 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 disabled:opacity-40 transition-colors">Add leg</button>
+        <button onClick={handleSave} disabled={!from || !to} className="flex-1 px-2 py-1 bg-accent text-white text-xs font-medium rounded-lg hover:bg-accent-hover disabled:opacity-40 transition-colors">Add leg</button>
         <button onClick={onCancel} className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700">Cancel</button>
       </div>
     </div>
@@ -420,7 +420,7 @@ function HotelCard({ item, onRemove, onLink, onLinkShows }: {
         {item.confirmationCode && (
           <div>
             <div className="text-[10px] text-gray-400 uppercase tracking-wide">Confirmation</div>
-            <div className="text-xs font-mono font-medium text-blue-600">{item.confirmationCode}</div>
+            <div className="text-xs font-mono font-medium text-accent">{item.confirmationCode}</div>
           </div>
         )}
         {item.cost && (
@@ -520,7 +520,7 @@ function GroundCard({ item, onRemove, onLink, onLinkShows }: {
         {item.confirmationCode && (
           <div>
             <div className="text-[10px] text-gray-400 uppercase tracking-wide">Confirmation</div>
-            <div className="text-xs font-mono font-medium text-blue-600">{item.confirmationCode}</div>
+            <div className="text-xs font-mono font-medium text-accent">{item.confirmationCode}</div>
           </div>
         )}
         {item.cost && (
@@ -567,7 +567,7 @@ function SectionHeader({
       {editable && (
         <button
           onClick={onAdd}
-          className="text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors"
+          className="text-xs text-accent hover:text-accent-hover font-medium transition-colors"
         >
           + Add
         </button>
@@ -589,7 +589,7 @@ function EmptySlot({ kind, onAdd }: { kind: string; onAdd: () => void }) {
   return (
     <button
       onClick={onAdd}
-      className="w-full border-2 border-dashed border-gray-100 rounded-xl p-4 text-center text-xs text-gray-400 hover:border-blue-200 hover:text-blue-400 transition-colors"
+      className="w-full border-2 border-dashed border-gray-100 rounded-xl p-4 text-center text-xs text-gray-400 hover:border-blue-200 hover:text-accent transition-colors"
     >
       + Add {kind}
     </button>
@@ -742,7 +742,7 @@ export function TravelView() {
         <div className="flex-1 overflow-y-auto">
           <button
             onClick={() => { setViewingGeneral(true); setSelectedShowId(null); setAddMode(null); pane.openDetail() }}
-            className={`w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors ${effectiveGeneral ? 'bg-blue-50' : ''}`}
+            className={`w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors ${effectiveGeneral ? 'bg-accent-soft' : ''}`}
           >
             <div className="flex items-start gap-2">
               <div className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${SHOW_DOT[generalStatus]}`} />
@@ -765,7 +765,7 @@ export function TravelView() {
               <button
                 key={s.id}
                 onClick={() => { selectShow(s.id); setAddMode(null) }}
-                className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${!effectiveGeneral && show?.id === s.id ? 'bg-blue-50' : ''}`}
+                className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${!effectiveGeneral && show?.id === s.id ? 'bg-accent-soft' : ''}`}
               >
                 <div className="flex items-start gap-2">
                   <div className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${SHOW_DOT[tStatus]}`} />

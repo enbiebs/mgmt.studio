@@ -140,7 +140,7 @@ export function CalendarView() {
         )}
         {agendaDays.map(d => (
           <div key={d} className="mb-4">
-            <div className={`text-[11px] font-bold uppercase tracking-wider mb-1.5 ${d === todayStr ? 'text-blue-500' : 'text-gray-400'}`}>
+            <div className={`text-[11px] font-bold uppercase tracking-wider mb-1.5 ${d === todayStr ? 'text-accent' : 'text-gray-400'}`}>
               {dayLabel(d)}{d === todayStr && ' · Today'}
             </div>
             <div className="space-y-1.5">
@@ -186,10 +186,10 @@ export function CalendarView() {
               <div
                 key={i}
                 className={`relative min-h-[88px] p-1.5 group ${
-                  !current ? 'bg-gray-50' : isToday ? 'bg-blue-50' : 'bg-canvas'
+                  !current ? 'bg-gray-50' : isToday ? 'bg-accent-soft' : 'bg-canvas'
                 }`}
               >
-                <div className={`text-xs font-semibold mb-1 ${isToday ? 'text-blue-600' : 'text-gray-400'}`}>{date.getDate()}</div>
+                <div className={`text-xs font-semibold mb-1 ${isToday ? 'text-accent' : 'text-gray-400'}`}>{date.getDate()}</div>
                 {dayEvents.map(e => (
                   <div
                     key={e.id}
@@ -344,7 +344,7 @@ function GoogleCalendarPanel({ clientId }: { clientId: string }) {
               <button
                 onClick={connect}
                 disabled={busy}
-                className="w-full px-2.5 py-1.5 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
+                className="w-full px-2.5 py-1.5 bg-accent text-white font-medium rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50"
               >
                 {busy ? 'Connecting…' : 'Connect Google Calendar'}
               </button>

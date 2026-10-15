@@ -221,7 +221,7 @@ export function PaymentsView() {
                     <a
                       href={`/api/bills/file?clientId=${encodeURIComponent(client.id)}&path=${encodeURIComponent(e.billFilePath)}`}
                       target="_blank" rel="noreferrer"
-                      className="ml-2 text-[10px] font-semibold text-blue-500 hover:underline"
+                      className="ml-2 text-[10px] font-semibold text-accent hover:underline"
                     >
                       PDF
                     </a>
@@ -324,7 +324,7 @@ function ExpenseFormModal({ onClose }: { onClose: () => void }) {
     <Modal title="Add an expense" onClose={onClose} footer={
       <>
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Add expense</button>
+        <button onClick={handleSave} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">Add expense</button>
       </>
     }>
       <FormField label="Description"><input type="text" className={inputClass} value={f.description} onChange={e => setF(p => ({...p, description: e.target.value}))} /></FormField>
@@ -367,7 +367,7 @@ function AssignExpenseModal({ expense, onClose }: { expense: Expense; onClose: (
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
         <button
           onClick={() => { updateExpense(expense.id, { showIds: assign.showIds.length > 0 ? assign.showIds : undefined, runId: assign.runId, bucket: assign.bucket }); onClose() }}
-          className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600"
+          className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover"
         >Save</button>
       </>
     }>

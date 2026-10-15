@@ -26,7 +26,7 @@ const TYPE_LABELS: Record<ProjectType, string> = {
 // artist's own "My Requests" list instead of duplicating this map.
 export const STATUS_CONFIG: Record<ProjectStatus, { label: string; bg: string; dot: string }> = {
   submitted:   { label: 'Submitted',   bg: 'bg-amber-50 text-amber-700',   dot: 'bg-amber-400' },
-  'in-progress': { label: 'In Progress', bg: 'bg-blue-50 text-blue-600',     dot: 'bg-blue-500'  },
+  'in-progress': { label: 'In Progress', bg: 'bg-blue-50 text-blue-600',     dot: 'bg-accent'  },
   review:      { label: 'In Review',   bg: 'bg-purple-50 text-purple-700', dot: 'bg-purple-500' },
   done:        { label: 'Done',        bg: 'bg-green-50 text-green-700',   dot: 'bg-green-500'  },
 }
@@ -84,7 +84,7 @@ export function ProjectsView() {
         {editable && (
           <button
             onClick={() => openModal('add-project')}
-            className="px-3 py-1.5 bg-[#4c8df6] text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition-colors"
+            className="px-3 py-1.5 bg-accent text-white text-xs font-semibold rounded-lg hover:bg-accent-hover transition-colors"
           >
             + New project
           </button>
@@ -290,7 +290,7 @@ export function AddProjectModal({ onClose, defaultDueDate }: { onClose: () => vo
         <div className="flex gap-2 pt-2">
           <button
             type="submit"
-            className="flex-1 py-2 bg-[#4c8df6] text-white font-semibold rounded-xl text-sm hover:bg-blue-600 transition-colors"
+            className="flex-1 py-2 bg-accent text-white font-semibold rounded-xl text-sm hover:bg-accent-hover transition-colors"
           >
             Add project
           </button>

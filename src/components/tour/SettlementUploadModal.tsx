@@ -131,7 +131,7 @@ export function SettlementUploadModal({ onClose, presetShowId }: { onClose: () =
         ) : (
           <button
             onClick={() => fileInput.current?.click()}
-            className="w-full border-2 border-dashed border-gray-200 rounded-xl py-8 text-sm text-gray-400 hover:border-blue-400 hover:text-blue-500 transition-colors"
+            className="w-full border-2 border-dashed border-gray-200 rounded-xl py-8 text-sm text-gray-400 hover:border-accent hover:text-accent transition-colors"
           >Choose a settlement file…</button>
         )}
         <input ref={fileInput} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }} />
@@ -146,7 +146,7 @@ export function SettlementUploadModal({ onClose, presetShowId }: { onClose: () =
     <Modal title="Check this settlement" onClose={handleClose} wide footer={
       <>
         <button onClick={handleClose} disabled={busy} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={handleSave} disabled={!canSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:opacity-50">
+        <button onClick={handleSave} disabled={!canSave} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover disabled:opacity-50">
           {busy ? 'Saving…' : 'Confirm settlement'}
         </button>
       </>
@@ -214,7 +214,7 @@ export function SettlementUploadModal({ onClose, presetShowId }: { onClose: () =
             </div>
           ))}
           <div className="flex items-center gap-3">
-            <button type="button" onClick={() => setLines([...lines, { label: '', kind: 'deduction', amount: '' }])} className="text-xs text-blue-500 hover:underline">+ Add a line</button>
+            <button type="button" onClick={() => setLines([...lines, { label: '', kind: 'deduction', amount: '' }])} className="text-xs text-accent hover:underline">+ Add a line</button>
             <span className="ml-auto text-xs text-gray-400">Total due to the artist</span>
             <input className={`${inputClass} !w-32 text-right font-semibold`} inputMode="decimal" value={totalText} onChange={e => setTotalText(e.target.value)} />
           </div>

@@ -402,7 +402,7 @@ function TemplatesTab() {
             <button
               onClick={() => setGenerateId(t.id)}
               disabled={t.clauses.length === 0}
-              className="px-2.5 py-1 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition-colors flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="px-2.5 py-1 bg-accent text-white text-xs font-medium rounded-lg hover:bg-accent-hover transition-colors flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
             >
               Generate →
             </button>
@@ -435,7 +435,7 @@ function NewTemplateModal({ onClose }: { onClose: () => void }) {
     <Modal title="New template" onClose={onClose} footer={
       <>
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={handleCreate} disabled={!name.trim()} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:opacity-40">
+        <button onClick={handleCreate} disabled={!name.trim()} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover disabled:opacity-40">
           Create
         </button>
       </>
@@ -574,7 +574,7 @@ function TemplateModal({ template, onClose }: { template: LegalTemplate; onClose
           {editable ? (
             <>
               <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-              <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Save</button>
+              <button onClick={handleSave} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">Save</button>
             </>
           ) : (
             <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 ml-auto">Close</button>
@@ -666,7 +666,7 @@ function GenerateDocumentModal({ template, onClose }: { template: LegalTemplate;
                   {blanks.length} left blank — {blanks.length === 1 ? 'it will' : 'they will'} stay as [bracketed text] in the document
                 </span>
               )}
-              <button onClick={() => setStep('preview')} className="ml-auto px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">
+              <button onClick={() => setStep('preview')} className="ml-auto px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">
                 Generate document
               </button>
             </div>
@@ -681,7 +681,7 @@ function GenerateDocumentModal({ template, onClose }: { template: LegalTemplate;
               <button onClick={handleCopy} className="ml-auto px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">
                 {copied ? 'Copied ✓' : 'Copy text'}
               </button>
-              <button onClick={handleDownload} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">
+              <button onClick={handleDownload} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">
                 Download (.rtf)
               </button>
             </div>

@@ -68,7 +68,7 @@ function ConnectBankButton({ clientId }: { clientId: string }) {
       <button
         onClick={startConnect}
         disabled={busy}
-        className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+        className="px-3 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
       >
         {busy ? 'Connecting…' : '+ Connect a bank account'}
       </button>
@@ -209,7 +209,7 @@ export function BankingView() {
                   </div>
                   {editable && (
                     <div className="flex gap-2 mt-4">
-                      <button onClick={() => markDepositDone(d.id)} className="px-3 py-1.5 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition-colors">Mark all moved</button>
+                      <button onClick={() => markDepositDone(d.id)} className="px-3 py-1.5 bg-accent text-white text-xs font-medium rounded-lg hover:bg-accent-hover transition-colors">Mark all moved</button>
                       <button onClick={() => dismissDeposit(d.id)} className="px-3 py-1.5 border border-gray-200 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors">Dismiss</button>
                     </div>
                   )}
@@ -282,7 +282,7 @@ function AddDepositModal({ onClose }: { onClose: () => void }) {
     <Modal title="Log a deposit" onClose={onClose} footer={
       <>
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={handleAdd} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Log deposit</button>
+        <button onClick={handleAdd} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">Log deposit</button>
       </>
     }>
       <FormField label="Source">

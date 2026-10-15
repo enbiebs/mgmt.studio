@@ -27,7 +27,7 @@ async function postForm(url: string, form: FormData) {
 const wantedByDefault = (r: ImportRow, existing: Show[]) =>
   r.kind === 'show' && r.venue.trim() !== '' && !findDuplicate(r, existing) && !(r.history && r.status === 'hold')
 
-const small = 'px-2 py-1.5 border border-gray-200 rounded-lg text-xs outline-none focus:border-blue-400 bg-canvas transition-colors'
+const small = 'px-2 py-1.5 border border-gray-200 rounded-lg text-xs outline-none focus:border-accent bg-canvas transition-colors'
 const longDate = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
 export function CalendarImportModal({ onClose }: { onClose: () => void }) {
@@ -112,7 +112,7 @@ export function CalendarImportModal({ onClose }: { onClose: () => void }) {
             <button
               onClick={doImport}
               disabled={busy || toImport.length === 0}
-              className="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors"
+              className="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover disabled:opacity-40 transition-colors"
             >
               {busy ? 'Adding…' : `Add ${toImport.length} show${toImport.length === 1 ? '' : 's'}`}
             </button>
@@ -123,13 +123,13 @@ export function CalendarImportModal({ onClose }: { onClose: () => void }) {
             <button
               onClick={readRows}
               disabled={picked.length === 0}
-              className="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors"
+              className="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover disabled:opacity-40 transition-colors"
             >
               Read these tabs
             </button>
           </>
         ) : step === 'done' ? (
-          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors">Done</button>
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-semibold bg-accent text-white hover:bg-accent-hover transition-colors">Done</button>
         ) : step === 'file' ? (
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">Cancel</button>
         ) : undefined

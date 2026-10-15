@@ -129,7 +129,7 @@ export function ArtistView() {
           <div className="ml-auto">
             <button
               onClick={() => openModal('submit-request')}
-              className="px-4 py-2 bg-[#4c8df6] text-white text-sm font-semibold rounded-xl hover:bg-blue-600 transition-colors"
+              className="px-4 py-2 bg-accent text-white text-sm font-semibold rounded-xl hover:bg-accent-hover transition-colors"
             >
               Submit a request
             </button>
@@ -154,7 +154,7 @@ export function ArtistView() {
           {/* Progress bar */}
           <div className="h-1.5 bg-gray-100 rounded-full mb-4 overflow-hidden">
             <div
-              className="h-full rounded-full bg-[#4c8df6] transition-all"
+              className="h-full rounded-full bg-accent transition-all"
               style={{ width: `${avgPct}%` }}
             />
           </div>
@@ -231,7 +231,7 @@ export function ArtistView() {
                 const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                 return (
                   <div key={post.id} className="flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-[#4c8df6] flex-shrink-0" />
+                    <div className="w-2 h-2 rounded-full bg-accent flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-medium">{post.title}</span>
                       <span className="text-xs text-gray-400 ml-2">{label} · {post.time}</span>
@@ -459,7 +459,7 @@ function SubmitRequestModal({ onClose }: { onClose: () => void }) {
         <div className="flex gap-2 pt-2">
           <button
             type="submit"
-            className="flex-1 py-2 bg-[#4c8df6] text-white font-semibold rounded-xl text-sm hover:bg-blue-600 transition-colors"
+            className="flex-1 py-2 bg-accent text-white font-semibold rounded-xl text-sm hover:bg-accent-hover transition-colors"
           >
             Send to management
           </button>

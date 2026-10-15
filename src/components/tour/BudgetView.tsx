@@ -65,7 +65,7 @@ export function BudgetView() {
     <button
       key={b.id}
       onClick={() => open(b.id)}
-      className={`w-full text-left px-3 py-2 border-b border-gray-50 hover:bg-gray-50 transition-colors ${selectedBudgetId === b.id && !runId ? 'bg-blue-50' : ''}`}
+      className={`w-full text-left px-3 py-2 border-b border-gray-50 hover:bg-gray-50 transition-colors ${selectedBudgetId === b.id && !runId ? 'bg-accent-soft' : ''}`}
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium truncate">{b.name}</span>
@@ -88,8 +88,8 @@ export function BudgetView() {
       <div className={`${pane.detail ? 'hidden md:block' : ''} w-full md:w-[300px] flex-shrink-0 border-r border-gray-100 overflow-auto`}>
         <div className="flex items-center gap-1.5 px-3 py-3 border-b border-gray-100">
           <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 flex-1">Budgets</div>
-          {editable && <button onClick={() => setRunsOpen(true)} className="text-[11px] text-blue-500 hover:underline">Runs</button>}
-          {editable && <button onClick={() => setSettingsOpen(true)} className="text-[11px] text-blue-500 hover:underline">Settings</button>}
+          {editable && <button onClick={() => setRunsOpen(true)} className="text-[11px] text-accent hover:underline">Runs</button>}
+          {editable && <button onClick={() => setSettingsOpen(true)} className="text-[11px] text-accent hover:underline">Settings</button>}
         </div>
 
         {runs.map(r => {
@@ -99,7 +99,7 @@ export function BudgetView() {
             <div key={r.id}>
               <button
                 onClick={() => { setRunId(r.id); setSelectedBudget(null); pane.openDetail() }}
-                className={`w-full text-left px-3 py-2 bg-gray-50 border-y border-gray-100 flex items-center justify-between hover:bg-gray-100 ${runId === r.id ? 'ring-1 ring-inset ring-blue-300' : ''}`}
+                className={`w-full text-left px-3 py-2 bg-gray-50 border-y border-gray-100 flex items-center justify-between hover:bg-gray-100 ${runId === r.id ? 'ring-1 ring-inset ring-accent/40' : ''}`}
               >
                 <span className="text-xs font-bold truncate">{r.name}</span>
                 <span className="text-[11px] text-gray-500 tabular-nums">{money(total, home)}</span>
@@ -123,13 +123,13 @@ export function BudgetView() {
             {needOffer.map(o => (
               <div key={o.id} className="flex items-center justify-between gap-2 py-1">
                 <span className="text-xs text-gray-600 truncate">Offer · {o.venue}, {o.city}</span>
-                <button onClick={() => create({ offerId: o.id })} className="text-[11px] text-blue-500 hover:underline flex-shrink-0">Create</button>
+                <button onClick={() => create({ offerId: o.id })} className="text-[11px] text-accent hover:underline flex-shrink-0">Create</button>
               </div>
             ))}
             {needShow.map(s => (
               <div key={s.id} className="flex items-center justify-between gap-2 py-1">
                 <span className="text-xs text-gray-600 truncate">Show · {s.venue}, {s.city}</span>
-                <button onClick={() => create({ showId: s.id })} className="text-[11px] text-blue-500 hover:underline flex-shrink-0">Create</button>
+                <button onClick={() => create({ showId: s.id })} className="text-[11px] text-accent hover:underline flex-shrink-0">Create</button>
               </div>
             ))}
           </div>
@@ -232,7 +232,7 @@ function ManageRunsModal({ client, onClose }: { client: Client; onClose: () => v
 
   return (
     <Modal wide title="Runs" onClose={onClose} footer={
-      <button onClick={onClose} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Done</button>
+      <button onClick={onClose} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">Done</button>
     }>
       <p className="text-xs text-gray-500">A run is a named group of shows, like “Europe, Fall 2026”. A show can be in one run. Costs assigned to a run are shared evenly across its shows.</p>
 
@@ -286,7 +286,7 @@ function BudgetSettingsModal({ client, onClose }: { client: Client; onClose: () 
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
         <button
           onClick={() => { setFinanceSettings({ homeCurrency: home, defaultCommissions: commissions.filter(c => c.label.trim()) }); onClose() }}
-          className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600"
+          className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover"
         >Save</button>
       </>
     }>
@@ -314,8 +314,8 @@ function BudgetSettingsModal({ client, onClose }: { client: Client; onClose: () 
           ))}
         </div>
         <div className="flex gap-3 mt-2">
-          <button className="text-xs text-blue-500 hover:underline" onClick={() => setCommissions(cs => [...cs, { label: '', pct: 5, base: 'gross' }])}>+ Add commission</button>
-          <button className="text-xs text-gray-400 hover:text-blue-500" onClick={() => setCommissions(DEFAULT_COMMISSIONS.map(c => ({ ...c })))}>Reset to Agent 10 / Management 15 / Biz mgmt 4</button>
+          <button className="text-xs text-accent hover:underline" onClick={() => setCommissions(cs => [...cs, { label: '', pct: 5, base: 'gross' }])}>+ Add commission</button>
+          <button className="text-xs text-gray-400 hover:text-accent" onClick={() => setCommissions(DEFAULT_COMMISSIONS.map(c => ({ ...c })))}>Reset to Agent 10 / Management 15 / Biz mgmt 4</button>
         </div>
       </div>
     </Modal>

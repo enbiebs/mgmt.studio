@@ -65,10 +65,10 @@ export function TourView() {
         key={s.id}
         onClick={() => { setSelectedShow(s.id); pane.openDetail() }}
         className={`w-full flex items-center gap-3 px-4 py-3 border-b border-gray-100 text-left transition-colors ${dim ? 'opacity-60' : ''} ${
-          selectedShowId === s.id ? 'bg-blue-50' : 'hover:bg-gray-50'
+          selectedShowId === s.id ? 'bg-accent-soft' : 'hover:bg-gray-50'
         }`}
       >
-        <div className={`w-10 flex-shrink-0 text-center rounded-lg py-1 ${selectedShowId === s.id ? 'bg-blue-100' : 'bg-gray-100'}`}>
+        <div className={`w-10 flex-shrink-0 text-center rounded-lg py-1 ${selectedShowId === s.id ? 'bg-accent/15' : 'bg-gray-100'}`}>
           <div className="text-[9px] font-bold uppercase tracking-wider text-gray-400">{MONTH_SHORT[d.getMonth()]}</div>
           <div className="text-lg font-bold font-serif leading-none">{d.getDate()}</div>
         </div>
@@ -111,7 +111,7 @@ export function TourView() {
               <span className="text-4xl">🎤</span>
               <span className="text-sm">No shows yet</span>
               {editable && (
-                <button onClick={() => setImportOpen(true)} className="mt-1 text-xs text-blue-600 hover:underline">
+                <button onClick={() => setImportOpen(true)} className="mt-1 text-xs text-accent hover:underline">
                   Import them from a spreadsheet
                 </button>
               )}
@@ -155,7 +155,7 @@ export function TourView() {
                     </div>
                     <button
                       onClick={() => enableCalendarFeed(client.id)}
-                      className="w-full px-2.5 py-1.5 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors"
+                      className="w-full px-2.5 py-1.5 bg-accent text-white font-medium rounded-lg hover:bg-accent-hover transition-colors"
                     >
                       Enable calendar feed
                     </button>
@@ -171,7 +171,7 @@ export function TourView() {
                     <div className="flex gap-1.5">
                       <button
                         onClick={copyFeedLink}
-                        className="flex-1 px-2.5 py-1.5 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors"
+                        className="flex-1 px-2.5 py-1.5 bg-accent text-white font-medium rounded-lg hover:bg-accent-hover transition-colors"
                       >
                         {copied ? 'Copied!' : 'Copy link'}
                       </button>
@@ -341,7 +341,7 @@ export function AddShowModal({ defaultDate, onClose }: { defaultDate?: string; o
     <Modal title="Add a show" onClose={onClose} footer={
       <>
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={handleAdd} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Add show</button>
+        <button onClick={handleAdd} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">Add show</button>
       </>
     }>
       <FormField label="Date"><input type="date" className={inputClass} value={f.date} onChange={e => setF(p => ({...p, date: e.target.value}))} /></FormField>
@@ -458,21 +458,21 @@ function ShowFinancials({ show, editable, onViewOffer }: { show: Show; editable:
 
       {show.guarantee != null && (
         linkedInvoice ? (
-          <button onClick={viewInvoice} className="flex items-center gap-1.5 text-xs text-blue-500 hover:text-blue-600 mb-1">
+          <button onClick={viewInvoice} className="flex items-center gap-1.5 text-xs text-accent hover:text-accent-hover mb-1">
             <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${INVOICE_STATUS_CONFIG[isOverdue(linkedInvoice) ? 'overdue' : linkedInvoice.status].bg} ${INVOICE_STATUS_CONFIG[isOverdue(linkedInvoice) ? 'overdue' : linkedInvoice.status].color}`}>
               {INVOICE_STATUS_CONFIG[isOverdue(linkedInvoice) ? 'overdue' : linkedInvoice.status].label}
             </span>
             View invoice →
           </button>
         ) : editable && (
-          <button onClick={() => generateInvoiceFromShow(show.id)} className="text-xs text-blue-500 hover:text-blue-600 mb-1">
+          <button onClick={() => generateInvoiceFromShow(show.id)} className="text-xs text-accent hover:text-accent-hover mb-1">
             Generate invoice
           </button>
         )
       )}
 
       {show.tourOfferId && (
-        <button onClick={onViewOffer} className="text-xs text-blue-500 hover:text-blue-600 block">
+        <button onClick={onViewOffer} className="text-xs text-accent hover:text-accent-hover block">
           From offer — view in Offers →
         </button>
       )}

@@ -1,42 +1,33 @@
 'use client'
+import { useEffect, useSyncExternalStore } from 'react'
 import { useStore } from '@/lib/store'
-import { initials } from '@/lib/utils'
-import { useState, useRef, useEffect } from 'react'
-import { useInbox } from '@/lib/useInbox'
 import { SHOW_UNFINISHED_KEY, analyticsHasData } from '@/lib/unfinished'
-import type { MainSection } from '@/types'
 import { ARTIST_SIDE_NAME, PRODUCT_NAME } from '@/lib/brand'
+import { BrandMark, Icon } from '@/components/ui/Icon'
+import { ClientSwitcher } from './ClientSwitcher'
+import { OPEN_COMMAND_BAR } from './CommandBar'
+import { UserMenu } from './UserMenu'
+import { sectionLabel, useVisibleNav } from './nav'
 
 const ROLE_LABEL: Record<string, string> = { manager: 'Manager', artist: 'Artist', agent: 'Agent', lawyer: 'Lawyer', team: 'Team' }
 
+// "⌘K" on a Mac, "Ctrl K" elsewhere.
+const noSubscribe = () => () => {}
+const onMac = () => /Mac|iPhone|iPad/.test(navigator.platform)
+
+/** The slim bar across the top: where you are, search, the few actions that belong everywhere, and your account. */
 export function AppHeader() {
   const {
-    view, section, clientId, data, role, authRole, previewMemberId, previewMembers, previewAs,
-    hasAccess, accessibleClientIds, goToDashboard, openClient, setSection, signOut,
+    view, section, role, authRole, previewMemberId, previewMembers,
+    goToDashboard, setSection, previewAs, setShowUnfinished,
   } = useStore()
-  const canSwitchRole = authRole === null || authRole === 'manager'
   const client = useStore(s => s.getClient())
-  const inboxCount = useInbox().total
   const showUnfinished = useStore(s => s.showUnfinished)
-  const setShowUnfinished = useStore(s => s.setShowUnfinished)
+  const groups = useVisibleNav()
+  const mac = useSyncExternalStore(noSubscribe, onMac, () => true)
   const analyticsVisible = showUnfinished || analyticsHasData(client)
-  const [switchOpen, setSwitchOpen] = useState(false)
-  const [previewOpen, setPreviewOpen] = useState(false)
-  const [userOpen, setUserOpen] = useState(false)
-  const switchRef = useRef<HTMLDivElement>(null)
-  const previewRef = useRef<HTMLDivElement>(null)
-  const userRef = useRef<HTMLDivElement>(null)
-
-  const visibleClientIds = accessibleClientIds()
-  const rosterClients = visibleClientIds === 'all' ? data.clients : data.clients.filter(c => visibleClientIds.includes(c.id))
-  const previewLabel = previewMemberId === null
-    ? 'Manager (you)'
-    : (() => {
-        const m = previewMembers.find(pm => pm.id === previewMemberId)
-        if (!m) return 'Manager (you)'
-        const who = m.role === 'artist' ? m.clientName : m.personName
-        return `${ROLE_LABEL[m.role] ?? m.role} — ${who ?? 'Unnamed'}`
-      })()
+  const isArtist = role === 'artist'
+  const inStudio = view === 'studio' && !isArtist
 
   // Remember the "show unfinished screens" choice on this computer.
   useEffect(() => {
@@ -48,185 +39,109 @@ export function AppHeader() {
     if (section === 'analytics' && !analyticsVisible) setSection('calendar')
   }, [section, analyticsVisible, setSection])
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (switchRef.current && !switchRef.current.contains(e.target as Node)) setSwitchOpen(false)
-      if (previewRef.current && !previewRef.current.contains(e.target as Node)) setPreviewOpen(false)
-      if (userRef.current && !userRef.current.contains(e.target as Node)) setUserOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
+  const previewLabel = (() => {
+    const m = previewMembers.find(pm => pm.id === previewMemberId)
+    if (!m) return ''
+    const who = m.role === 'artist' ? m.clientName : m.personName
+    return `${ROLE_LABEL[m.role] ?? m.role} — ${who ?? 'Unnamed'}`
+  })()
 
   return (
-    <header className="flex-shrink-0 flex flex-wrap items-center min-h-[50px] px-3 md:px-4 gap-x-2 md:gap-x-3 border-b border-gray-100 md:flex-nowrap">
-      {/* Back button (studio mode only — artists have no roster to go back to) */}
-      {view === 'studio' && role !== 'artist' && (
-        <>
+    <>
+      {previewMemberId && (
+        <div className="flex-shrink-0 flex items-center justify-center gap-3 bg-amber-50 text-amber-800 text-xs px-4 py-1.5 border-b border-amber-100">
+          <span>Previewing the app as <strong className="font-semibold">{previewLabel}</strong></span>
+          <button onClick={() => previewAs(null)} className="font-semibold underline underline-offset-2 hover:text-amber-900">Exit preview</button>
+        </div>
+      )}
+
+      <header className="flex-shrink-0 flex flex-wrap items-center min-h-[52px] px-3 md:px-6 gap-x-3 border-b border-gray-100 md:flex-nowrap">
+        {/* Phone: a way back to the roster when inside an artist */}
+        {inStudio && (
           <button
             onClick={goToDashboard}
             aria-label="All clients"
-            className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-700 hover:bg-gray-50 px-2 py-1 rounded-lg transition-colors"
+            className="md:hidden flex items-center text-gray-500 hover:text-gray-900 hover:bg-gray-50 px-2 py-1 rounded-lg transition-colors"
           >
-            ←<span className="hidden md:inline"> All clients</span>
-          </button>
-          <div className="w-px h-4 bg-gray-100 hidden md:block" />
-        </>
-      )}
-
-      {/* Logo */}
-      <div className={`font-serif font-semibold text-base tracking-tight flex-shrink-0 ${view === 'studio' && role !== 'artist' ? 'hidden md:block' : ''}`}>{role === 'artist' ? ARTIST_SIDE_NAME : PRODUCT_NAME}</div>
-
-      {/* Main nav (studio mode, everyone except artist — artists get their own dashboard-style view) */}
-      {view === 'studio' && role !== 'artist' && (
-        <nav className="flex gap-0.5 order-last basis-full pb-1.5 md:order-none md:basis-auto md:pb-0 md:flex-1 overflow-x-auto">
-          {([
-            ['Calendar', 'calendar'],
-            ['Music', 'songs'], ['Tour', 'tour'], ['Content', 'content'],
-            ['Finance', 'finance'], ['Team', 'team'], ['Projects', 'projects'], ['Analytics', 'analytics'], ['Legal', 'legal'], ['Activity', 'activity'],
-          ] as [string, MainSection][])
-            .filter(([, key]) => hasAccess(key, clientId ?? undefined) && (key !== 'analytics' || analyticsVisible))
-            .map(([label, key]) => (
-            <button
-              key={key}
-              onClick={() => setSection(key)}
-              className={`px-2.5 py-1 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                section === key
-                  ? 'bg-gray-100 text-gray-900'
-                  : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
-      )}
-
-      {/* Spacer when artist (no main nav) */}
-      {view === 'studio' && role === 'artist' && <div className="flex-1" />}
-
-      <div className="flex items-center gap-2 ml-auto py-1.5 md:py-0">
-        {/* Inbox — what needs attention across every artist; opens the roster, where it lives. */}
-        {role !== 'artist' && (
-          <button
-            onClick={goToDashboard}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
-            title="What needs your attention"
-          >
-            Inbox
-            {inboxCount > 0 && <span className="px-1.5 rounded-full bg-red-500 text-white text-[10px] leading-4">{inboxCount}</span>}
+            ←
           </button>
         )}
-        {/* Preview — a real manager can simulate any other real workspace
-            member's actual role + access_grants. Everyone else is locked
-            to the role assigned in workspace_members. */}
-        {canSwitchRole && previewMembers.length > 0 && (
-          <div ref={previewRef} className={`relative ${previewMemberId ? '' : 'hidden md:block'}`}>
-            <button
-              onClick={() => setPreviewOpen(v => !v)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
-                previewMemberId ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-              title="Preview as another workspace member"
-            >
-              {previewMemberId ? `Previewing: ${previewLabel}` : 'Preview as…'}
-            </button>
-            {previewOpen && (
-              <div className="absolute right-0 top-full mt-1 bg-canvas border border-gray-100 rounded-xl shadow-lg min-w-[220px] overflow-hidden z-50 py-1">
-                <button
-                  onClick={() => { previewAs(null); setPreviewOpen(false) }}
-                  className={`flex items-center w-full px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors ${previewMemberId === null ? 'font-semibold' : ''}`}
-                >
-                  Manager (you)
-                </button>
-                <div className="h-px bg-gray-100 my-1" />
-                {previewMembers.map(m => (
-                  <button
-                    key={m.id}
-                    onClick={() => { previewAs(m.id); setPreviewOpen(false) }}
-                    className={`flex items-center justify-between w-full px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors ${previewMemberId === m.id ? 'font-semibold' : ''}`}
-                  >
-                    <span>{m.role === 'artist' ? m.clientName : m.personName ?? 'Unnamed'}</span>
-                    <span className="text-[10px] text-gray-400 uppercase ml-2">{ROLE_LABEL[m.role] ?? m.role}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+
+        {/* Brand: always for artists (they have no rail); on phones for everyone not inside an artist */}
+        {(isArtist || !inStudio) && (
+          <div className={`flex items-center gap-2 font-serif font-semibold text-base flex-shrink-0 ${isArtist ? '' : 'md:hidden'}`}>
+            <BrandMark className="w-6 h-6" /> {isArtist ? ARTIST_SIDE_NAME : PRODUCT_NAME}
           </div>
         )}
-        {!canSwitchRole && (
-          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-500" title="Your assigned role">
-            {ROLE_LABEL[role] ?? role}
-          </span>
+
+        {/* Desktop: where you are */}
+        {!isArtist && (
+          <nav aria-label="Breadcrumb" className="hidden md:flex items-center gap-2 text-sm text-gray-400 min-w-0">
+            {inStudio && client ? (
+              <>
+                <button onClick={goToDashboard} className="hover:text-gray-700 transition-colors">Home</button>
+                <span>/</span>
+                <span className="truncate">{client.name}</span>
+                <span>/</span>
+                <span className="text-gray-900 font-medium">{sectionLabel(section)}</span>
+              </>
+            ) : (
+              <span className="text-gray-900 font-medium">Home</span>
+            )}
+          </nav>
         )}
 
-        {/* Client switcher — hidden for artists, who only ever see their own client */}
-        {view === 'studio' && client && role !== 'artist' ? (
-          <div ref={switchRef} className="relative">
+        <div className="flex items-center gap-2 ml-auto py-1.5 md:py-0">
+          {!isArtist && (
             <button
-              onClick={() => setSwitchOpen(v => !v)}
-              className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-gray-50 border border-gray-200 text-sm font-medium hover:bg-gray-100 transition-colors"
+              onClick={() => window.dispatchEvent(new Event(OPEN_COMMAND_BAR))}
+              aria-label="Search or jump to"
+              className="flex items-center gap-2 px-2.5 py-1.5 md:w-[280px] rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-400 hover:border-gray-300 transition-colors"
             >
-              <div
-                className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0"
-                style={{ background: client.color }}
-              >
-                {initials(client.name)}
-              </div>
-              <span className="max-w-[110px] md:max-w-none truncate">{client.name}</span>
+              <Icon name="search" className="w-4 h-4" />
+              <span className="hidden md:inline">Search or jump to…</span>
+              <kbd className="hidden md:inline ml-auto font-mono text-[11px] text-gray-500 border border-gray-200 bg-canvas rounded px-1.5">{mac ? '⌘K' : 'Ctrl K'}</kbd>
             </button>
-
-            {switchOpen && (
-              <div className="absolute right-0 top-full mt-1 bg-canvas border border-gray-100 rounded-xl shadow-lg min-w-[160px] max-h-[60vh] overflow-y-auto z-50">
-                {rosterClients.map(c => (
-                  <button
-                    key={c.id}
-                    onClick={() => { openClient(c.id); setSwitchOpen(false) }}
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: c.color }} />
-                    <span className={c.id === clientId ? 'font-semibold' : ''}>{c.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : view === 'dashboard' && role === 'manager' ? (
-          <button
-            onClick={() => useStore.getState().openModal('add-client')}
-            className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            + Add client
-          </button>
-        ) : null}
-
-        {/* User / sign-out menu */}
-        <div ref={userRef} className="relative ml-1">
-          <button
-            onClick={() => setUserOpen(v => !v)}
-            className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 hover:bg-gray-300 transition-colors"
-            title="Account"
-          >
-            S
-          </button>
-          {userOpen && (
-            <div className="absolute right-0 top-full mt-1 bg-canvas border border-gray-100 rounded-xl shadow-lg min-w-[140px] overflow-hidden z-50 py-1">
-              {authRole === 'manager' && (
-                <label className="flex items-start gap-2 px-3 py-2 text-xs text-gray-500 cursor-pointer hover:bg-gray-50 max-w-[220px]">
-                  <input type="checkbox" className="mt-0.5 rounded" checked={showUnfinished} onChange={e => setShowUnfinished(e.target.checked)} />
-                  <span>Show unfinished screens<span className="block text-[10px] text-gray-400">Analytics, Content Lab. Only on this computer.</span></span>
-                </label>
-              )}
-              <button
-                onClick={() => { setUserOpen(false); signOut() }}
-                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left text-gray-600 hover:bg-gray-50 transition-colors"
-              >
-                Sign out
-              </button>
-            </div>
           )}
+
+          {authRole !== null && authRole !== 'manager' && (
+            <span className="hidden md:inline px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-500" title="Your assigned role">
+              {ROLE_LABEL[role] ?? role}
+            </span>
+          )}
+
+          {inStudio && client && <div className="md:hidden"><ClientSwitcher variant="compact" /></div>}
+
+          {view === 'dashboard' && role === 'manager' && (
+            <button
+              onClick={() => useStore.getState().openModal('add-client')}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-accent hover:bg-accent-hover text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              <Icon name="plus" className="w-4 h-4" /> Add client
+            </button>
+          )}
+
+          <UserMenu />
         </div>
-      </div>
-    </header>
+
+        {/* Phone: the sections, as a scrolling strip (the side rail is not shown on small screens) */}
+        {inStudio && (
+          <nav aria-label="Sections" className="md:hidden flex gap-0.5 order-last basis-full pb-1.5 overflow-x-auto no-scrollbar">
+            {groups.flatMap(g => g.items).map(i => (
+              <button
+                key={i.key}
+                onClick={() => setSection(i.key)}
+                aria-current={section === i.key ? 'page' : undefined}
+                className={`px-2.5 py-1 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                  section === i.key ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                {i.label}
+              </button>
+            ))}
+          </nav>
+        )}
+      </header>
+    </>
   )
 }

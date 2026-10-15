@@ -45,7 +45,7 @@ export function PersonPicker({ value, onChange }: { value: string; onChange: (pe
               setCreating(false)
               setNewName(''); setNewEmail(''); setNewPhone(''); setNewOrg('')
             }}
-            className="px-2.5 py-1 bg-blue-500 text-white rounded-lg text-xs font-medium hover:bg-blue-600"
+            className="px-2.5 py-1 bg-accent text-white rounded-lg text-xs font-medium hover:bg-accent-hover"
           >
             Add person
           </button>

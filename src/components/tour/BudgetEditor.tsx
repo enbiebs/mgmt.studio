@@ -32,7 +32,7 @@ function NumInput({ value, onCommit, disabled, className = '' }: { value: number
   return (
     <input
       type="text" inputMode="decimal" disabled={disabled}
-      className={`w-full px-2 py-1 border border-gray-200 rounded-md text-sm text-right outline-none focus:border-blue-400 bg-canvas disabled:opacity-60 disabled:border-transparent ${className}`}
+      className={`w-full px-2 py-1 border border-gray-200 rounded-md text-sm text-right outline-none focus:border-accent bg-canvas disabled:opacity-60 disabled:border-transparent ${className}`}
       value={shown}
       onChange={e => setDraft(e.target.value)}
       onBlur={commit}
@@ -52,7 +52,7 @@ function TextInput({ value, onCommit, disabled, className = '' }: { value: strin
   return (
     <input
       type="text" disabled={disabled}
-      className={`w-full px-2 py-1 border border-transparent hover:border-gray-200 rounded-md text-sm outline-none focus:border-blue-400 bg-transparent disabled:opacity-100 ${className}`}
+      className={`w-full px-2 py-1 border border-transparent hover:border-gray-200 rounded-md text-sm outline-none focus:border-accent bg-transparent disabled:opacity-100 ${className}`}
       value={draft ?? value}
       onChange={e => setDraft(e.target.value)}
       onBlur={commit}
@@ -277,7 +277,7 @@ export function BudgetEditor({ budget, client }: { budget: Budget; client: Clien
         <SectionTitle>Sound &amp; lights</SectionTitle>
         {renderGroups('sound_lights', ['sound_lights'])}
         {editable && (
-          <div className="px-3 py-1"><button className="text-[11px] text-blue-500 hover:underline" onClick={() => addLine('sound_lights', 'Sound & lights')}>+ Add line</button></div>
+          <div className="px-3 py-1"><button className="text-[11px] text-accent hover:underline" onClick={() => addLine('sound_lights', 'Sound & lights')}>+ Add line</button></div>
         )}
         <TotalRow label="Total sound & lights" orig={was?.soundLights ?? null} cur={now.soundLights} act={act ? (actual?.byBucket.sound_lights ?? 0) : null} gross={now.gross} currency={cur} />
         <TotalRow label="Adjusted income after sound & lights" orig={was?.adjustedAfterSL ?? null} cur={now.adjustedAfterSL} act={act?.adjustedAfterSL ?? null} gross={now.gross} currency={cur} strong />
@@ -289,7 +289,7 @@ export function BudgetEditor({ budget, client }: { budget: Budget; client: Clien
             <select className="px-1.5 py-0.5 border border-gray-200 rounded text-[11px] bg-canvas" value={addBucket} onChange={e => setAddBucket(e.target.value as BudgetBucket)}>
               {PRODUCTION_BUCKETS.map(b => <option key={b} value={b}>{BUCKET_LABEL[b]}</option>)}
             </select>
-            <button className="text-[11px] text-blue-500 hover:underline" onClick={() => addLine(addBucket, BUCKET_LABEL[addBucket])}>+ Add line</button>
+            <button className="text-[11px] text-accent hover:underline" onClick={() => addLine(addBucket, BUCKET_LABEL[addBucket])}>+ Add line</button>
             {crewNotInBudget.length > 0 && (
               <select
                 className="px-1.5 py-0.5 border border-gray-200 rounded text-[11px] bg-canvas" value=""
@@ -304,7 +304,7 @@ export function BudgetEditor({ budget, client }: { budget: Budget; client: Clien
                 {crewNotInBudget.map(r => <option key={r.crewMemberId} value={r.crewMemberId}>{people.get(crewById.get(r.crewMemberId)!.personId) ?? 'Crew'}</option>)}
               </select>
             )}
-            <button className="text-[11px] text-gray-400 hover:text-blue-500 ml-auto" onClick={recalcFromRates} title="Re-work crew pay and per diems from each person's saved rates and days">Recalculate crew from saved rates</button>
+            <button className="text-[11px] text-gray-400 hover:text-accent ml-auto" onClick={recalcFromRates} title="Re-work crew pay and per diems from each person's saved rates and days">Recalculate crew from saved rates</button>
           </div>
         )}
         <TotalRow label="Total production costs" orig={was?.production ?? null} cur={now.production} act={act ? Object.entries(actual!.byBucket).filter(([b]) => BUCKET_SECTION[b as BudgetBucket] === 'production').reduce((a, [, v]) => a + (v ?? 0), 0) : null} gross={now.gross} currency={cur} />
@@ -346,7 +346,7 @@ export function BudgetEditor({ budget, client }: { budget: Budget; client: Clien
         })}
         {editable && (
           <div className="px-3 py-1">
-            <button className="text-[11px] text-blue-500 hover:underline" onClick={() => updateBudget(budget.id, { commissions: [...budget.commissions, newCommission({ label: 'Commission', pct: 5, base: 'gross' })] })}>+ Add commission</button>
+            <button className="text-[11px] text-accent hover:underline" onClick={() => updateBudget(budget.id, { commissions: [...budget.commissions, newCommission({ label: 'Commission', pct: 5, base: 'gross' })] })}>+ Add commission</button>
           </div>
         )}
         <TotalRow label="Total commissions" orig={was?.totalCommissions ?? null} cur={now.totalCommissions} act={act?.totalCommissions ?? null} gross={now.gross} currency={cur} />

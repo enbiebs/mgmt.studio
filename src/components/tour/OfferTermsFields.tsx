@@ -90,7 +90,7 @@ export function OfferTermsFields({ draft, onChange, guarantee }: {
                   <button type="button" aria-label="Remove bonus" onClick={() => set('bonuses', draft.bonuses.filter((_, j) => j !== i))} className="text-gray-300 hover:text-red-400 px-1">×</button>
                 </div>
               ))}
-              <button type="button" onClick={() => set('bonuses', [...draft.bonuses, { atTickets: '', amount: '' }])} className="text-xs text-blue-500 hover:underline">+ Add a bonus</button>
+              <button type="button" onClick={() => set('bonuses', [...draft.bonuses, { atTickets: '', amount: '' }])} className="text-xs text-accent hover:underline">+ Add a bonus</button>
               {terms?.bonuses && guarantee > 0 && (
                 <div className="text-xs text-gray-500">Most this deal can pay: <b>{money(bonusTotal)}</b> (guarantee plus every bonus)</div>
               )}
@@ -136,14 +136,14 @@ export function OfferTermsFields({ draft, onChange, guarantee }: {
                 </div>
               ))}
               <div className="flex items-center gap-3 flex-wrap">
-                <button type="button" onClick={() => set('payments', [...payments, { when: '', pct: '' }])} className="text-xs text-blue-500 hover:underline">+ Add a payment</button>
+                <button type="button" onClick={() => set('payments', [...payments, { when: '', pct: '' }])} className="text-xs text-accent hover:underline">+ Add a payment</button>
                 <span className="text-[11px] text-gray-400">Quick fill:</span>
                 <button
-                  type="button" className="text-xs text-blue-500 hover:underline"
+                  type="button" className="text-xs text-accent hover:underline"
                   onClick={() => set('payments', [{ when: 'Before announce', pct: '25' }, { when: '30 days out', pct: '25' }, { when: 'Within 7 days after the show', pct: '50' }])}
                 >25 / 25 / balance</button>
                 <button
-                  type="button" className="text-xs text-blue-500 hover:underline"
+                  type="button" className="text-xs text-accent hover:underline"
                   onClick={() => set('payments', [{ when: 'On confirmation', pct: '50' }, { when: 'Day of show', pct: '50' }])}
                 >50 / 50</button>
               </div>

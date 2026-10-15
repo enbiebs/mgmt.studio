@@ -166,7 +166,7 @@ export function BillUploadModal({ onClose }: { onClose: () => void }) {
             />
             <button
               onClick={() => fileInput.current?.click()}
-              className="w-full py-6 border-2 border-dashed border-gray-200 rounded-xl text-sm font-medium text-gray-500 hover:border-blue-300 hover:text-blue-500 transition-colors"
+              className="w-full py-6 border-2 border-dashed border-gray-200 rounded-xl text-sm font-medium text-gray-500 hover:border-accent hover:text-accent transition-colors"
             >
               Choose a PDF…
             </button>
@@ -183,7 +183,7 @@ export function BillUploadModal({ onClose }: { onClose: () => void }) {
         {cancelBtn}
         <button
           onClick={handleSave} disabled={!canSave}
-          className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Looks good — save bill
         </button>
@@ -199,7 +199,7 @@ export function BillUploadModal({ onClose }: { onClose: () => void }) {
       {filePath && clientId && (
         <a
           href={`/api/bills/file?clientId=${encodeURIComponent(clientId)}&path=${encodeURIComponent(filePath)}`}
-          target="_blank" rel="noreferrer" className="inline-block text-xs font-semibold text-blue-500 hover:underline"
+          target="_blank" rel="noreferrer" className="inline-block text-xs font-semibold text-accent hover:underline"
         >
           Open the PDF to compare →
         </a>

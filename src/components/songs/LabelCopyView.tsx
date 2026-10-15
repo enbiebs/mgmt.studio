@@ -131,7 +131,7 @@ function TrackLabelCopyModal({ track, onClose, onSave }: {
     <Modal title={`Label copy · ${track.title}`} onClose={onClose} footer={
       <>
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={() => onSave(form)} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Save</button>
+        <button onClick={() => onSave(form)} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">Save</button>
       </>
     }>
       <div className="grid grid-cols-2 gap-3">

@@ -282,7 +282,7 @@ function AddTrackModal({ albumId, onClose }: { albumId: string; onClose: () => v
     <Modal title="Add a track" onClose={onClose} footer={
       <>
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={handleAdd} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Add track</button>
+        <button onClick={handleAdd} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">Add track</button>
       </>
     }>
       <FormField label="Title">
@@ -314,7 +314,7 @@ function NewReleaseModal({ onClose }: { onClose: () => void }) {
     <Modal title="New release" onClose={onClose} footer={
       <>
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={handleCreate} disabled={!title.trim()} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:opacity-40">Create</button>
+        <button onClick={handleCreate} disabled={!title.trim()} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover disabled:opacity-40">Create</button>
       </>
     }>
       <FormField label="Title">
@@ -468,7 +468,7 @@ function TrackDetailModal({ track, onClose }: { track: Track; onClose: () => voi
             editable ? (
               <>
                 <button onClick={onClose} className="ml-auto px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-                <button onClick={handleSaveDetails} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Save</button>
+                <button onClick={handleSaveDetails} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">Save</button>
               </>
             ) : (
               <button onClick={onClose} className="ml-auto px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Close</button>
@@ -587,7 +587,7 @@ function RoundsTab({ track, editable }: { track: Track; editable: boolean }) {
               <textarea className={`${inputClass} resize-none`} rows={2} placeholder="What needs attention here?" value={composeText} onChange={e => setComposeText(e.target.value)} autoFocus />
               <div className="flex gap-2 justify-end">
                 <button onClick={() => setComposing(null)} className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs hover:bg-gray-50">Cancel</button>
-                <button onClick={submitNote} disabled={!composeText.trim() || !composeAuthor.trim()} className="px-2.5 py-1 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 disabled:opacity-40">Add note</button>
+                <button onClick={submitNote} disabled={!composeText.trim() || !composeAuthor.trim()} className="px-2.5 py-1 bg-accent text-white text-xs font-medium rounded-lg hover:bg-accent-hover disabled:opacity-40">Add note</button>
               </div>
             </div>
           )}
@@ -602,7 +602,7 @@ function RoundsTab({ track, editable }: { track: Track; editable: boolean }) {
               {sortedNotes.map((n, i) => (
                 <div key={n.id} className={`border rounded-lg p-3 ${n.resolved ? 'border-gray-100 opacity-60' : 'border-gray-200'}`}>
                   <div className="flex items-start gap-2">
-                    <span className="w-4 h-4 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
+                    <span className="w-4 h-4 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 text-xs">
                         <span className="font-semibold text-gray-700">{n.author}</span>
@@ -678,7 +678,7 @@ function UploadRoundModal({ track, onClose, onUploaded }: { track: Track; onClos
     <Modal title="Upload a round" onClose={onClose} footer={
       <>
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={handleUpload} disabled={!label.trim() || !file || uploading} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:opacity-40">
+        <button onClick={handleUpload} disabled={!label.trim() || !file || uploading} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover disabled:opacity-40">
           {uploading ? 'Uploading…' : 'Upload'}
         </button>
       </>
@@ -765,7 +765,7 @@ function CreditsTab({ track, editable }: { track: Track; editable: boolean }) {
         {editable && (
           <div className="flex gap-2 mt-2">
             <button onClick={addCredit} className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors">+ Add credit</button>
-            <button onClick={saveCredits} className="px-2.5 py-1 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition-colors">Save credits</button>
+            <button onClick={saveCredits} className="px-2.5 py-1 bg-accent text-white text-xs font-medium rounded-lg hover:bg-accent-hover transition-colors">Save credits</button>
           </div>
         )}
       </div>

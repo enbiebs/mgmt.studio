@@ -60,7 +60,7 @@ export function GuestListView() {
               <button
                 key={s.id}
                 onClick={() => { setSelectedShowId(s.id); pane.openDetail() }}
-                className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${(show?.id === s.id) ? 'bg-blue-50' : ''}`}
+                className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${(show?.id === s.id) ? 'bg-accent-soft' : ''}`}
               >
                 <div className="text-xs font-semibold text-gray-800 truncate">{s.venue}</div>
                 <div className="text-[11px] text-gray-400">
@@ -196,7 +196,7 @@ function GuestModal({ showId, guest, onClose }: { showId: string; guest?: GuestL
             </button>
           )}
           <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-          <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">
+          <button onClick={handleSave} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">
             {guest ? 'Save' : 'Add guest'}
           </button>
         </>

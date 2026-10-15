@@ -113,7 +113,7 @@ export function ActivityView() {
 
         {days.map(([day, list]) => (
           <div key={day} className="mb-6">
-            <div className={`text-[11px] font-bold uppercase tracking-wider mb-2 ${day === today() ? 'text-blue-500' : 'text-gray-400'}`}>{dayHeading(day)}</div>
+            <div className={`text-[11px] font-bold uppercase tracking-wider mb-2 ${day === today() ? 'text-accent' : 'text-gray-400'}`}>{dayHeading(day)}</div>
             <div className="space-y-3">
               {list.map(e => {
                 const who = actorName(e, myId)

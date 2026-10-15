@@ -48,7 +48,7 @@ export function ManageView() {
         <span className="font-serif text-[18px] font-medium">{MONTH_NAMES[calMonth]} {calYear}</span>
         <button onClick={calToday} className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors">Today</button>
         {editable && (
-          <button onClick={() => setAddDate('')} className="ml-auto px-2.5 py-1 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition-colors">+ New post</button>
+          <button onClick={() => setAddDate('')} className="ml-auto px-2.5 py-1 bg-accent text-white text-xs font-medium rounded-lg hover:bg-accent-hover transition-colors">+ New post</button>
         )}
       </div>
 
@@ -59,7 +59,7 @@ export function ManageView() {
         )}
         {agendaDays.map(d => (
           <div key={d} className="mb-4">
-            <div className={`text-[11px] font-bold uppercase tracking-wider mb-1.5 ${d === todayStr ? 'text-blue-500' : 'text-gray-400'}`}>
+            <div className={`text-[11px] font-bold uppercase tracking-wider mb-1.5 ${d === todayStr ? 'text-accent' : 'text-gray-400'}`}>
               {dayLabel(d)}{d === todayStr && ' · Today'}
             </div>
             <div className="space-y-1.5">
@@ -92,10 +92,10 @@ export function ManageView() {
               <div
                 key={i}
                 className={`relative min-h-[88px] p-1.5 group ${
-                  !current ? 'bg-gray-50' : isToday ? 'bg-blue-50' : 'bg-canvas'
+                  !current ? 'bg-gray-50' : isToday ? 'bg-accent-soft' : 'bg-canvas'
                 }`}
               >
-                <div className={`text-xs font-semibold mb-1 ${isToday ? 'text-blue-600' : 'text-gray-400'}`}>{date.getDate()}</div>
+                <div className={`text-xs font-semibold mb-1 ${isToday ? 'text-accent' : 'text-gray-400'}`}>{date.getDate()}</div>
                 {posts.map(p => (
                   <div
                     key={p.id}
@@ -183,7 +183,7 @@ export function PostModal({ post, defaultDate, onClose }: { post?: Post; default
             </div>
           )}
           <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-          <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">
+          <button onClick={handleSave} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">
             {post ? 'Save' : 'Schedule'}
           </button>
         </>

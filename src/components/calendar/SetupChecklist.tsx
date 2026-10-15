@@ -31,7 +31,7 @@ export function SetupChecklist({ client }: { client: Client }) {
           <div className="text-xs text-gray-400">{setup.done} of {setup.total} done{!open && setup.open[0] ? ` · next: ${setup.open[0].title.toLowerCase()}` : ''}</div>
         </div>
         <div className="hidden sm:block w-28 h-1.5 rounded-full bg-gray-100 overflow-hidden flex-shrink-0">
-          <div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
+          <div className="h-full bg-accent rounded-full" style={{ width: `${pct}%` }} />
         </div>
         <span className="text-gray-400 text-sm flex-shrink-0">{open ? '▴' : '▾'}</span>
       </button>
@@ -55,7 +55,7 @@ export function SetupChecklist({ client }: { client: Client }) {
                   {s.skipped ? (
                     <button
                       onClick={() => setSetupSkipped(client.id, skippedKeys.filter(k => k !== s.key))}
-                      className="text-xs text-blue-500 hover:underline"
+                      className="text-xs text-accent hover:underline"
                     >
                       Skipped · bring back
                     </button>

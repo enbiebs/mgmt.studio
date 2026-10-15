@@ -127,7 +127,7 @@ export function AccessPanel({ person }: { person: Person }) {
           </div>
           <button
             type="button" onClick={sendInvite} disabled={inviting}
-            className="px-3 py-1.5 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 disabled:opacity-50 flex-shrink-0"
+            className="px-3 py-1.5 bg-accent text-white text-xs font-medium rounded-lg hover:bg-accent-hover disabled:opacity-50 flex-shrink-0"
           >
             {inviting ? 'Sending…' : 'Invite'}
           </button>
@@ -153,7 +153,7 @@ export function AccessPanel({ person }: { person: Person }) {
               {SECTIONS.map(s => {
                 const level = levelOf(grants, s.key, c.id)
                 const cls = level === 'edit'
-                  ? 'bg-blue-500 text-white'
+                  ? 'bg-accent text-white'
                   : level === 'view'
                   ? 'bg-blue-50 text-blue-700'
                   : 'bg-gray-50 text-gray-400 hover:bg-gray-100'

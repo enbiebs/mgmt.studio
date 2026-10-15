@@ -77,7 +77,7 @@ export function SettlementDetail({ settlementId, onClose }: { settlementId: stri
       <div className="text-xs text-gray-400 -mt-3">
         {[st.promoter, st.eventName, st.preparedOn ? `prepared ${longDate(st.preparedOn)}` : '', st.preparedBy ? `by ${st.preparedBy}` : ''].filter(Boolean).join(' · ')}
         {st.filePath && (
-          <> · <a className="text-blue-500 hover:underline" target="_blank" rel="noreferrer" href={`/api/settlements/file?clientId=${encodeURIComponent(client.id)}&path=${encodeURIComponent(st.filePath)}`}>View the original</a></>
+          <> · <a className="text-accent hover:underline" target="_blank" rel="noreferrer" href={`/api/settlements/file?clientId=${encodeURIComponent(client.id)}&path=${encodeURIComponent(st.filePath)}`}>View the original</a></>
         )}
       </div>
 

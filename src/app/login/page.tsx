@@ -114,7 +114,7 @@ export default function LoginPage() {
                 value={workspaceName}
                 onChange={e => setWorkspaceName(e.target.value)}
                 placeholder="e.g. Mascolo Management"
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
               />
             </div>
           )}
@@ -128,7 +128,7 @@ export default function LoginPage() {
               onChange={e => setEmail(e.target.value)}
               placeholder="you@example.com"
               required
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
             />
           </div>
 
@@ -141,7 +141,7 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={() => { setMode('reset'); setMessage(null) }}
-                    className="text-xs text-blue-500 hover:underline"
+                    className="text-xs text-accent hover:underline"
                   >
                     Forgot password?
                   </button>
@@ -154,7 +154,7 @@ export default function LoginPage() {
                 placeholder={mode === 'signup' ? 'Choose a strong password' : '••••••••'}
                 required
                 minLength={6}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
               />
             </div>
           )}
@@ -188,8 +188,8 @@ export default function LoginPage() {
         {/* Footer */}
         <p className="text-center text-xs text-gray-400 mt-6">
           {mode === 'login'
-            ? <>No account? <button className="text-blue-500 hover:underline" onClick={() => setMode('signup')}>Sign up</button></>
-            : <>Have an account? <button className="text-blue-500 hover:underline" onClick={() => setMode('login')}>Sign in</button></>
+            ? <>No account? <button className="text-accent hover:underline" onClick={() => setMode('signup')}>Sign up</button></>
+            : <>Have an account? <button className="text-accent hover:underline" onClick={() => setMode('login')}>Sign in</button></>
           }
         </p>
       </div>

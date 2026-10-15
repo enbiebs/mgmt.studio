@@ -80,7 +80,7 @@ function ItemAccessModal({ itemType, itemId, clientId, onClose }: { itemType: It
 
   return (
     <Modal title={`Who can see this ${NOUN[itemType]}`} onClose={onClose} footer={
-      <button onClick={onClose} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Done</button>
+      <button onClick={onClose} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">Done</button>
     }>
       <p className="text-xs text-gray-500">
         Managers always see everything. Switch someone off and it disappears for them completely.

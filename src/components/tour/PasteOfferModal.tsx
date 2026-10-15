@@ -53,7 +53,7 @@ export function PasteOfferModal({ onClose, onRead }: {
           <button
             onClick={read}
             disabled={busy || empty}
-            className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:opacity-40"
+            className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover disabled:opacity-40"
           >
             {busy ? 'Reading…' : 'Fill in the offer form'}
           </button>
