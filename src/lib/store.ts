@@ -49,7 +49,7 @@ import {
   loadWorkspaceData, getMyMembership, getGrantsForMember, getPreviewableMembers,
   loadItemAccess, upsertItemAccess, deleteItemAccess,
   loadInboxState, saveInboxChoice, clearInboxChoice,
-  upsertTask, deleteTaskRow, loadWorkspacePeople, upsertAgendaPoint, deleteAgendaPointRow,
+  upsertTask, deleteTaskRow, loadWorkspacePeople, insertAgendaPoints, saveAgendaPoint, deleteAgendaPointRow,
   type AccessGrant, type PreviewMember,
   upsertClient, deleteClient as dbDeleteClient, setCalendarToken, saveSetupSkipped,
   upsertTrack, deleteTrack as dbDeleteTrack,
@@ -2541,7 +2541,7 @@ export const useStore = create<StudioState>((set, get) => ({
     if (added.length === 0) return
     set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, agenda: [...(c.agenda ?? []), ...added] } : c) } })
     if (!get().workspaceId) return
-    Promise.all(added.map(p => upsertAgendaPoint(p, clientId))).catch(e => {
+    insertAgendaPoints(added, clientId).catch(e => {
       console.error(e)
       const ids = new Set(added.map(p => p.id))
       set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, agenda: (c.agenda ?? []).filter(p => !ids.has(p.id)) } : c) } })
@@ -2556,7 +2556,7 @@ export const useStore = create<StudioState>((set, get) => ({
     const after = { ...before, done: !before.done }
     put(after)
     if (!get().workspaceId) return
-    upsertAgendaPoint(after, clientId).catch(e => { console.error(e); put(before); notify("Couldn't save that change.") })
+    saveAgendaPoint(after).catch(e => { console.error(e); put(before); notify("Couldn't save that change.") })
   },
 
   removeAgendaPoint: (clientId, pointId) => {

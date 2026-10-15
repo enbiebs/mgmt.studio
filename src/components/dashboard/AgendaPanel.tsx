@@ -61,7 +61,7 @@ export function AgendaPanel({ clientId, itemType, itemId, canEdit }: { clientId:
           <span className={`flex-1 min-w-0 text-sm break-words ${p.done ? 'text-gray-400 line-through decoration-gray-300' : ''}`}>{p.text}</span>
           {canEdit && (
             <span className="flex items-center gap-1 flex-shrink-0 opacity-60 group-hover:opacity-100 focus-within:opacity-100">
-              <button onClick={() => agendaPointToTodo(clientId, p.id)} title="Make this its own to-do" className="px-1.5 py-0.5 text-[11px] text-accent hover:underline">To-do</button>
+              {!p.done && <button onClick={() => agendaPointToTodo(clientId, p.id)} title="Make this its own to-do" className="px-1.5 py-0.5 text-[11px] text-accent hover:underline">To-do</button>}
               <button onClick={() => removeAgendaPoint(clientId, p.id)} aria-label={`Remove “${p.text}”`} title="Remove" className="px-1 text-sm leading-none text-gray-300 hover:text-red-500">×</button>
             </span>
           )}

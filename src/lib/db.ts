@@ -770,12 +770,21 @@ export function rowToAgendaPoint(r: AgendaRow): AgendaPoint {
   return { id: r.id, itemType: r.item_type as AgendaItemType, itemId: r.item_id, text: r.text, done: r.done, position: r.position }
 }
 
-export async function upsertAgendaPoint(p: AgendaPoint, clientId: string) {
+export async function insertAgendaPoints(points: AgendaPoint[], clientId: string) {
   const supabase = createClient()
-  const { error } = await supabase.from('agenda_points').upsert({
+  const { error } = await supabase.from('agenda_points').insert(points.map(p => ({
     id: p.id, client_id: clientId, item_type: p.itemType, item_id: p.itemId, text: p.text, done: p.done, position: p.position,
-  })
+  })))
   if (error) throw error
+}
+
+// Ticking or editing an existing point is a plain UPDATE (an upsert is also an insert, which needs edit access).
+// An update that changed nothing comes back with no rows and is reported as a failure.
+export async function saveAgendaPoint(p: AgendaPoint) {
+  const supabase = createClient()
+  const { data, error } = await supabase.from('agenda_points').update({ text: p.text, done: p.done, position: p.position }).eq('id', p.id).select('id')
+  if (error) throw error
+  if (!data || data.length === 0) throw new Error('That agenda point could not be saved')
 }
 
 export async function deleteAgendaPointRow(id: string) {
