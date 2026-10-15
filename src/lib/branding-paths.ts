@@ -16,7 +16,7 @@ export function isBrandingPathFor(clientId: string, kind: BrandingKind, path: un
   return typeof path === 'string'
     && path.length <= 200
     && !path.includes('..')
-    && new RegExp(`^${clientId.replace(/[.]/g, '\\.')}/${kind}-[A-Za-z0-9]+\\.(png|jpe?g|webp)$`, 'i').test(path)
+    && new RegExp(`^${clientId.replace(/[.]/g, '\\.')}/${kind}-[A-Za-z0-9]+\\.(png|jpe?g|webp)$`).test(path)
 }
 
 export const extOfPath = (path: string) => (path.split('.').pop() ?? '').toLowerCase()

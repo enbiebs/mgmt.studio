@@ -46,6 +46,8 @@ assert.ok(!isBrandingPathFor('nimino-7tohmry', 'photo', 'nimino-7tohmry/photo-.j
 assert.ok(!isBrandingPathFor('nimino-7tohmry', 'photo', 'x'.repeat(300)))
 assert.ok(!isBrandingPathFor('nimino-7tohmry', 'photo', null))
 assert.ok(!isBrandingPathFor('nimino-7tohmry', 'photo', 42))
+assert.ok(!isBrandingPathFor('nimino-7tohmry', 'photo', 'nimino-7tohmry/PHOTO-a1b2c3.jpg'))      // the shape is exact: the database check is case-sensitive too
+assert.ok(!isBrandingPathFor('Nimino-7tohmry', 'photo', 'nimino-7tohmry/photo-a1b2c3.jpg'))      // another artist whose id differs only by capitals
 assert.ok(!isBrandingPathFor('a.b', 'logo', 'aXb/logo-x1.webp'))                                    // a dot in an id is a dot, not "any character"
 // shrinking: the longest side is capped, the shape is kept, nothing is ever made bigger
 assert.deepEqual(fitWithin(4000, 3000, 1600), { width: 1600, height: 1200 })

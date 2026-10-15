@@ -18,6 +18,7 @@ export const LIMITS = {
   ai:     { max: 60,   windowSeconds: 3600 },   // anything that calls the AI reader: it costs money every time
   upload: { max: 60,   windowSeconds: 600 },    // asking for a place to upload a file
   file:   { max: 120,  windowSeconds: 60 },     // opening or removing a stored file, downloading a PDF
+  branding: { max: 600, windowSeconds: 60 },    // an artist's photo or logo shown on a page (a roster can show many at once)
   bank:   { max: 60,   windowSeconds: 3600 },   // connecting or syncing a bank
   invite: { max: 10,   windowSeconds: 3600 },   // sending a login invitation email
   reveal: { max: 60,   windowSeconds: 600 },    // opening or saving an artist's private details
