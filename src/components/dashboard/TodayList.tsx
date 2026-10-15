@@ -11,6 +11,8 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { useToday, recallScope, rememberScope } from '@/lib/useToday'
 import { BUCKET_LABEL, dueLabel, type Bucket, type TodoRow } from '@/lib/tasks'
+import type { KeyDate } from '@/lib/key-dates'
+import { notify } from '@/lib/notify'
 import { STATUS_CONFIG } from '@/components/manager/ProjectsView'
 import type { InboxItem, InboxSeverity } from '@/lib/inbox'
 import { money2 } from '@/lib/settlement-math'
@@ -118,6 +120,7 @@ export function TodayList() {
 function Row({ row, me }: { row: TodoRow; me: string | null }) {
   if (row.kind === 'task') return <TaskRow task={row.task} clientId={row.clientId} clientName={row.clientName} me={me} />
   if (row.kind === 'project') return <ProjectRow project={row.project} clientId={row.clientId} clientName={row.clientName} me={me} />
+  if (row.kind === 'keydate') return <KeyDateRow keyDate={row.keyDate} me={me} />
   return <AutoRow item={row.item} />
 }
 
@@ -158,6 +161,50 @@ function ProjectRow({ project, clientId, clientName, me }: { project: Project; c
           onChange={assign}
           className="px-1 py-1 text-xs text-gray-400 bg-transparent border-0 cursor-pointer hover:text-gray-700 max-w-[110px] truncate disabled:cursor-default"
         />
+        <button onClick={open} className="px-2 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50">Open</button>
+      </div>
+    </div>
+  )
+}
+
+// ── A key date: something a show needs by a day, worked out automatically, up for grabs ──
+
+function KeyDateRow({ keyDate: kd, me }: { keyDate: KeyDate; me: string | null }) {
+  const hasAccess = useStore(s => s.hasAccess)
+  const people = useStore(s => s.workspacePeople)
+  const mayTake = hasAccess('tour', kd.clientId, true)      // the to-do points at a show, so the database needs Tour edit access
+  const late = kd.due < today()
+
+  // Taking it makes a real to-do, given to that person, pointing at the show. The key stops it coming back.
+  function take(assignee: string | null) {
+    const id = useStore.getState().addTask(kd.clientId, {
+      title: kd.title, dueDate: kd.due, assigneeId: assignee || undefined,
+      link: { type: 'show', id: kd.showId }, source: 'auto', autoKey: kd.key,
+    })
+    if (id && assignee && assignee !== me) {
+      const who = people.find(p => p.userId === assignee)?.label ?? 'them'
+      notify(`Given to ${who}`, { label: 'Undo', run: () => useStore.getState().deleteTask(kd.clientId, id) })
+    }
+  }
+  function open() {
+    const s = useStore.getState()
+    s.openClient(kd.clientId)
+    s.setSection('tour')
+    s.setTourSub(kd.go.sub)
+    s.setSelectedShow(kd.showId)
+  }
+
+  return (
+    <div className={ROW}>
+      <span className="mt-0.5 w-[18px] h-[18px] rounded-md border-[1.5px] border-gray-200 bg-gray-50 flex items-center justify-center text-[9px] font-bold text-gray-400 flex-shrink-0" title="A key date, worked out from the show's date">D</span>
+      <div className="flex-1 min-w-0 basis-[calc(100%-2rem)] md:basis-auto">
+        <div className="text-sm"><ChipName name={kd.clientName} /><span className="font-medium break-words">{kd.title}</span></div>
+        <div className="text-xs text-gray-400 mt-0.5">{kd.detail ?? 'Due ahead of the show'}</div>
+      </div>
+      <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto md:ml-0">
+        <span className={`px-2 py-1 text-xs ${late ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>{dueLabel(kd.due, today())}</span>
+        {mayTake && me && <button onClick={() => take(me)} className="px-2 py-1 border border-accent/40 text-accent bg-accent-soft rounded-lg text-xs font-medium hover:bg-accent-soft/70">Take it</button>}
+        {mayTake && <AssigneeSelect clientId={kd.clientId} value={undefined} noneLabel="Give to…" onChange={id => { if (id) take(id) }} className="px-1 py-1 text-xs text-gray-400 bg-transparent border-0 cursor-pointer hover:text-gray-700 max-w-[110px] truncate" />}
         <button onClick={open} className="px-2 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50">Open</button>
       </div>
     </div>

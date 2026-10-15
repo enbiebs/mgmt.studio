@@ -5,7 +5,7 @@ import { addressKey, rateLimit } from '@/lib/api-guard'
 import { calendarTokenSchema } from '@/lib/api-schemas'
 
 // Public, unauthenticated feed — polled by calendar apps with no browser
-// session (see the middleware bypass for this path). The token itself is
+// session (see the proxy bypass for this path). The token itself is
 // the only access control, so this looks the client up with the
 // service-role client rather than a user-scoped RLS query.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {

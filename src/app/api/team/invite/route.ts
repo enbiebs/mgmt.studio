@@ -5,7 +5,7 @@ import { inviteBody } from '@/lib/api-schemas'
 
 // Sends a real email invite that joins the invited person into the
 // caller's existing workspace (see handle_new_user() in
-// supabase/migrations/012_team_invites.sql) instead of spinning up a
+// supabase/migrations/046_pending_invites.sql) instead of spinning up a
 // new one. Manager-only - checked here and enforced again by RLS on
 // every table the invited person will ever touch.
 export async function POST(req: NextRequest) {
@@ -32,16 +32,22 @@ export async function POST(req: NextRequest) {
     if (!data) return fail(400, 'That person was not found')
   }
 
+  // The invitation itself lives in a table only this server can write. When the invited person's account is created,
+  // the database looks the email up THERE to decide which workspace, role and artist they get. It never trusts
+  // what an account says about itself, so nobody can sign up and award themselves access (see migration 046).
   const admin = createAdminClient()
-  const { data: invited, error } = await admin.auth.admin.inviteUserByEmail(email, {
-    data: {
-      invite_workspace_id: wm.workspace_id,
-      invite_role: role,
-      invite_person_id: personId ?? null,
-      invite_client_id: clientId ?? null,
-    },
+  const address = email.toLowerCase()
+  await admin.from('pending_invites').delete().eq('email', address).is('used_at', null)    // a new invitation replaces an earlier unused one
+  const { error: saveErr } = await admin.from('pending_invites').insert({
+    email: address, workspace_id: wm.workspace_id, role, person_id: personId ?? null, client_id: clientId ?? null, created_by: user.id,
   })
-  if (error) return serverError('Invite failed', error, "Couldn't send that invitation. Check the email address and try again.")
+  if (saveErr) return serverError('Invite could not be recorded', saveErr, "Couldn't send that invitation. Please try again.")
+
+  const { data: invited, error } = await admin.auth.admin.inviteUserByEmail(email)
+  if (error) {
+    await admin.from('pending_invites').delete().eq('email', address).is('used_at', null)   // nothing was sent, so nothing stays pending
+    return serverError('Invite failed', error, "Couldn't send that invitation. Check the email address and try again.")
+  }
 
   return NextResponse.json({ ok: true, userId: invited.user?.id })
 }

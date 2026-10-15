@@ -731,7 +731,7 @@ export async function clearInboxChoice(itemKey: string) {
 // ── To-dos (the Home list; see lib/tasks.ts) ───────────────
 export interface TaskRow {
   id: string; client_id: string; title: string; notes: string | null; due_date: string | null
-  assignee: string | null; link_type: string | null; link_id: string | null; source: string
+  assignee: string | null; link_type: string | null; link_id: string | null; source: string; auto_key: string | null
   created_by: string | null; created_at: string; done_at: string | null; done_by: string | null
 }
 
@@ -740,21 +740,34 @@ export function rowToTask(r: TaskRow): Task {
     id: r.id, title: r.title, notes: r.notes ?? undefined, dueDate: r.due_date ?? undefined,
     assigneeId: r.assignee ?? undefined,
     link: r.link_type && r.link_id ? { type: r.link_type as TaskLinkType, id: r.link_id } : undefined,
-    source: r.source as TaskSource, createdBy: r.created_by ?? undefined, createdAt: r.created_at,
+    autoKey: r.auto_key ?? undefined, source: r.source as TaskSource, createdBy: r.created_by ?? undefined, createdAt: r.created_at,
     doneAt: r.done_at ?? undefined, doneBy: r.done_by ?? undefined,
   }
 }
 
 // Only what a person can set is sent; who wrote it, when it was checked off, and which section it belongs to
 // are filled in by the database itself (see migration 040), so a changed browser cannot fake them.
-export async function upsertTask(task: Task, clientId: string) {
+export async function insertTask(task: Task, clientId: string) {
   const supabase = createClient()
-  const { error } = await supabase.from('tasks').upsert({
+  const { error } = await supabase.from('tasks').insert({
     id: task.id, client_id: clientId, title: task.title, notes: task.notes ?? null, due_date: task.dueDate ?? null,
     assignee: task.assigneeId ?? null, link_type: task.link?.type ?? null, link_id: task.link?.id ?? null,
-    source: task.source, done_at: task.doneAt ?? null,
+    source: task.source, auto_key: task.autoKey ?? null, done_at: task.doneAt ?? null,
   })
   if (error) throw error
+}
+
+// Changing a to-do that already exists is a plain UPDATE, not an "upsert": an upsert is also an insert, which needs
+// edit access, so the person a to-do was merely GIVEN to could not tick it off. An update that changed nothing (no
+// permission, or the row is gone) comes back with no rows, which is reported as a failure rather than swallowed.
+export async function saveTask(task: Task) {
+  const supabase = createClient()
+  const { data, error } = await supabase.from('tasks').update({
+    title: task.title, notes: task.notes ?? null, due_date: task.dueDate ?? null,
+    assignee: task.assigneeId ?? null, done_at: task.doneAt ?? null,
+  }).eq('id', task.id).select('id')
+  if (error) throw error
+  if (!data || data.length === 0) throw new Error('That to-do could not be saved')
 }
 
 export async function deleteTaskRow(taskId: string) {

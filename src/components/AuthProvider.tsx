@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (data.user) {
           initFromSupabase(data.user.id)
         } else {
-          // No session — middleware should have caught this, but just in case
+          // No session — the proxy should have caught this, but just in case
           window.location.href = '/login'
         }
       })
