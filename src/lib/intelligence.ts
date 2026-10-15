@@ -10,6 +10,7 @@
 
 import type { Client, Currency, Show } from '@/types'
 import { makeConverter, type FxRates } from '@/lib/budget'
+import { isRegionCode } from '@/lib/regions'
 
 const DAY = 86_400_000
 export const dayDiff = (a: string, b: string) => Math.round((Date.parse(a + 'T00:00:00Z') - Date.parse(b + 'T00:00:00Z')) / DAY)
@@ -29,8 +30,13 @@ const REGION_ALIAS: Record<string, string> = {
 
 export function placeKey(city: string): { name: string; region: string } {
   const parts = city.split(',').map(plain).filter(Boolean)
-  const name = parts[0] ?? ''
-  const last = parts.length > 1 ? parts[parts.length - 1] : ''
+  let name = parts[0] ?? ''
+  let last = parts.length > 1 ? parts[parts.length - 1] : ''
+  // "Chicago IL" / "London UK" (no comma): a trailing state or country code is the region
+  if (parts.length === 1) {
+    const words = name.split(' ')
+    if (words.length >= 2 && isRegionCode(words[words.length - 1])) { last = words.pop() as string; name = words.join(' ') }
+  }
   return { name, region: REGION_ALIAS[last] ?? last }
 }
 
@@ -55,6 +61,7 @@ export interface Booking {
   city: string
   kind: 'show' | 'offer'
   status: string                 // confirmed / hold / inquiry
+  radius?: { miles: number; daysAfter: number }   // the radius clause on the deal, if it has one
 }
 
 export interface Exclude { offerId?: string; showId?: string }
@@ -63,16 +70,22 @@ export interface Exclude { offerId?: string; showId?: string }
 export function bookingsOf(client: Client, exclude: Exclude = {}): Booking[] {
   const out: Booking[] = []
   const showIds = new Set(client.tour.shows.map(s => s.id))
+  const offers = client.agentData?.offers ?? []
+  const radiusOf = (t?: { radiusMiles?: number; radiusDaysAfter?: number }) =>
+    t?.radiusMiles ? { miles: t.radiusMiles, daysAfter: t.radiusDaysAfter ?? 0 } : undefined
   for (const s of client.tour.shows) {
     if (s.status === 'cancelled' || s.id === exclude.showId) continue
-    out.push({ key: `show:${s.id}`, date: s.date, venue: s.venue, city: s.city, kind: 'show', status: s.status })
+    // a show carries the radius clause of the offer it came from
+    const radius = radiusOf(offers.find(o => o.id === s.tourOfferId)?.terms)
+    out.push({ key: `show:${s.id}`, date: s.date, venue: s.venue, city: s.city, kind: 'show', status: s.status, ...(radius ? { radius } : {}) })
   }
-  for (const o of client.agentData?.offers ?? []) {
+  for (const o of offers) {
     if (o.id === exclude.offerId) continue
     if (o.status !== 'inquiry' && o.status !== 'hold' && o.status !== 'confirmed') continue
     // An offer that already became a show is that show; don't list the deal twice.
     if (o.showId && (showIds.has(o.showId) || o.showId === exclude.showId)) continue
-    out.push({ key: `offer:${o.id}`, date: o.date, venue: o.venue, city: o.city, kind: 'offer', status: o.status })
+    const radius = radiusOf(o.terms)
+    out.push({ key: `offer:${o.id}`, date: o.date, venue: o.venue, city: o.city, kind: 'offer', status: o.status, ...(radius ? { radius } : {}) })
   }
   return out
 }
