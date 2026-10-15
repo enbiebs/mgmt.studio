@@ -48,7 +48,7 @@ const FIELD: Record<string, string> = {
   vendor: 'vendor', amount: 'amount', description: 'description', bill_number: 'bill number', bucket: 'budget line',
   title: 'title', type: 'type', counterparty: 'counterparty', value: 'value', signed_date: 'signed date',
   expiry_date: 'expiry date', flagged: 'flag', payments: 'payments', total_due: 'total due', balance_due: 'balance due',
-  event_name: 'event', prepared_on: 'statement date', payout: 'payout', summary: 'summary', deal: 'deal', fx: 'exchange rates',
+  drive_url: 'folder link', event_name: 'event', prepared_on: 'statement date', payout: 'payout', summary: 'summary', deal: 'deal', fx: 'exchange rates',
   response_note: 'artist\'s note', responded_at: 'answer date', message: 'message', detail: 'detail level',
 }
 // Behind-the-scenes links and copies: recorded, but meaningless to read ("set the show link to show-x5coe98").
@@ -96,6 +96,7 @@ function describeChange(field: string, change: unknown): string {
   if (Array.isArray(change)) {
     const [from, to] = change
     if (field === 'paid') return to ? 'marked it paid' : 'marked it unpaid'
+    if (field === 'drive_url') return to ? 'linked a folder' : 'removed the folder link'
     if (field === 'history_only') return to ? 'kept it as history only' : 'took it out of history'
     if (field === 'via_agency') return to ? 'marked it as booked through an agency' : 'marked it as booked direct'
     if (field === 'locked_at') return to ? 'locked the budget\'s Original' : 'unlocked the budget'

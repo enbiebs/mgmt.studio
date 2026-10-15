@@ -1,6 +1,8 @@
 'use client'
 import { useStore } from '@/lib/store'
 import { shareOnlyTabs, effectiveSub } from '@/lib/item-access'
+import { SECTION_FOLDER, folderLabel, folderLink } from '@/lib/drive-links'
+import { Icon } from '@/components/ui/Icon'
 
 const SUBNAV: Record<string, [string, string][]> = {
   songs:     [['Tracks', 'tracks'], ['Label Copy', 'labelcopy'], ['Checklist', 'checklist'], ['Status', 'status']],
@@ -46,6 +48,8 @@ export function Subnav() {
   }
 
   if (subs.length === 0) return null
+  const folderKey = SECTION_FOLDER[section]
+  const folder = folderKey ? folderLink(client, folderKey) : undefined
 
   return (
     <div className="flex-shrink-0 flex items-stretch gap-1 px-3 md:px-6 border-b border-gray-100 overflow-x-auto no-scrollbar">
@@ -63,6 +67,14 @@ export function Subnav() {
           {label}
         </button>
       ))}
+      {folder && folderKey && (
+        <a
+          href={folder} target="_blank" rel="noopener noreferrer" title={`Open the ${folderLabel(folderKey)} folder`}
+          className="ml-auto flex flex-shrink-0 items-center gap-1.5 self-center whitespace-nowrap px-2 text-xs font-medium text-gray-500 transition-colors hover:text-accent"
+        >
+          <Icon name="folder" className="h-4 w-4" /> <span className="hidden sm:inline">{folderLabel(folderKey)} folder</span><span aria-hidden>↗</span>
+        </a>
+      )}
     </div>
   )
 }

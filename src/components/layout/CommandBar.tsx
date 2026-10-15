@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { fromDateStr } from '@/lib/utils'
 import { searchCommands, type Searchable } from '@/lib/command-search'
+import { DRIVE_FOLDERS, folderLink } from '@/lib/drive-links'
 import { Icon, type IconName } from '@/components/ui/Icon'
 import type { MainSection } from '@/types'
 import { useVisibleNav } from './nav'
@@ -87,6 +88,17 @@ export function CommandBar() {
     }
     out.push({ id: 'sign-out', group: 'Actions', icon: 'arrow', label: 'Sign out', run: () => { void useStore.getState().signOut() } })
 
+    // The open artist's Drive folders, one keystroke away.
+    if (view === 'studio' && current) {
+      for (const [key, label] of DRIVE_FOLDERS) {
+        const url = folderLink(current, key)
+        if (url) out.push({
+          id: `folder-${key}`, group: 'Folders', icon: 'folder', label: key === 'root' ? 'Open the artist folder' : `Open the ${label} folder`,
+          hint: `${current.name} · Drive`, keywords: 'drive google files folder',
+          run: () => { window.open(url, '_blank', 'noopener,noreferrer') },
+        })
+      }
+    }
     for (const c of roster) {
       out.push({ id: `artist-${c.id}`, group: 'Artists', icon: 'home', label: c.name, hint: c.isDemo ? 'Demo artist' : 'Open artist', run: () => useStore.getState().openClient(c.id) })
     }

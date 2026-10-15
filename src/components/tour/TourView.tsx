@@ -4,6 +4,7 @@ import { useStore } from '@/lib/store'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { CalendarImportModal } from '@/components/tour/CalendarImportModal'
 import { ShowProgressPanel } from '@/components/tour/ShowProgressPanel'
+import { ShowFolderLink } from '@/components/tour/ShowFolderLink'
 import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { MONTH_NAMES, MONTH_SHORT, today } from '@/lib/utils'
@@ -306,6 +307,7 @@ export function TourView() {
                   {l as string}
                 </button>
               ))}
+              <ShowFolderLink show={selected} canEdit={editable} />
               <ItemAccessButton itemType="show" itemId={selected.id} />
             </div>
             {editable && (
