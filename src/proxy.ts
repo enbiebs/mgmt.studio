@@ -4,7 +4,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-export async function middleware(request: NextRequest) {
+// (Next.js 16 calls this file convention "proxy"; it used to be "middleware". It runs in front of every page and API call.)
+export async function proxy(request: NextRequest) {
   // Demo mode: no Supabase credentials configured — skip auth entirely
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     return NextResponse.next({ request })
