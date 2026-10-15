@@ -388,7 +388,7 @@ export interface ArtistTodo {
 // A hand-written to-do that belongs to one artist and is given to one teammate. What points at a show
 // or an invoice carries the link so "Open" lands in the right place; who may see it follows that link.
 export type TaskLinkType = 'show' | 'offer' | 'invoice' | 'expense' | 'contract' | 'song' | 'project'
-export type TaskSource = 'manual' | 'command_bar' | 'agent'
+export type TaskSource = 'manual' | 'command_bar' | 'agent' | 'auto'
 
 export interface Task {
   id: string
@@ -397,6 +397,7 @@ export interface Task {
   dueDate?: string            // YYYY-MM-DD
   assigneeId?: string         // the login it is given to (a WorkspacePerson.userId); none = nobody yet
   link?: { type: TaskLinkType; id: string }
+  autoKey?: string            // set when it was made by taking a key date ("advance:<show id>"), so it is never made twice
   source: TaskSource
   createdBy?: string
   createdAt: string           // ISO timestamp

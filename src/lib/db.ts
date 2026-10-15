@@ -729,7 +729,7 @@ export async function clearInboxChoice(itemKey: string) {
 // ── To-dos (the Home list; see lib/tasks.ts) ───────────────
 export interface TaskRow {
   id: string; client_id: string; title: string; notes: string | null; due_date: string | null
-  assignee: string | null; link_type: string | null; link_id: string | null; source: string
+  assignee: string | null; link_type: string | null; link_id: string | null; source: string; auto_key: string | null
   created_by: string | null; created_at: string; done_at: string | null; done_by: string | null
 }
 
@@ -738,7 +738,7 @@ export function rowToTask(r: TaskRow): Task {
     id: r.id, title: r.title, notes: r.notes ?? undefined, dueDate: r.due_date ?? undefined,
     assigneeId: r.assignee ?? undefined,
     link: r.link_type && r.link_id ? { type: r.link_type as TaskLinkType, id: r.link_id } : undefined,
-    source: r.source as TaskSource, createdBy: r.created_by ?? undefined, createdAt: r.created_at,
+    autoKey: r.auto_key ?? undefined, source: r.source as TaskSource, createdBy: r.created_by ?? undefined, createdAt: r.created_at,
     doneAt: r.done_at ?? undefined, doneBy: r.done_by ?? undefined,
   }
 }
@@ -750,7 +750,7 @@ export async function upsertTask(task: Task, clientId: string) {
   const { error } = await supabase.from('tasks').upsert({
     id: task.id, client_id: clientId, title: task.title, notes: task.notes ?? null, due_date: task.dueDate ?? null,
     assignee: task.assigneeId ?? null, link_type: task.link?.type ?? null, link_id: task.link?.id ?? null,
-    source: task.source, done_at: task.doneAt ?? null,
+    source: task.source, auto_key: task.autoKey ?? null, done_at: task.doneAt ?? null,
   })
   if (error) throw error
 }

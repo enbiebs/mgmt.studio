@@ -21,6 +21,7 @@ export function useToday(scope: 'mine' | 'everyone'): { list: TodayList; hiddenA
   const data = useStore(s => s.data)
   const accessibleClientIds = useStore(s => s.accessibleClientIds)
   const grants = useStore(s => s.grants)
+  const hasAccess = useStore(s => s.hasAccess)
   const inbox = useInbox()
   const me = useMe()
 
@@ -28,8 +29,8 @@ export function useToday(scope: 'mine' | 'everyone'): { list: TodayList; hiddenA
     void grants   // a change in what this person may open re-runs this
     const ids = accessibleClientIds()
     const clients = ids === 'all' ? data.clients : data.clients.filter(c => ids.includes(c.id))
-    return buildToday({ clients, inbox: inbox.visible, me, scope, today: today() })
-  }, [data, accessibleClientIds, grants, inbox.visible, me, scope])
+    return buildToday({ clients, inbox: inbox.visible, me, scope, today: today(), canTour: id => hasAccess('tour', id) })
+  }, [data, accessibleClientIds, grants, hasAccess, inbox.visible, me, scope])
 
   return { list, hiddenAuto: inbox.hidden, me }
 }

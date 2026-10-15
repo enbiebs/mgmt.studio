@@ -429,7 +429,7 @@ interface StudioState {
 
   // ── To-dos (the Today list; see lib/tasks.ts) ──
   /** Adds a to-do for an artist and returns its id (so a toast can offer Undo), or null if it could not be added. */
-  addTask: (clientId: string, patch: { title: string; dueDate?: string; assigneeId?: string; link?: { type: TaskLinkType; id: string }; notes?: string; source?: TaskSource }) => string | null
+  addTask: (clientId: string, patch: { title: string; dueDate?: string; assigneeId?: string; link?: { type: TaskLinkType; id: string }; notes?: string; source?: TaskSource; autoKey?: string }) => string | null
   toggleTask: (clientId: string, taskId: string) => void
   updateTask: (clientId: string, taskId: string, patch: { title?: string; dueDate?: string | null; assigneeId?: string | null; notes?: string | null }) => void
   deleteTask: (clientId: string, taskId: string) => void
@@ -2525,7 +2525,7 @@ export const useStore = create<StudioState>((set, get) => ({
     const task: Task = {
       id: 'task-' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : uid() + uid() + uid()),
       title, notes: patch.notes?.trim() || undefined, dueDate: patch.dueDate || undefined,
-      assigneeId: patch.assigneeId || undefined, link: patch.link, source: patch.source ?? 'manual',
+      assigneeId: patch.assigneeId || undefined, link: patch.link, autoKey: patch.autoKey, source: patch.source ?? 'manual',
       createdBy: userId ?? undefined, createdAt: new Date().toISOString(),
     }
     const withTask = (list: Task[] | undefined) => [...(list ?? []), task]
