@@ -33,9 +33,9 @@ export interface InboxItem {
   go: { section: MainSection; sub?: string }   // where "Open" takes you
 }
 
-// What this person may see for this client: money items need Finance, offer and show
-// items need Tour. (The artist's own login never gets an inbox at all.)
-export interface InboxAccess { finance: boolean; tour: boolean }
+// What this person may see for this client: money items need Finance, show items need Tour,
+// offer items need Deals & fees. (The artist's own login never gets an inbox at all.)
+export interface InboxAccess { finance: boolean; tour: boolean; deals: boolean }
 
 const DAY = 86_400_000
 const days = (a: string, b: string) => Math.round((Date.parse(a + 'T00:00:00Z') - Date.parse(b + 'T00:00:00Z')) / DAY)
@@ -104,8 +104,8 @@ export function buildInbox(client: Client, today: string, access: InboxAccess): 
     }
   }
 
-  // ── Shows & offers ────────────────────────────────────
-  if (access.tour) {
+  // ── Offers ────────────────────────────────────────────
+  if (access.deals) {
     for (const o of client.agentData?.offers ?? []) {
       if (o.status !== 'inquiry' && o.status !== 'hold') continue
 
@@ -124,7 +124,7 @@ export function buildInbox(client: Client, today: string, access: InboxAccess): 
         add('offer_hold', o.id, 'soon', { title: `The hold at ${o.venue} is still unconfirmed (the date is ${when(away)})`, detail: `${o.city} · ${o.promoter}`, date: o.date, go: { section: 'tour', sub: 'offers' } })
       }
 
-      // The artist's answer to an offer sheet (sheets carry budget numbers: Tour + Finance).
+      // The artist's answer to an offer sheet (sheets carry budget numbers: Deals & fees + Finance).
       if (access.finance) {
         const sheet = latestSheet(client.tour.offerSheets, o.id)
         if (sheet?.status === 'approved') {

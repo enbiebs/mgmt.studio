@@ -41,6 +41,7 @@ import { balanceOf } from '@/lib/settlement-math'
 import type { InboxChoice } from '@/lib/inbox'
 import { SHOW_UNFINISHED_KEY } from '@/lib/unfinished'
 import { buildOfferSheetSnapshot } from '@/lib/offer-sheet'
+import { hasDealData, splitDealPatch, withoutDeal } from '@/lib/show-deals'
 import {
   SECTION_TO_GRANT_KEY, findException, filterClientForViewer,
   type ItemException, type ItemType, type ItemEffect, type Viewer,
@@ -56,7 +57,7 @@ import {
   upsertAlbum, deleteAlbum as dbDeleteAlbum, upsertChecklist,
   upsertPerson, deletePerson as dbDeletePerson,
   upsertStakeholder, deleteStakeholder as dbDeleteStakeholder,
-  upsertShow, deleteShow as dbDeleteShow,
+  upsertShow, upsertShowDeal, deleteShow as dbDeleteShow,
   upsertOffer, deleteOffer as dbDeleteOffer,
   insertOfferSheet, answerOfferSheet as dbAnswerOfferSheet, withdrawOfferSheets,
   insertSettlement, updateSettlementPayments, deleteSettlementRow,
@@ -163,7 +164,7 @@ function pushDeleteToGoogleCalendar(clientId: string, recordType: 'show' | 'post
 // 'calendar' has no grant of its own (see hasAccess) — it's a read-only aggregate
 // view gated per-event by the underlying section's own access, not a section
 // anyone can be granted.
-const ALL_SECTIONS: MainSection[] = ['songs', 'tour', 'content', 'finance', 'team', 'projects', 'analytics', 'legal', 'profile']
+const ALL_SECTIONS: MainSection[] = ['songs', 'tour', 'deals', 'content', 'finance', 'team', 'projects', 'analytics', 'legal', 'profile']
 
 // ── State shape ─────────────────────────────────────────────
 interface StudioState {
@@ -578,6 +579,7 @@ export const useStore = create<StudioState>((set, get) => ({
     if (s.role === 'manager') return true
     if (s.role === 'artist') {
       if (s.authClientId !== cid) return false
+      if (section === 'deals') return false   // what shows pay is management's business; the artist sees what management sends as an offer sheet
       return requireEdit ? section === 'projects' : true
     }
     const key = SECTION_TO_GRANT_KEY[section]
@@ -775,9 +777,8 @@ export const useStore = create<StudioState>((set, get) => ({
   goToDashboard: () => set({ view: 'dashboard', clientId: null, selectedShowId: null, selectedAlbumId: null }),
   openClient: (id) => {
     const s = get()
-    const firstSection = (s.role === 'manager' || s.role === 'artist')
-      ? 'calendar'
-      : (ALL_SECTIONS.find(sec => s.hasAccess(sec, id)) ?? 'songs')
+    const firstAccessible = (s.role === 'manager' || s.role === 'artist') ? 'calendar' : (ALL_SECTIONS.find(sec => s.hasAccess(sec, id)) ?? 'songs')
+    const firstSection: MainSection = firstAccessible === 'deals' ? 'tour' : firstAccessible   // Deals & fees opens on the Tour page's Offers tab
     set({ view: 'studio', clientId: id, section: firstSection, selectedShowId: null, selectedAlbumId: null })
   },
   setSection:    (section) => set({ section, selectedShowId: null }),
@@ -2085,9 +2086,12 @@ export const useStore = create<StudioState>((set, get) => ({
     }
   },
 
-  importShows: async (shows) => {
+  importShows: async (imported) => {
     const { clientId } = get()
-    if (!clientId || shows.length === 0) return { saved: 0, failed: 0 }
+    if (!clientId || imported.length === 0) return { saved: 0, failed: 0 }
+    // Fees in a spreadsheet are Deals & fees: without that page's edit access the shows come in, the money does not.
+    const mayEditMoney = get().hasAccess('deals', clientId, true)
+    const shows = mayEditMoney ? imported : imported.map(withoutDeal)
     const updated = {
       clients: get().data.clients.map(c => {
         if (c.id !== clientId) return c
@@ -2099,7 +2103,7 @@ export const useStore = create<StudioState>((set, get) => ({
     // Saved a few at a time so a long calendar doesn't open dozens of connections at once.
     let failed = 0
     for (let i = 0; i < shows.length; i += 8) {
-      const results = await Promise.allSettled(shows.slice(i, i + 8).map(s => upsertShow(s, clientId)))
+      const results = await Promise.allSettled(shows.slice(i, i + 8).map(s => upsertShow(s, clientId).then(() => (mayEditMoney && hasDealData(s)) ? upsertShowDeal(s, clientId) : undefined)))
       failed += results.filter(r => r.status === 'rejected').length
     }
     shows.forEach(s => pushToGoogleCalendar(clientId, 'show', s))
@@ -2134,8 +2138,12 @@ export const useStore = create<StudioState>((set, get) => ({
 
   // Guarantee/deposit/currency don't appear on the pushed Google event
   // either, for the same reason — no push here.
-  updateShowFinancials: (showId, patch) => {
+  updateShowFinancials: (showId, change) => {
     const { data, clientId } = get()
+    // A fee is Deals & fees: without edit access to that page only the other fields (history flag, Drive link) can change.
+    const { rest, touchesDeal } = splitDealPatch(change)
+    const mayEditMoney = !!clientId && get().hasAccess('deals', clientId, true)
+    const patch = mayEditMoney ? change : rest
     let updatedShow: Show | undefined
     const updated = {
       clients: data.clients.map(c => {
@@ -2155,7 +2163,11 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
-    if (clientId && updatedShow) upsertShow(updatedShow, clientId).catch(console.error)
+    // The money is saved to its own table; the show row only when something that belongs to it changed.
+    if (clientId && updatedShow) {
+      if (Object.keys(rest).length > 0) upsertShow(updatedShow, clientId).catch(console.error)
+      if (mayEditMoney && touchesDeal) upsertShowDeal(updatedShow, clientId).catch(console.error)
+    }
   },
 
   generateInvoiceFromShow: (showId) => {
@@ -2163,6 +2175,8 @@ export const useStore = create<StudioState>((set, get) => ({
     const client = data.clients.find(c => c.id === clientId)
     const show = client?.tour.shows.find(s => s.id === showId)
     if (!client || !show || !show.guarantee || show.invoiceId) return
+    // An invoice is Finance and the fee it comes from is Deals & fees: it needs edit access to both.
+    if (!get().hasAccess('finance', client.id, true) || !get().hasAccess('deals', client.id, true)) return
 
     const agencyPct = show.viaAgency ? (show.agencyCommissionPct ?? 0) : 0
     const mgmtPct = show.viaAgency ? (show.managementCommissionPct ?? 0) : 0
@@ -2197,11 +2211,11 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     if (workspaceId && clientId) {
-      // shows.invoice_id has a real foreign key to invoices — the invoice
+      // show_deals.invoice_id has a real foreign key to invoices — the invoice
       // must land in the DB first, same ordering fix already used for the
       // offer→show write.
       upsertInvoice(invoice, clientId)
-        .then(() => upsertShow(updatedShow, clientId))
+        .then(() => upsertShowDeal(updatedShow, clientId))
         .catch(console.error)
     }
   },
@@ -2257,6 +2271,9 @@ export const useStore = create<StudioState>((set, get) => ({
     let lockedBudget: Budget | undefined
     let newAdvance: ShowAdvance | undefined
     let withdrewSheets = false
+    // Confirming an offer also adds its show, which is Tour. Someone with Deals & fees but no Tour edit can confirm the offer; the show is left for the team.
+    const mayMakeShow = get().hasAccess('tour', clientId ?? undefined, true)
+    const wasConfirmed = data.clients.find(c => c.id === clientId)?.agentData?.offers.find(o => o.id === offerId)?.status === 'confirmed'
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId || !c.agentData) return c
@@ -2265,7 +2282,7 @@ export const useStore = create<StudioState>((set, get) => ({
           updatedOffer = { ...o, ...patch }
           // Confirming an offer creates its Show automatically — only on the
           // transition into 'confirmed', not on every edit while confirmed.
-          if (patch.status === 'confirmed' && o.status !== 'confirmed' && !updatedOffer.showId) {
+          if (patch.status === 'confirmed' && o.status !== 'confirmed' && !updatedOffer.showId && mayMakeShow) {
             newShow = {
               id: 'show-' + uid(), date: updatedOffer.date, city: updatedOffer.city,
               venue: updatedOffer.venue, time: '20:00', status: 'confirmed',
@@ -2323,7 +2340,9 @@ export const useStore = create<StudioState>((set, get) => ({
       // the show must land in the DB first — write them in sequence, not
       // fire-and-forget in parallel, or the offer write can lose the race
       // and get rejected for pointing at a show that doesn't exist yet.
-      upsertShow(newShow, clientId)
+      const madeShow = newShow
+      upsertShow(madeShow, clientId)
+        .then(() => hasDealData(madeShow) ? upsertShowDeal(madeShow, clientId) : undefined)    // its fee comes from the offer
         .then(() => { if (workspaceId && updatedOffer) return upsertOffer(updatedOffer, clientId) })
         .then(() => { if (workspaceId && lockedBudget) return upsertBudget(lockedBudget, clientId) })
         .then(() => { if (workspaceId && newAdvance) return upsertAdvance(newAdvance) })
@@ -2336,6 +2355,9 @@ export const useStore = create<StudioState>((set, get) => ({
       )
     } else if (workspaceId && clientId && updatedOffer) {
       upsertOffer(updatedOffer, clientId).catch(console.error)
+      if (patch.status === 'confirmed' && !wasConfirmed && !mayMakeShow) {
+        notify('Confirmed. The show itself still needs adding by someone with Tour access.')
+      }
     }
   },
 

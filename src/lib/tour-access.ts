@@ -6,3 +6,8 @@ import { requireClientAccess, type LimitName } from '@/lib/api-guard'
 export async function requireTourEditAccess(clientId: unknown, limit: LimitName = 'api') {
   return requireClientAccess(clientId, { section: 'tour', edit: true, limit, managementSide: true })
 }
+
+// Booking offers and show fees are Deals & fees, not Tour: same shape, a different page.
+export async function requireDealsEditAccess(clientId: unknown, limit: LimitName = 'api') {
+  return requireClientAccess(clientId, { section: 'deals', edit: true, limit, managementSide: true })
+}

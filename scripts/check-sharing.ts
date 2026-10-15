@@ -13,7 +13,7 @@ const people = [
 ]
 const grants = [
   grant('1', 'sam', 'admin', 'a', true),
-  grant('2', 'dana', 'finance', 'a', true), grant('3', 'dana', 'tour', 'a', true), grant('4', 'dana', 'team', 'a', false),
+  grant('2', 'dana', 'finance', 'a', true), grant('3', 'dana', 'tour', 'a', true), grant('4', 'dana', 'team', 'a', false), grant('4b', 'dana', 'deals', 'a', false),
   grant('5', 'jo', 'tour', 'a', false), grant('6', 'jo', 'tour', 'b', true),
   grant('7', 'ann', 'legal', 'b', true),                                              // only another artist
 ]
@@ -28,7 +28,7 @@ assert.ok(!rows.some(r => r.person.label === 'Ann'))                            
 const byName = (n: string) => rows.find(r => r.person.label === n)!
 const keyOf = (n: string) => { const r = byName(n); return r.kind === 'person' ? r.levelKey : r.kind }
 assert.equal(keyOf('Sam'), 'admin')
-assert.equal(keyOf('Dana'), 'tourmanager')   // finance edit + tour edit + team view is the tour/production manager level
+assert.equal(keyOf('Dana'), 'tourmanager')   // finance edit + tour edit + deals view + team view is the tour/production manager level
 assert.equal(keyOf('Jo'), 'crew')               // tour view only
 assert.equal(levelLabel('admin'), 'Point Person')
 assert.equal(levelLabel('crew'), 'Touring Crew')

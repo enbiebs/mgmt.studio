@@ -19,7 +19,7 @@ for (const k of ['crew', 'readonly']) {
   assert.ok(Object.values(presetByKey(k)!.levels).every(v => v === 'view'), `${k} must be look-only`)   // crew and look-only can never change anything
 }
 assert.deepEqual(presetByKey('crew')!.levels, { tour: 'view' })
-assert.ok(presetByKey('crew')!.hidden.includes('offers'))                                                // the plain-language note admits offers are part of Tour
+assert.ok(presetByKey('crew')!.hidden.includes('offers'))                                                // the plain-language note says offers and fees are out of reach
 assert.equal(presetByKey('full')!.levels.finance, 'edit')
 
 // reading what is granted for one artist (other artists' rows and unknown sections are ignored)
@@ -33,7 +33,7 @@ assert.equal(matchPreset([], 'a'), 'none')
 assert.equal(matchPreset(grants, 'a'), 'crew')
 assert.equal(matchPreset([row('1', 'tour', 'a', true)], 'a'), 'custom')                                  // same section but can change: not the crew level
 assert.equal(matchPreset([row('1', 'tour', 'a', false), row('2', 'music', 'a', false)], 'a'), 'custom')
-const bookkeeper = [row('1', 'finance', 'a', true), row('2', 'tour', 'a', false)]
+const bookkeeper = [row('1', 'finance', 'a', true), row('2', 'tour', 'a', false), row('3', 'deals', 'a', true)]
 assert.equal(matchPreset(bookkeeper, 'a'), 'bookkeeper')
 assert.equal(matchPreset(bookkeeper, 'other'), 'none')                                                   // another artist's grants don't count
 
@@ -45,7 +45,7 @@ assert.deepEqual(plan.update, [{ id: 'g1', canEdit: false }])
 assert.deepEqual(plan.add, [])
 assert.ok(![...plan.remove, ...plan.update.map(u => u.id)].includes('g4'))                               // artist b is untouched
 const toFull = planChanges([], 'a', presetByKey('full')!.levels)
-assert.equal(toFull.add.length, 9)
+assert.equal(toFull.add.length, 10)
 assert.ok(toFull.add.every(a => a.canEdit))
 assert.deepEqual(planChanges(current, 'a', {}), { remove: ['g1', 'g2', 'g3'], update: [], add: [] })     // "no access" removes all of this artist's rows
 assert.deepEqual(planChanges(bookkeeper, 'a', presetByKey('bookkeeper')!.levels), { remove: [], update: [], add: [] })   // already that level: nothing to do
@@ -57,10 +57,14 @@ for (const p of PRESETS) {
   const profile = p.levels.profile
   assert.equal(!!profile, p.key === 'full', `${p.key}: only Full access includes the profile (found ${profile})`)
 }
-// every "can't see" line is honest about booking offers living inside Tour wherever Tour is included
-for (const p of PRESETS) if (p.levels.tour && !p.levels.finance) assert.ok(/offers/i.test(p.hidden), `${p.key}: say that offers (with fees) are part of Tour`)
-// ... and a level with money but no Tour (the business manager) says its fees are out of reach until offers move out of Tour
-assert.ok(/offers/i.test(presetByKey('businessmanager')!.hidden))
+// Deals & fees (booking offers and what a show pays) is its own page: every level that includes Tour but not Deals says offers and fees are out of reach
+for (const p of PRESETS) if (p.levels.tour && !p.levels.deals) assert.ok(/offers/i.test(p.hidden), `${p.key}: say that offers and fees are hidden`)
+// touring crew, the creative team, lawyers and look-only never get anyone's fees; nobody who may not change money can change a fee
+for (const k of ['crew', 'creative', 'lawyer', 'readonly']) assert.ok(!presetByKey(k)!.levels.deals, `${k} must not see deals`)
+assert.equal(presetByKey('tourmanager')!.levels.deals, 'view')                              // the tour manager reads the fees, a business manager or agent changes them
+assert.equal(presetByKey('businessmanager')!.levels.deals, 'edit')
+assert.equal(presetByKey('agent')!.levels.deals, 'edit')
+assert.ok(PRESETS.every(p => !p.levels.deals || p.levels.deals === 'view' || p.levels.finance === 'edit' || ['full', 'agent', 'assistant'].includes(p.key)))
 
 // choosing a level never touches access the panel can't show (the vault), and says it is there
 const withVault = [row('v', 'vault', 'a', true), row('t', 'tour', 'a', true), row('all', 'finance', null, true)]
@@ -75,7 +79,7 @@ assert.deepEqual(otherAccess([row('1', 'vault', 'b', false)], 'a'), [])         
 // plain-language summary
 assert.equal(summarize(presetByKey('crew')!.levels), 'Can look at: Tour')
 assert.equal(summarize({}), 'Cannot see anything for this artist')
-assert.ok(summarize(presetByKey('bookkeeper')!.levels).startsWith('Can change: Finance'))
+assert.ok(/^Can change: .*Finance/.test(summarize(presetByKey('bookkeeper')!.levels)))
 
 // ── the roles Eli asked for ──
 assert.equal(presetByKey('crew')!.label, 'Touring Crew')
@@ -135,7 +139,7 @@ assert.equal(overallLevel({ tour: 'view', team: 'view' }), 'view')
 assert.equal(overallLevel({ tour: 'edit', finance: 'edit' }), 'edit')
 assert.equal(overallLevel({ tour: 'edit', team: 'view' }), 'mixed')
 assert.deepEqual(levelsForRole('crew'), { tour: 'view' })
-assert.deepEqual(levelsForRole('tourmanager'), { tour: 'edit', finance: 'edit', team: 'view' })
+assert.deepEqual(levelsForRole('tourmanager'), { tour: 'edit', deals: 'view', finance: 'edit', team: 'view' })
 assert.deepEqual(levelsForRole('admin'), {})                                                   // a Point Person has no page list
 assert.deepEqual(levelsForRole('nonsense'), {})
 

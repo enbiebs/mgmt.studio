@@ -12,6 +12,7 @@
 
 import { useStore } from '@/lib/store'
 import { effectiveSub, shareOnlyTabs } from '@/lib/item-access'
+import { canOpenSection, visibleTourTabs } from '@/lib/tour-tabs'
 import { AppHeader }  from '@/components/layout/AppHeader'
 import { Subnav }     from '@/components/layout/Subnav'
 import { Rail }       from '@/components/layout/Rail'
@@ -67,7 +68,12 @@ export function StudioApp() {
   const songsSub = effectiveSub(rawSongsSub, allowedTabs) as typeof rawSongsSub
   const contentSub = effectiveSub(rawContentSub, allowedTabs) as typeof rawContentSub
   const bizSub = effectiveSub(rawBizSub, allowedTabs) as typeof rawBizSub
-  const tourSub = effectiveSub(rawTourSub, allowedTabs) as typeof rawTourSub
+  // The Tour page opens for Tour, for Deals & fees alone, or both; each person lands on a tab they actually have.
+  const tourTabs = visibleTourTabs({
+    tour: hasAccess('tour'), deals: hasAccess('deals'), finance: role !== 'artist' && hasAccess('finance'),
+    sharedTabs: isShareOnly('tour') ? shareOnlyTabs('tour', data.clients.find(c => c.id === clientId)) : undefined,
+  })
+  const tourSub = effectiveSub(rawTourSub, tourTabs.length > 0 ? tourTabs : undefined) as typeof rawTourSub
 
   // Show loading spinner while Supabase data is hydrating
   if (isLoading) {
@@ -130,7 +136,7 @@ export function StudioApp() {
 
         {/* ── Studio: everyone else shares the real Manager views, gated by hasAccess() ── */}
         {view === 'studio' && role !== 'artist' && (
-          hasAccess(section) ? (
+          canOpenSection(section, s => hasAccess(s)) ? (
             <>
               <Subnav />
               {section === 'tour' && ['advance', 'daysheet', 'travel', 'guests'].includes(tourSub) && <ShowProgressBar />}

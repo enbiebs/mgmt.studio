@@ -82,7 +82,7 @@ export function CommandBar() {
     // Actions come right after the pages, so they are easy to find.
     const pasteFor = view === 'studio' && current ? [current] : roster
     for (const c of pasteFor) {
-      if (!hasAccess('tour', c.id, true)) continue
+      if (!hasAccess('deals', c.id, true)) continue   // booking offers are Deals & fees
       out.push({
         id: `paste-offer-${c.id}`, group: 'Actions', icon: 'tour', label: `Paste a booking offer for ${c.name}`,
         hint: 'Read an email or PDF into a new booking offer', keywords: 'new offer add email paste',
@@ -116,7 +116,6 @@ export function CommandBar() {
     }
     for (const c of roster) {
       if (!hasAccess('tour', c.id)) continue
-      const showIds = new Set(c.tour.shows.map(s => s.id))
       for (const s of c.tour.shows) {
         if (s.status === 'cancelled') continue
         out.push({
@@ -125,6 +124,10 @@ export function CommandBar() {
           run: () => jump(c.id, 'tour', st => { st.setTourSub('tour'); st.setSelectedShow(s.id) }),
         })
       }
+    }
+    for (const c of roster) {
+      if (!hasAccess('deals', c.id)) continue
+      const showIds = new Set(c.tour.shows.map(s => s.id))   // an offer that already became a show is found as the show
       for (const o of c.agentData?.offers ?? []) {
         if (o.showId && showIds.has(o.showId)) continue
         out.push({

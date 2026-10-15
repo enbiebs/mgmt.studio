@@ -150,6 +150,7 @@ export function peopleFor(people: WorkspacePerson[], clientId: string, me: strin
 /** The section a to-do belongs to: what it points at, or Projects when it points at nothing. The database sets the same value. */
 export function taskSection(link: Task['link']): MainSection {
   if (!link) return 'projects'
+  if (link.type === 'offer') return 'deals'   // booking offers are Deals & fees; "Open" still goes to the Offers tab on the Tour page
   return taskDestination(link).section
 }
 
@@ -178,11 +179,11 @@ const ABOUT_CAP = 15
 /**
  * Everything a to-do for this artist could be about, grouped by kind: shows, offers, songs, invoices, bills,
  * contracts, projects. A kind only appears if the person may EDIT the section such a to-do is saved under (a
- * to-do about a show is saved under Tour, an invoice under Finance, and so on, which is also what the database
+ * to-do about a show is saved under Tour, an offer under Deals & fees, an invoice under Finance, and so on, which is also what the database
  * requires). Each list stays short: what is still open, soonest first. Values look like "invoice:abc123".
  */
 export function aboutOptions(client: Client, canEdit: (section: MainSection) => boolean, today: string): AboutGroup[] {
-  const ok = (type: TaskLinkType) => canEdit(taskDestination({ type, id: '' }).section)
+  const ok = (type: TaskLinkType) => canEdit(taskSection({ type, id: '' }))
   const place = (venue?: string, city?: string) => [venue, city].filter(Boolean).join(' · ')
   const md = (d?: string) => (d ? d.slice(5) : '')
   const byDate = (a?: string, b?: string) => (a ?? '9999').localeCompare(b ?? '9999')

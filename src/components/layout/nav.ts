@@ -4,6 +4,7 @@
 
 import { useStore } from '@/lib/store'
 import { analyticsHasData } from '@/lib/unfinished'
+import { canOpenSection } from '@/lib/tour-tabs'
 import type { MainSection } from '@/types'
 import type { IconName } from '@/components/ui/Icon'
 
@@ -43,6 +44,6 @@ export function useVisibleNav(): NavGroup[] {
   const showUnfinished = useStore(s => s.showUnfinished)
   const analyticsVisible = showUnfinished || analyticsHasData(client)
   return NAV_GROUPS
-    .map(g => ({ ...g, items: g.items.filter(i => hasAccess(i.key, clientId ?? undefined) && (i.key !== 'analytics' || analyticsVisible)) }))
+    .map(g => ({ ...g, items: g.items.filter(i => canOpenSection(i.key, s => hasAccess(s, clientId ?? undefined)) && (i.key !== 'analytics' || analyticsVisible)) }))
     .filter(g => g.items.length > 0)
 }
