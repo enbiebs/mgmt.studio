@@ -24,6 +24,7 @@ import type {
   LegalTemplate, LegalTemplateClause, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
   ReleaseType, Venue, TourOffer, Expense, Vendor, Run, Budget, BudgetBucket, CrewRate, FinanceSettings,
   OfferSheet, OfferSheetDetail, OfferTerms, Settlement, SettlementDraft, SettlementPayment,
+  Task, TaskLinkType, TaskSource, WorkspacePerson,
 } from '@/types'
 import { DEMO_DATA } from '@/lib/demo-data'
 import { DEFAULT_LEGAL_TEMPLATES } from '@/lib/legal-templates-demo'
@@ -47,6 +48,7 @@ import {
   loadWorkspaceData, getMyMembership, getGrantsForMember, getPreviewableMembers,
   loadItemAccess, upsertItemAccess, deleteItemAccess,
   loadInboxState, saveInboxChoice, clearInboxChoice,
+  upsertTask, deleteTaskRow, loadWorkspacePeople,
   type AccessGrant, type PreviewMember,
   upsertClient, deleteClient as dbDeleteClient, setCalendarToken, saveSetupSkipped,
   upsertTrack, deleteTrack as dbDeleteTrack,
@@ -199,6 +201,8 @@ interface StudioState {
   previewBackup: AppData | null
   /** This person's Done / Snoozed choices in the Inbox, by item key. */
   inboxState: Record<string, InboxChoice>
+  /** The teammates a to-do can be given to (empty for an artist's own login). */
+  workspacePeople: WorkspacePerson[]
   /** Show screens that aren't connected to real data yet (kept per browser). */
   showUnfinished: boolean
   setShowUnfinished: (on: boolean) => void
@@ -423,6 +427,15 @@ interface StudioState {
   snoozeInboxItem: (key: string, untilIso: string) => void
   restoreInboxItem: (key: string) => void
 
+  // ── To-dos (the Today list; see lib/tasks.ts) ──
+  /** Adds a to-do for an artist and returns its id (so a toast can offer Undo), or null if it could not be added. */
+  addTask: (clientId: string, patch: { title: string; dueDate?: string; assigneeId?: string; link?: { type: TaskLinkType; id: string }; notes?: string; source?: TaskSource }) => string | null
+  toggleTask: (clientId: string, taskId: string) => void
+  updateTask: (clientId: string, taskId: string, patch: { title?: string; dueDate?: string | null; assigneeId?: string | null; notes?: string | null }) => void
+  deleteTask: (clientId: string, taskId: string) => void
+  /** Internal: saves one changed to-do, undoing it on screen if the save fails. */
+  applyTask: (clientId: string, after: Task, before: Task) => void
+
   // ── Settlements (Stage 4, Part 3) ──
   /** Saves a confirmed settlement for the chosen shows, freezing today's exchange rates into it. */
   confirmSettlement: (draft: SettlementDraft, opts: { showIds: string[]; filePath?: string; fileName?: string }) => Promise<{ ok: true; settlementId: string } | { ok: false; error: string }>
@@ -495,6 +508,7 @@ export const useStore = create<StudioState>((set, get) => ({
   memberGrants: {},
   previewBackup: null,
   inboxState: {},
+  workspacePeople: [],
   showUnfinished: false,
   setShowUnfinished: (on) => {
     try { localStorage.setItem(SHOW_UNFINISHED_KEY, on ? '1' : '0') } catch { /* private window: it just won't be remembered */ }
@@ -613,6 +627,7 @@ export const useStore = create<StudioState>((set, get) => ({
       let itemAccess: ItemException[] = []
       // Everyone except the artist has an inbox (the artist's login never sees money alerts).
       const inboxState = role === 'artist' ? {} : await loadInboxState().catch(e => { console.error(e); return {} as Record<string, InboxChoice> })
+      const workspacePeople = role === 'artist' ? [] : await loadWorkspacePeople().catch(e => { console.error(e); return [] as WorkspacePerson[] })
       if (role === 'agent' || role === 'lawyer' || role === 'team') {
         grants = await getGrantsForMember(memberId)
       } else if (role === 'manager') {
@@ -629,6 +644,7 @@ export const useStore = create<StudioState>((set, get) => ({
         previewMembers,
         itemAccess,
         inboxState,
+        workspacePeople,
         data: hasClients ? appData : { clients: [] },
         legalTemplates,
         // Artists land straight in their own client — no roster to pick from.
@@ -674,7 +690,7 @@ export const useStore = create<StudioState>((set, get) => ({
     // A manager's own session can read every row, so the preview hides what
     // this person's login wouldn't get (the database does it for real logins).
     const base = previewBackup ?? get().data
-    const viewer: Viewer = { memberId: member.id, role: member.role, clientId: member.clientId, grants }
+    const viewer: Viewer = { memberId: member.id, role: member.role, clientId: member.clientId, grants, userId: get().workspacePeople.find(p => p.memberId === member.id)?.userId }
     set({
       role: member.role,
       grants,
@@ -2499,6 +2515,70 @@ export const useStore = create<StudioState>((set, get) => ({
     void _removed
     set({ inboxState: rest })
     clearInboxChoice(key).catch(e => { console.error(e); set({ inboxState: before }) })
+  },
+
+  // ── To-dos ──
+  addTask: (clientId, patch) => {
+    const { data, userId, workspaceId } = get()
+    const title = patch.title.trim().slice(0, 300)
+    if (!title || !data.clients.some(c => c.id === clientId)) return null
+    const task: Task = {
+      id: 'task-' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : uid() + uid() + uid()),
+      title, notes: patch.notes?.trim() || undefined, dueDate: patch.dueDate || undefined,
+      assigneeId: patch.assigneeId || undefined, link: patch.link, source: patch.source ?? 'manual',
+      createdBy: userId ?? undefined, createdAt: new Date().toISOString(),
+    }
+    const withTask = (list: Task[] | undefined) => [...(list ?? []), task]
+    set({ data: { clients: data.clients.map(c => c.id === clientId ? { ...c, tasks: withTask(c.tasks) } : c) } })
+    if (workspaceId) {
+      upsertTask(task, clientId).catch(e => {
+        console.error(e)
+        set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, tasks: (c.tasks ?? []).filter(t => t.id !== task.id) } : c) } })
+        notify("Couldn't save that to-do. You may not have access to add one for this artist.")
+      })
+    }
+    return task.id
+  },
+
+  toggleTask: (clientId, taskId) => {
+    const before = get().data.clients.find(c => c.id === clientId)?.tasks?.find(t => t.id === taskId)
+    if (!before) return
+    const after: Task = { ...before, doneAt: before.doneAt ? undefined : new Date().toISOString() }
+    get().applyTask(clientId, after, before)
+  },
+
+  updateTask: (clientId, taskId, patch) => {
+    const before = get().data.clients.find(c => c.id === clientId)?.tasks?.find(t => t.id === taskId)
+    if (!before) return
+    const after: Task = { ...before }
+    if (patch.title !== undefined) after.title = patch.title.trim().slice(0, 300) || before.title
+    if (patch.dueDate !== undefined) after.dueDate = patch.dueDate || undefined
+    if (patch.assigneeId !== undefined) after.assigneeId = patch.assigneeId || undefined
+    if (patch.notes !== undefined) after.notes = patch.notes?.trim() || undefined
+    get().applyTask(clientId, after, before)
+  },
+
+  applyTask: (clientId, after, before) => {
+    const put = (t: Task) => set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, tasks: (c.tasks ?? []).map(x => x.id === t.id ? t : x) } : c) } })
+    put(after)
+    if (!get().workspaceId) return
+    upsertTask(after, clientId).catch(e => {
+      console.error(e)
+      put(before)
+      notify("Couldn't save that change. You may not have access to change this to-do.")
+    })
+  },
+
+  deleteTask: (clientId, taskId) => {
+    const before = get().data.clients.find(c => c.id === clientId)?.tasks?.find(t => t.id === taskId)
+    if (!before) return
+    set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, tasks: (c.tasks ?? []).filter(t => t.id !== taskId) } : c) } })
+    if (!get().workspaceId) return
+    deleteTaskRow(taskId).catch(e => {
+      console.error(e)
+      set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, tasks: [...(c.tasks ?? []), before] } : c) } })
+      notify("Couldn't remove that to-do. You may not have access to remove it.")
+    })
   },
 
   confirmSettlement: async (draft, { showIds, filePath, fileName }) => {
