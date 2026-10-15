@@ -26,6 +26,9 @@ import { EMPTY_FINANCE }   from '@/lib/finance-demo'
 import { rowToOfferSheet, type OfferSheetRow } from '@/lib/offer-sheet'
 import type { InboxChoice } from '@/lib/inbox'
 import { sectionsWithItems, type ItemException, type ItemType, type ItemEffect } from '@/lib/item-access'
+import type { GrantChanges } from '@/lib/access-presets'
+import type { SharingGrant } from '@/lib/sharing'
+import { uid } from '@/lib/utils'
 
 // ── Load ───────────────────────────────────────────────────
 export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
@@ -905,6 +908,40 @@ export async function getGrantsForMember(workspaceMemberId: string): Promise<Acc
 // Non-manager members of the workspace, for the manager's "preview as"
 // picker — each one labeled by their linked person (team/agent/lawyer)
 // or client (artist).
+// ── Sharing: who can open ONE artist ─────────────────────────
+/** Every access row for one artist. A manager reads them all; a Point Person reads them all except the vault's. */
+export async function fetchArtistGrants(clientId: string): Promise<SharingGrant[]> {
+  const { data, error } = await createClient()
+    .from('access_grants').select('id, workspace_member_id, section, client_id, can_edit').eq('client_id', clientId)
+  if (error) throw error
+  return (data ?? []).map(g => ({ id: g.id, memberId: g.workspace_member_id, section: g.section, clientId: g.client_id, canEdit: g.can_edit }))
+}
+
+/**
+ * Saves a plan from planChanges for one person on one artist. Adds and changes come first and removals last; the rows in
+ * `lastIds` (a Point Person's own admin row) go very last, so someone stepping down or removing themselves still has
+ * the right to finish the job. Throws the moment anything is refused, so the caller can re-read what really saved.
+ */
+export async function applyGrantPlan(memberId: string, clientId: string, plan: GrantChanges, lastIds: string[] = []): Promise<void> {
+  const supabase = createClient()
+  if (plan.add.length) {
+    const { error } = await supabase.from('access_grants')
+      .insert(plan.add.map(a => ({ id: 'grant-' + uid(), workspace_member_id: memberId, section: a.section, client_id: clientId, can_edit: a.canEdit })))
+    if (error) throw error
+  }
+  for (const u of plan.update) {
+    const { data, error } = await supabase.from('access_grants').update({ can_edit: u.canEdit }).eq('id', u.id).select('id')
+    if (error) throw error
+    if (!data?.length) throw new Error('That change was not allowed')
+  }
+  for (const ids of [plan.remove.filter(id => !lastIds.includes(id)), plan.remove.filter(id => lastIds.includes(id))]) {
+    if (!ids.length) continue
+    const { data, error } = await supabase.from('access_grants').delete().in('id', ids).select('id')
+    if (error) throw error
+    if ((data?.length ?? 0) !== ids.length) throw new Error('Some access could not be removed')
+  }
+}
+
 export type PreviewMember = {
   id: string; role: UserRole
   personName: string | null

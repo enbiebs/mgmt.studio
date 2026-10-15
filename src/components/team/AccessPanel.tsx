@@ -5,7 +5,7 @@ import { uid } from '@/lib/utils'
 import { inputClass, selectClass } from '@/components/ui/Modal'
 import type { Person } from '@/types'
 import { ARTIST_SIDE_NAME } from '@/lib/brand'
-import { PRESETS, SECTIONS, matchPreset, otherAccess, planChanges, presetByKey, summarize, levelsOf, type GrantRow } from '@/lib/access-presets'
+import { ADMIN_KEY, LEVELS, SECTIONS, matchPreset, otherAccess, planChanges, presetByKey, summarize, levelsOf, type GrantRow } from '@/lib/access-presets'
 
 type Level = 'none' | 'view' | 'edit'
 type Member = { id: string; role: string } | null
@@ -79,7 +79,8 @@ export function AccessPanel({ person }: { person: Person }) {
     const levels = key === 'none' ? {} : presetByKey(key)?.levels
     if (!levels) return
     if (matchPreset(grants, clientId) === 'custom' && !confirm('This replaces the choices you made for this artist. Continue?')) return
-    const plan = planChanges(grants, clientId, levels)
+    if (key === ADMIN_KEY && !confirm('A Point Person can see and change everything for this artist, including money, contracts and private details, and can decide who else has access. Continue?')) return
+    const plan = planChanges(grants, clientId, levels, key === ADMIN_KEY)
     const { createClient } = await import('@/lib/supabase/client')
     const supabase = createClient()
     const added = plan.add.map(a => ({ id: 'grant-' + uid(), workspace_member_id: member.id, section: a.section, client_id: clientId, can_edit: a.canEdit }))
@@ -185,7 +186,7 @@ export function AccessPanel({ person }: { person: Person }) {
                 className="px-2 py-1 text-xs bg-gray-50 border border-gray-100 rounded-lg text-gray-600 hover:border-gray-200 max-w-[190px]"
               >
                 <option value="none">No access</option>
-                {PRESETS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+                {LEVELS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
                 {current === 'custom' && <option value="custom" disabled>Custom (fine-tuned)</option>}
               </select>
             </div>
@@ -196,6 +197,9 @@ export function AccessPanel({ person }: { person: Person }) {
               <div className="text-[11px] text-amber-700 mb-1">Also has: {otherAccess(grants, c.id).join(', ')}. Choosing a level here doesn&apos;t change these.</div>
             )}
             {levelMessage[c.id] && <div className="text-[11px] text-red-500 mb-1">{levelMessage[c.id]}</div>}
+            {current === ADMIN_KEY ? (
+              <div className="text-[11px] text-gray-400">Every page is included, so there is nothing to pick one by one. To limit them, choose another level above.</div>
+            ) : (
             <div className="flex flex-wrap gap-1">
               {SECTIONS.map(s => {
                 const level = levelOf(grants, s.key, c.id)
@@ -217,6 +221,7 @@ export function AccessPanel({ person }: { person: Person }) {
                 )
               })}
             </div>
+            )}
           </div>
           )
         })}

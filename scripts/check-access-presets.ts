@@ -1,6 +1,6 @@
 // Checks the access-level bundles.  Run with:  npx tsx scripts/check-access-presets.ts
 import assert from 'node:assert/strict'
-import { PRESETS, SECTIONS, levelsOf, matchPreset, otherAccess, planChanges, presetByKey, summarize, type GrantRow } from '../src/lib/access-presets'
+import { ADMIN_KEY, LEVELS, POINT_PERSON, PRESETS, SECTIONS, isPointPerson, levelsOf, matchPreset, otherAccess, planChanges, presetByKey, summarize, type GrantRow } from '../src/lib/access-presets'
 
 const row = (id: string, section: string, clientId: string | null, canEdit: boolean): GrantRow => ({ id, section, client_id: clientId, can_edit: canEdit })
 
@@ -58,7 +58,9 @@ for (const p of PRESETS) {
   assert.equal(!!profile, p.key === 'full', `${p.key}: only Full access includes the profile (found ${profile})`)
 }
 // every "can't see" line is honest about booking offers living inside Tour wherever Tour is included
-for (const p of PRESETS) if (p.levels.tour) assert.ok(/offers/i.test(p.hidden) || p.key === 'full' || p.key === 'bookkeeper', `${p.key}: say that offers (with fees) are part of Tour`)
+for (const p of PRESETS) if (p.levels.tour && !p.levels.finance) assert.ok(/offers/i.test(p.hidden), `${p.key}: say that offers (with fees) are part of Tour`)
+// ... and a level with money but no Tour (the business manager) says its fees are out of reach until offers move out of Tour
+assert.ok(/offers/i.test(presetByKey('businessmanager')!.hidden))
 
 // choosing a level never touches access the panel can't show (the vault), and says it is there
 const withVault = [row('v', 'vault', 'a', true), row('t', 'tour', 'a', true), row('all', 'finance', null, true)]
@@ -74,4 +76,35 @@ assert.deepEqual(otherAccess([row('1', 'vault', 'b', false)], 'a'), [])         
 assert.equal(summarize(presetByKey('crew')!.levels), 'Can look at: Tour')
 assert.equal(summarize({}), 'Cannot see anything for this artist')
 assert.ok(summarize(presetByKey('bookkeeper')!.levels).startsWith('Can change: Finance'))
+
+// ── the roles Eli asked for ──
+assert.equal(presetByKey('crew')!.label, 'Touring Crew')
+assert.ok(!presetByKey('crew')!.levels.finance)                                            // touring crew never gets money
+const tm = presetByKey('tourmanager')!.levels
+assert.equal(tm.tour, 'edit'); assert.equal(tm.finance, 'edit'); assert.ok(!tm.profile && !tm.legal)   // the tour/production manager has the tour money, not the private profile or contracts
+const bm = presetByKey('businessmanager')!.levels
+assert.equal(bm.finance, 'edit'); assert.ok(!bm.tour && !bm.music && !bm.content && !bm.projects)       // the business manager sees all money but has no calendar sections
+assert.ok(PRESETS.every(p => p.key === 'full' || !p.levels.profile))
+
+// ── Point Person ──
+assert.equal(LEVELS[0], POINT_PERSON)
+assert.equal(presetByKey(ADMIN_KEY), POINT_PERSON)
+assert.ok(!PRESETS.some(p => p.key === ADMIN_KEY))
+const pp = [row('a1', 'admin', 'a', true)]
+assert.ok(isPointPerson(pp, 'a'))
+assert.ok(!isPointPerson(pp, 'b'))                                                        // a Point Person for one artist is nothing for another
+assert.equal(matchPreset(pp, 'a'), ADMIN_KEY)
+assert.equal(matchPreset(pp, 'b'), 'none')
+assert.deepEqual(levelsOf(pp, 'a'), {})                                                   // 'admin' is not a page
+assert.deepEqual(otherAccess(pp, 'a'), [])                                                // and is not an "other access" note
+
+// becoming a Point Person: one admin row, and the redundant per-section rows go (vault and other artists untouched)
+const before = [row('g1', 'tour', 'a', false), row('g2', 'finance', 'a', true), row('v', 'vault', 'a', true), row('o', 'tour', 'b', true)]
+assert.deepEqual(planChanges(before, 'a', {}, true), { remove: ['g1', 'g2'], update: [], add: [{ section: 'admin', canEdit: true }] })
+assert.deepEqual(planChanges(pp, 'a', {}, true), { remove: [], update: [], add: [] })      // already one: nothing to do
+// stepping down: the admin row goes and the new level's rows come in
+assert.deepEqual(planChanges(pp, 'a', presetByKey('crew')!.levels), { remove: ['a1'], update: [], add: [{ section: 'tour', canEdit: false }] })
+assert.deepEqual(planChanges(pp, 'a', {}), { remove: ['a1'], update: [], add: [] })        // "no access" removes the admin row too
+assert.deepEqual(planChanges([row('a1', 'admin', 'a', true), row('x', 'admin', 'b', true)], 'a', {}).remove, ['a1'])   // never another artist's admin row
+
 console.log('access-presets: all checks passed')

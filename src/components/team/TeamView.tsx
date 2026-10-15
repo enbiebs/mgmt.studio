@@ -6,6 +6,7 @@ import { Modal, FormField, inputClass } from '@/components/ui/Modal'
 import { CREW_ROLE_LABEL } from '@/components/tour/CrewView'
 import { ROLE_LABEL as STAKEHOLDER_ROLE_LABEL } from '@/components/songs/StatusView'
 import { AccessPanel } from '@/components/team/AccessPanel'
+import { SharingCard } from '@/components/team/SharingCard'
 import type { Person, TravelItem } from '@/types'
 
 function travelLabel(item: TravelItem): string {
@@ -21,11 +22,16 @@ export function TeamView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('team'))
   const { deletePerson } = useStore()
+  // Sharing is for managers and for this artist's Point People (the database enforces it; this just hides the tab from everyone else).
+  const canShare = useStore(s => s.role === 'manager' || s.grants.some(g => g.section === 'admin' && g.clientId === s.clientId))
+  const [tab, setTab] = useState<'people' | 'sharing'>('people')
   const [addOpen, setAddOpen] = useState(false)
   const [openPersonId, setOpenPersonId] = useState<string | null>(null)
 
   if (!client) return null
   const people = client.people ?? []
+  const showSharing = canShare && !client.isDemo
+  const view = showSharing ? tab : 'people'
   const openPerson = openPersonId ? people.find(p => p.id === openPersonId) ?? null : null
 
   function linksFor(personId: string) {
@@ -52,7 +58,7 @@ export function TeamView() {
             One record per person, shared across the whole app — crew, stakeholders, travel, and more all point back here
           </div>
         </div>
-        {editable && (
+        {editable && view === 'people' && (
           <button
             onClick={() => setAddOpen(true)}
             className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors flex-shrink-0"
@@ -62,11 +68,26 @@ export function TeamView() {
         )}
       </div>
 
-      {people.length === 0 && (
+      {showSharing && (
+        <div role="tablist" className="mb-5 flex gap-1 border-b border-gray-100">
+          {([['people', 'People'], ['sharing', 'Sharing']] as const).map(([key, label]) => (
+            <button
+              key={key} role="tab" aria-selected={view === key} onClick={() => setTab(key)}
+              className={`-mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${view === key ? 'border-accent text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {view === 'sharing' && <SharingCard client={client} />}
+
+      {view === 'people' && people.length === 0 && (
         <div className="text-sm text-gray-300 text-center py-12">No team members added yet</div>
       )}
 
-      <div className="flex flex-col gap-2">
+      {view === 'people' && <div className="flex flex-col gap-2">
         {people.map(p => {
           const links = linksFor(p.id)
           return (
@@ -101,7 +122,7 @@ export function TeamView() {
             </div>
           )
         })}
-      </div>
+      </div>}
 
       {addOpen && <PersonModal onClose={() => setAddOpen(false)} />}
       {openPerson && <PersonModal person={openPerson} links={linksFor(openPerson.id)} onClose={() => setOpenPersonId(null)} />}

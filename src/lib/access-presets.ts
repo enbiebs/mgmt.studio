@@ -4,6 +4,12 @@
 //  trusted: the database still checks every one of them), so a level can always be fine-tuned afterwards.
 //  Pure logic (no screen, no database), so it can be tested.
 //
+//  Two kinds of level live here:
+//    • ready-made roles (below): bundles of per-section view / edit, tweakable afterwards
+//    • Point Person: the admin of ONE artist. It is stored as a single 'admin' row for that artist (not as nine
+//      section rows) and the database treats it as "everything for this artist except the vault, plus managing
+//      who else has access" (migration 050).
+//
 //  What a section covers (so the descriptions are honest):
 //    Tour     the schedule, advance, day sheets, travel, guest list, crew, AND the booking offers with their fees
 //    Finance  money: invoices, bills, budgets, settlements, banking, crew pay
@@ -41,19 +47,31 @@ export interface AccessPreset {
 export const PRESETS: AccessPreset[] = [
   {
     key: 'full', label: 'Full access',
-    blurb: 'Everything for this artist, including money, contracts and the private profile, and can change all of it.',
+    blurb: 'Everything for this artist, including money, contracts and the private profile, and can change all of it. Can\u2019t manage who else has access (that is a Point Person).',
     hidden: 'Nothing',
     levels: { profile: 'edit', music: 'edit', tour: 'edit', content: 'edit', finance: 'edit', team: 'edit', projects: 'edit', analytics: 'edit', legal: 'edit' },
   },
   {
+    key: 'tourmanager', label: 'Tour or Production Manager',
+    blurb: 'Runs the road: shows, advance, day sheets, travel and crew, and the tour money (budgets, settlements, invoices).',
+    hidden: 'Contracts, music, content, projects, analytics and the profile (private details such as ID numbers and home address live there)',
+    levels: { tour: 'edit', finance: 'edit', team: 'view' },
+  },
+  {
+    key: 'businessmanager', label: 'Business Manager',
+    blurb: 'Sees and handles all of the money: invoices, bills, budgets, settlements and banking. Can read contracts. No tour calendar.',
+    hidden: 'Shows and the tour calendar, music, content, projects and the profile. Booking offers, with their fees, are part of Tour for now, so they stay hidden too',
+    levels: { finance: 'edit', legal: 'view' },
+  },
+  {
     key: 'assistant', label: 'Day-to-day team',
-    blurb: 'Works on shows, projects, content and music, and can look at the artist’s people and analytics.',
+    blurb: 'Works on shows, projects, content and music, and can look at the artist\u2019s people and analytics.',
     hidden: 'Money (finance), contracts and the profile (private details such as ID numbers and home address live there). Booking offers, with their fees, are part of Tour, so they show',
     levels: { music: 'edit', tour: 'edit', content: 'edit', team: 'view', projects: 'edit', analytics: 'view' },
   },
   {
-    key: 'crew', label: 'Tour crew',
-    blurb: 'Sees the schedule, advance, day sheets, travel, guest list and crew for this artist, and can’t change anything.',
+    key: 'crew', label: 'Touring Crew',
+    blurb: 'Sees the schedule, advance, day sheets, travel, guest list and crew for this artist, and can\u2019t change anything.',
     hidden: 'Money, contracts, music, content and the profile. Booking offers, with their fees, are part of Tour, so they show',
     levels: { tour: 'view' },
   },
@@ -71,13 +89,25 @@ export const PRESETS: AccessPreset[] = [
   },
   {
     key: 'readonly', label: 'Look only',
-    blurb: 'Can look at shows, music, content, projects and analytics, but can’t change anything.',
-    hidden: 'Money, contracts, the profile and the artist’s people. Booking offers, with their fees, are part of Tour, so they show',
+    blurb: 'Can look at shows, music, content, projects and analytics, but can\u2019t change anything.',
+    hidden: 'Money, contracts, the profile and the artist\u2019s people. Booking offers, with their fees, are part of Tour, so they show',
     levels: { music: 'view', tour: 'view', content: 'view', projects: 'view', analytics: 'view' },
   },
 ]
 
-export const presetByKey = (key: string) => PRESETS.find(p => p.key === key)
+/** The admin of one artist. Not in PRESETS: it has no per-section levels, it is one 'admin' row. */
+export const ADMIN_KEY = 'admin'
+export const POINT_PERSON: AccessPreset = {
+  key: ADMIN_KEY, label: 'Point Person',
+  blurb: 'Runs this artist\u2019s whole business: can see and change everything for them, add people, change what they can see, and remove them. Can make other Point People.',
+  hidden: 'The vault (saved passwords and bank details) unless a manager gives it separately. Other artists',
+  levels: {},
+}
+
+/** Every choice in the level menu, Point Person first. */
+export const LEVELS: AccessPreset[] = [POINT_PERSON, ...PRESETS]
+
+export const presetByKey = (key: string) => LEVELS.find(p => p.key === key)
 
 export interface GrantRow { id: string; section: string; client_id: string | null; can_edit: boolean }
 
@@ -92,8 +122,14 @@ export function levelsOf(grants: GrantRow[], clientId: string): Partial<Record<S
   return out
 }
 
+/** Is this person a Point Person (admin) for this artist? */
+export function isPointPerson(grants: GrantRow[], clientId: string): boolean {
+  return grants.some(g => g.section === ADMIN_KEY && g.client_id === clientId)
+}
+
 /** Which ready-made level exactly matches what is granted, 'none' for nothing at all, or 'custom'. */
 export function matchPreset(grants: GrantRow[], clientId: string): string {
+  if (isPointPerson(grants, clientId)) return ADMIN_KEY
   const have = levelsOf(grants, clientId)
   const keys = Object.keys(have) as SectionKey[]
   if (keys.length === 0) return 'none'
@@ -107,13 +143,24 @@ export function matchPreset(grants: GrantRow[], clientId: string): string {
 export interface GrantChanges {
   remove: string[]                                          // grant ids to delete
   update: { id: string; canEdit: boolean }[]                // existing grants whose view/edit changes
-  add: { section: SectionKey; canEdit: boolean }[]          // new grants
+  add: { section: SectionKey | typeof ADMIN_KEY; canEdit: boolean }[]   // new grants
 }
 
-/** What has to change to make one artist's grants exactly equal `levels`. Only touches that artist. */
-export function planChanges(grants: GrantRow[], clientId: string, levels: Partial<Record<SectionKey, Level>>): GrantChanges {
+/**
+ * What has to change to make one artist's grants exactly equal `levels` (or, with `pointPerson`, exactly "Point
+ * Person"). Only touches that artist, and never the vault. Becoming a Point Person replaces the per-section rows
+ * (they would be redundant, and would come back to life if the person were later made something smaller).
+ */
+export function planChanges(grants: GrantRow[], clientId: string, levels: Partial<Record<SectionKey, Level>>, pointPerson = false): GrantChanges {
   const mine = grants.filter(g => g.client_id === clientId)
   const out: GrantChanges = { remove: [], update: [], add: [] }
+  const adminRow = mine.find(g => g.section === ADMIN_KEY)
+  if (pointPerson) {
+    for (const g of mine) if (SECTIONS.some(sec => sec.key === g.section)) out.remove.push(g.id)
+    if (!adminRow) out.add.push({ section: ADMIN_KEY, canEdit: true })
+    return out
+  }
+  if (adminRow) out.remove.push(adminRow.id)
   for (const g of mine) {
     if (!SECTIONS.some(sec => sec.key === g.section)) continue      // access the panel can't show (e.g. the vault) is never changed by choosing a level
     const want = levels[g.section as SectionKey]
@@ -143,7 +190,7 @@ export function summarize(levels: Partial<Record<SectionKey, Level>>): string {
  */
 export function otherAccess(grants: GrantRow[], clientId: string): string[] {
   const label = (section: string) => SECTIONS.find(s => s.key === section)?.label ?? section
-  const known = new Set<string>(SECTIONS.map(s => s.key))
+  const known = new Set<string>([...SECTIONS.map(s => s.key), ADMIN_KEY])
   const out: string[] = []
   for (const g of grants) {
     if (g.client_id === clientId && !known.has(g.section)) out.push(`${label(g.section)} (not shown here)`)
