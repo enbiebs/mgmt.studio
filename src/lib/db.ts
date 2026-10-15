@@ -816,8 +816,8 @@ export async function loadWorkspacePeople(): Promise<WorkspacePerson[]> {
   const supabase = createClient()
   const { data, error } = await supabase.rpc('workspace_people')
   if (error) throw error
-  return ((data ?? []) as { member_id: string; user_id: string; label: string; role: string; all_clients: boolean; client_ids: string[]; invited?: boolean }[])
-    .map(r => ({ memberId: r.member_id, userId: r.user_id, label: r.label, role: r.role as UserRole, allClients: r.all_clients, clientIds: r.client_ids ?? [], invited: !!r.invited }))
+  return ((data ?? []) as { member_id: string; user_id: string; label: string; role: string; all_clients: boolean; client_ids: string[]; invited?: boolean; person_id?: string | null }[])
+    .map(r => ({ memberId: r.member_id, userId: r.user_id, label: r.label, role: r.role as UserRole, allClients: r.all_clients, clientIds: r.client_ids ?? [], invited: !!r.invited, personId: r.person_id ?? undefined }))
 }
 
 export async function loadItemAccess(): Promise<ItemException[]> {

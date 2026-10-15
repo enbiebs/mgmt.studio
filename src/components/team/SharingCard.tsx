@@ -22,7 +22,6 @@ import type { Client } from '@/types'
 import { Card } from '@/components/profile/FieldsCard'
 import { RoleMenu } from './RoleMenu'
 import { PagesPanel } from './PagesPanel'
-import { InviteForm } from './InviteForm'
 
 type PersonRow = Extract<SharingRow, { kind: 'person' }>
 type Confirm =
@@ -30,7 +29,7 @@ type Confirm =
   | { memberId: string; kind: 'remove'; text: string }
   | { memberId: string; kind: 'cancel'; text: string }
 
-export function SharingCard({ client }: { client: Client }) {
+export function SharingCard({ client, onAddMember }: { client: Client; onAddMember: () => void }) {
   const role = useStore(s => s.role)
   const myMemberId = useStore(s => s.myMemberId)
   const people = useStore(s => s.workspacePeople)
@@ -58,15 +57,16 @@ export function SharingCard({ client }: { client: Client }) {
   const reload = useCallback(async () => {
     try { setGrants(await fetchArtistGrants(client.id)); setLoadError(false) } catch (e) { console.error(e); setLoadError(true) }
   }, [client.id])
+  // The list is read again whenever the team list changes (someone was just invited, or a change was saved).
   useEffect(() => {
     let live = true
     fetchArtistGrants(client.id)
       .then(g => { if (live) { setGrants(g); setLoadError(false) } })
       .catch(e => { console.error(e); if (live) setLoadError(true) })
-    // the team list was read when the app opened; someone may have joined since
-    void afterAccessChange()
     return () => { live = false }
-  }, [client.id, afterAccessChange])
+  }, [client.id, people])
+  // the team list was read when the app opened; someone may have joined since
+  useEffect(() => { void afterAccessChange() }, [client.id, afterAccessChange])
 
   const rows = useMemo(() => buildSharingRows(people, grants ?? [], client.id), [people, grants, client.id])
   const addable = useMemo(() => addablePeople(people, rows), [people, rows])
@@ -281,15 +281,20 @@ export function SharingCard({ client }: { client: Client }) {
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Add someone</div>
               <div role="group" aria-label="Who to add" className="inline-flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium">
-                <button type="button" aria-pressed={mode === 'new'} onClick={() => setMode('new')} className={`px-3 py-1.5 ${mode === 'new' ? 'bg-accent text-white' : 'bg-canvas text-gray-600 hover:bg-gray-50'}`}>Invite someone new</button>
+                <button type="button" aria-pressed={mode === 'new'} onClick={() => setMode('new')} className={`px-3 py-1.5 ${mode === 'new' ? 'bg-accent text-white' : 'bg-canvas text-gray-600 hover:bg-gray-50'}`}>New team member</button>
                 <button type="button" aria-pressed={mode === 'existing'} onClick={() => setMode('existing')} className={`border-l border-gray-200 px-3 py-1.5 ${mode === 'existing' ? 'bg-accent text-white' : 'bg-canvas text-gray-600 hover:bg-gray-50'}`}>Already on the team</button>
               </div>
             </div>
 
             {mode === 'new' && (
-              isManager
-                ? <InviteForm defaultClientId={client.id} onSent={() => void reload()} />
-                : <p className="text-xs text-gray-500">Only a manager can invite someone new for now. If they already have a login, add them under &ldquo;Already on the team&rdquo;.</p>
+              isManager ? (
+                <div>
+                  <p className="mb-3 text-xs text-gray-500">
+                    Add them to the team first, then choose what they can see and send the invite. It is one step after the other, so nothing is set up twice.
+                  </p>
+                  <button onClick={onAddMember} className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent-hover">Add a team member</button>
+                </div>
+              ) : <p className="text-xs text-gray-500">Only a manager can invite someone new for now. If they already have a login, add them under &ldquo;Already on the team&rdquo;.</p>
             )}
 
             {mode === 'existing' && (
@@ -298,7 +303,7 @@ export function SharingCard({ client }: { client: Client }) {
                   {people.some(p => p.role !== 'manager' && p.role !== 'artist')
                     ? `Everyone on the team can already open ${client.name}.`
                     : 'Nobody else is on your team yet.'}
-                  {' '}To bring in someone new, choose &ldquo;Invite someone new&rdquo;.
+                  {' '}To bring in someone new, choose &ldquo;New team member&rdquo;.
                 </p>
               ) : (
                 <div className="space-y-3">

@@ -419,6 +419,8 @@ export interface WorkspacePerson {
   clientIds: string[]
   /** True until this login has signed in for the first time (an invitation nobody has accepted yet). */
   invited?: boolean
+  /** The directory person (their card on the Team page) this login belongs to, if any. */
+  personId?: string
 }
 
 // ── Agenda (talking points / steps around one to-do or project) ──
