@@ -48,7 +48,7 @@ import {
   loadWorkspaceData, getMyMembership, getGrantsForMember, getPreviewableMembers,
   loadItemAccess, upsertItemAccess, deleteItemAccess,
   loadInboxState, saveInboxChoice, clearInboxChoice,
-  upsertTask, deleteTaskRow, loadWorkspacePeople,
+  insertTask, saveTask, deleteTaskRow, loadWorkspacePeople,
   type AccessGrant, type PreviewMember,
   upsertClient, deleteClient as dbDeleteClient, setCalendarToken, saveSetupSkipped,
   upsertTrack, deleteTrack as dbDeleteTrack,
@@ -429,7 +429,7 @@ interface StudioState {
 
   // ── To-dos (the Today list; see lib/tasks.ts) ──
   /** Adds a to-do for an artist and returns its id (so a toast can offer Undo), or null if it could not be added. */
-  addTask: (clientId: string, patch: { title: string; dueDate?: string; assigneeId?: string; link?: { type: TaskLinkType; id: string }; notes?: string; source?: TaskSource }) => string | null
+  addTask: (clientId: string, patch: { title: string; dueDate?: string; assigneeId?: string; link?: { type: TaskLinkType; id: string }; notes?: string; source?: TaskSource; autoKey?: string }) => string | null
   toggleTask: (clientId: string, taskId: string) => void
   updateTask: (clientId: string, taskId: string, patch: { title?: string; dueDate?: string | null; assigneeId?: string | null; notes?: string | null }) => void
   deleteTask: (clientId: string, taskId: string) => void
@@ -2525,16 +2525,19 @@ export const useStore = create<StudioState>((set, get) => ({
     const task: Task = {
       id: 'task-' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : uid() + uid() + uid()),
       title, notes: patch.notes?.trim() || undefined, dueDate: patch.dueDate || undefined,
-      assigneeId: patch.assigneeId || undefined, link: patch.link, source: patch.source ?? 'manual',
+      assigneeId: patch.assigneeId || undefined, link: patch.link, autoKey: patch.autoKey, source: patch.source ?? 'manual',
       createdBy: userId ?? undefined, createdAt: new Date().toISOString(),
     }
     const withTask = (list: Task[] | undefined) => [...(list ?? []), task]
     set({ data: { clients: data.clients.map(c => c.id === clientId ? { ...c, tasks: withTask(c.tasks) } : c) } })
     if (workspaceId) {
-      upsertTask(task, clientId).catch(e => {
+      insertTask(task, clientId).catch(e => {
         console.error(e)
         set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, tasks: (c.tasks ?? []).filter(t => t.id !== task.id) } : c) } })
-        notify("Couldn't save that to-do. You may not have access to add one for this artist.")
+        // 23505 = the same key date was just taken by someone else (the key is unique per artist)
+        notify(task.autoKey && (e as { code?: string })?.code === '23505'
+          ? 'Someone else just took that one.'
+          : "Couldn't save that to-do. You may not have access to add one for this artist.")
       })
     }
     return task.id
@@ -2562,7 +2565,7 @@ export const useStore = create<StudioState>((set, get) => ({
     const put = (t: Task) => set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, tasks: (c.tasks ?? []).map(x => x.id === t.id ? t : x) } : c) } })
     put(after)
     if (!get().workspaceId) return
-    upsertTask(after, clientId).catch(e => {
+    saveTask(after).catch(e => {
       console.error(e)
       put(before)
       notify("Couldn't save that change. You may not have access to change this to-do.")
