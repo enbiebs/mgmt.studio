@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { parseJson, requireClientAccess } from '@/lib/api-guard'
+import { gcalPushDeleteBody, SECTION_FOR_RECORD } from '@/lib/api-schemas'
 import { deleteShowFromGoogle, deletePostFromGoogle, deleteProjectFromGoogle } from '@/lib/google-calendar-sync'
 
 // Mirrors /api/google-calendar/push, for deletes. Called by the store
 // after a Show/Post/Project is deleted locally.
 export async function POST(req: NextRequest) {
-  const { clientId, recordType, recordId } = await req.json()
-  if (!clientId || !recordType || !recordId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+  const body = await parseJson(req, gcalPushDeleteBody)
+  if (body.error) return body.error
+  const { clientId, recordType, recordId } = body.data
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
-
-  const { data: client, error } = await supabase.from('clients').select('id').eq('id', clientId).single()
-  if (error || !client) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
+  const gate = await requireClientAccess(clientId, { section: SECTION_FOR_RECORD[recordType], edit: true, managementSide: false, limit: 'sync' })
+  if (gate.error) return gate.error
 
   try {
     if (recordType === 'show') await deleteShowFromGoogle(recordId, clientId)

@@ -1,31 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { CountryCode, Products } from 'plaid'
 import { plaidClient } from '@/lib/plaid'
-import { createClient } from '@/lib/supabase/server'
+import { parseJson, requireClientAccess, serverError } from '@/lib/api-guard'
+import { clientOnly } from '@/lib/api-schemas'
 import { PRODUCT_NAME } from '@/lib/brand'
 
 // Starts a bank connection for one artist. The browser calls this to get a
 // short-lived link_token, then hands it to Plaid's own Link widget — the
 // actual bank login happens on Plaid's screen, never in this app.
 export async function POST(req: NextRequest) {
-  const { clientId } = await req.json()
-  if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
+  const body = await parseJson(req, clientOnly)
+  if (body.error) return body.error
+  const { clientId } = body.data
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
+  // Connecting a bank is a money action: Finance edit access to this artist, and never the artist's own login.
+  const gate = await requireClientAccess(clientId, { section: 'finance', edit: true, managementSide: true, limit: 'bank' })
+  if (gate.error) return gate.error
 
-  // RLS on `clients` rejects this if the artist isn't in the user's workspace.
-  const { data: client, error } = await supabase.from('clients').select('id, name').eq('id', clientId).single()
-  if (error || !client) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
-
-  const response = await plaidClient.linkTokenCreate({
-    client_name: PRODUCT_NAME,
-    language: 'en',
-    country_codes: [CountryCode.Us],
-    user: { client_user_id: `${user.id}:${clientId}` },
-    products: [Products.Transactions],
-  })
-
-  return NextResponse.json({ link_token: response.data.link_token })
+  try {
+    const response = await plaidClient.linkTokenCreate({
+      client_name: PRODUCT_NAME,
+      language: 'en',
+      country_codes: [CountryCode.Us],
+      user: { client_user_id: `${gate.user.id}:${clientId}` },
+      products: [Products.Transactions],
+    })
+    return NextResponse.json({ link_token: response.data.link_token })
+  } catch (e) {
+    return serverError('Plaid link token failed', e, "Couldn't start the bank connection. Please try again.")
+  }
 }

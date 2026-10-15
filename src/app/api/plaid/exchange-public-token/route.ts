@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { plaidClient } from '@/lib/plaid'
-import { createClient } from '@/lib/supabase/server'
+import { parseJson, requireClientAccess, serverError } from '@/lib/api-guard'
+import { plaidExchangeBody } from '@/lib/api-schemas'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { uid } from '@/lib/utils'
 
@@ -10,18 +11,25 @@ import { uid } from '@/lib/utils'
 // the only thing that can ever write or read it), then pulls the account
 // list once so there's something to show immediately.
 export async function POST(req: NextRequest) {
-  const { clientId, publicToken, institutionName } = await req.json()
-  if (!clientId || !publicToken) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+  const body = await parseJson(req, plaidExchangeBody)
+  if (body.error) return body.error
+  const { clientId, publicToken, institutionName } = body.data
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
+  // Linking a bank gives the app a permanent key to the account: Finance edit access, never the artist's own login.
+  const gate = await requireClientAccess(clientId, { section: 'finance', edit: true, managementSide: true, limit: 'bank' })
+  if (gate.error) return gate.error
+  const { supabase } = gate
 
   const { data: client, error: clientErr } = await supabase
     .from('clients').select('id, workspace_id').eq('id', clientId).single()
   if (clientErr || !client) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
 
-  const exchange = await plaidClient.itemPublicTokenExchange({ public_token: publicToken })
+  let exchange
+  try {
+    exchange = await plaidClient.itemPublicTokenExchange({ public_token: publicToken })
+  } catch (e) {
+    return serverError('Plaid token exchange failed', e, "Couldn't finish connecting the bank. Please try again.")
+  }
   const accessToken = exchange.data.access_token
   const itemId = exchange.data.item_id
 
@@ -35,7 +43,7 @@ export async function POST(req: NextRequest) {
     access_token: accessToken,
     institution_name: institutionName ?? null,
   })
-  if (connErr) return NextResponse.json({ error: connErr.message }, { status: 500 })
+  if (connErr) return serverError('Saving the bank connection failed', connErr, "Couldn't save the bank connection. Please try again.")
 
   const accountsResp = await plaidClient.accountsGet({ access_token: accessToken })
   const rows = accountsResp.data.accounts.map(a => ({
@@ -54,7 +62,7 @@ export async function POST(req: NextRequest) {
   }))
 
   const { error: acctErr } = await supabase.from('bank_accounts').insert(rows)
-  if (acctErr) return NextResponse.json({ error: acctErr.message }, { status: 500 })
+  if (acctErr) return serverError('Saving the bank accounts failed', acctErr, "Couldn't save the bank accounts. Please try again.")
 
   return NextResponse.json({ ok: true, accountCount: rows.length })
 }

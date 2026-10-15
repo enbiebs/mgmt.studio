@@ -1,5 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
+import { parseJson } from '@/lib/api-guard'
+import { clientAndPath } from '@/lib/api-schemas'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   BILLS_BUCKET, MAX_BILL_BYTES, requireBillAccess, isBillPathFor, billReadingConfigured,
@@ -16,8 +18,10 @@ export const maxDuration = 60
 // `extracted: null` so the form falls back to manual entry with the PDF
 // still attached.
 export async function POST(req: NextRequest) {
-  const { clientId, path } = await req.json()
-  const gate = await requireBillAccess(clientId, true)
+  const body = await parseJson(req, clientAndPath)
+  if (body.error) return body.error
+  const { clientId, path } = body.data
+  const gate = await requireBillAccess(clientId, true, 'ai')
   if (gate.error) return gate.error
   if (!isBillPathFor(clientId, path)) return NextResponse.json({ error: 'Bad file path' }, { status: 400 })
 

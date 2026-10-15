@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/api-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { FX_CURRENCIES, fetchRate } from '@/lib/fx'
 
@@ -11,9 +11,8 @@ const MAX_AGE_MS = 6 * 60 * 60 * 1000
 // automatic backup). If a refresh fails the last known rate is served and `stale`
 // is true, so a budget never loses its numbers because a rate feed is down.
 export async function GET() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
+  const who = await requireUser()
+  if (who.error) return who.error
 
   const admin = createAdminClient()
   const { data: rows } = await admin.from('fx_rates').select('currency, rate_to_usd, source, fetched_at')

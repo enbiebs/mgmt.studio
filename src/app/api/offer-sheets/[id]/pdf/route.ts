@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { fail, requireUser } from '@/lib/api-guard'
 import { rowToOfferSheet, sheetFileName, type OfferSheetRow } from '@/lib/offer-sheet'
 import { renderOfferSheetPdf } from '@/lib/offer-sheet-pdf'
 
@@ -11,9 +11,10 @@ export const runtime = 'nodejs'
 // could already see on screen.
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Please sign in' }, { status: 401 })
+  if (!/^[A-Za-z0-9_.-]{1,100}$/.test(id)) return fail(400, 'That is not a valid offer sheet')
+  const who = await requireUser('file')
+  if (who.error) return who.error
+  const { supabase } = who
 
   const { data, error } = await supabase.from('offer_sheets').select('*').eq('id', id).maybeSingle()
   if (error) return NextResponse.json({ error: 'Could not load the offer sheet' }, { status: 500 })
