@@ -16,7 +16,7 @@ import type {
   AdvanceHospitality, AdvanceLogistics,
   CrewMember, GuestListEntry, TravelItem, Currency, Person, PersonActivity, CatalogWork,
   LegalTemplate, LegalTemplateClause, Stage, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
-  Venue, FlightLeg, Vendor, Run, Budget, CrewRate, FinanceSettings, BudgetLine, BudgetCommission, BudgetSnapshot, Currency as Cur,
+  ArtistProfile, Venue, FlightLeg, Vendor, Run, Budget, CrewRate, FinanceSettings, BudgetLine, BudgetCommission, BudgetSnapshot, Currency as Cur,
   OfferSheet, OfferTerms, Settlement,
 } from '@/types'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
@@ -54,7 +54,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems, flightLegs, travelItemShows,
     people, bankAccounts, bankTransactions,
     trackRounds, trackNotes, trackNoteReplies, trackCredits, venues, vendors,
-    runsQ, budgetsQ, crewRatesQ, financeSettingsQ, expenseShowsQ, offerSheetsQ, settlementsQ, settlementShowsQ,
+    runsQ, budgetsQ, crewRatesQ, financeSettingsQ, expenseShowsQ, offerSheetsQ, settlementsQ, settlementShowsQ, profilesQ,
   ] = await Promise.all([
     supabase.from('albums').select('*').in('client_id', clientIds),
     supabase.from('tracks').select('*'),
@@ -97,6 +97,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     supabase.from('offer_sheets').select('*').in('client_id', clientIds),
     supabase.from('settlements').select('*').in('client_id', clientIds),
     supabase.from('settlement_shows').select('*'),
+    supabase.from('artist_profiles').select('client_id, data').in('client_id', clientIds),
   ])
 
   const albumRows     = albums.data       ?? []
@@ -674,6 +675,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       },
       projects:    cProjects,
       artistTodos: cTodos,
+      profile:     ((profilesQ.data ?? []) as { client_id: string; data: ArtistProfile }[]).find(p => p.client_id === c.id)?.data,
       agentData:   { offers: cOffers },
       legal:       { contracts: cContracts },
       finance:     { invoices: cInvoices, expenses: cExpenses, vendors: cVendors, plMonths: cPLMonths, budgets: cBudgets, crewRates: cCrewRates, settings: cFinanceSettings, settlements: cSettlements },
@@ -1254,6 +1256,12 @@ export async function upsertFinanceSettings(s: FinanceSettings, clientId: string
   const { error } = await supabase.from('client_finance_settings').upsert({
     client_id: clientId, home_currency: s.homeCurrency, default_commissions: s.defaultCommissions,
   })
+  if (error) throw error
+}
+
+export async function upsertArtistProfile(clientId: string, data: ArtistProfile) {
+  const supabase = createClient()
+  const { error } = await supabase.from('artist_profiles').upsert({ client_id: clientId, data, updated_at: new Date().toISOString() })
   if (error) throw error
 }
 

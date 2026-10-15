@@ -6,6 +6,19 @@ export const clientIdSchema = z.string().regex(/^[A-Za-z0-9_.-]{1,100}$/)
 const shortId = z.string().min(1).max(100)
 const storagePath = z.string().min(3).max(300)
 
+import { MAX_FIELD_CHARS } from '@/lib/profile-fields'
+
+// "artist", or the id of a person in the artist's directory
+const subjectSchema = z.string().regex(/^[A-Za-z0-9_.-]{1,100}$/)
+export const secureReadBody = z.object({ clientId: clientIdSchema, subject: subjectSchema, tier: z.literal('private') })
+export const secureSaveBody = z.object({
+  clientId: clientIdSchema,
+  subject: subjectSchema,
+  tier: z.literal('private'),
+  // field name -> new value; an empty value clears the field
+  set: z.record(z.string().max(60), z.string().max(MAX_FIELD_CHARS)).refine(o => Object.keys(o).length <= 40, { message: 'too many fields' }),
+})
+
 export const clientOnly = z.object({ clientId: clientIdSchema })
 export const clientAndPath = z.object({ clientId: clientIdSchema, path: storagePath })
 export const settlementUploadBody = z.object({ clientId: clientIdSchema, ext: z.string().max(8).optional() })

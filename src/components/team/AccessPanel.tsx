@@ -7,6 +7,7 @@ import type { Person } from '@/types'
 import { ARTIST_SIDE_NAME } from '@/lib/brand'
 
 const SECTIONS: { key: string; label: string }[] = [
+  { key: 'profile', label: 'Profile' },
   { key: 'music', label: 'Music' },
   { key: 'tour', label: 'Tour' },
   { key: 'content', label: 'Content' },
