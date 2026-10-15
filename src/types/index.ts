@@ -120,6 +120,7 @@ export interface Person {
   email?: string
   phone?: string
   org?: string
+  title?: string                // free-text job title or role, typed by hand ("Tour Manager", "Stylist")
   notes?: string
   activity?: PersonActivity[]   // running comms log — what's been said/sent to this person
 }
@@ -291,7 +292,7 @@ export interface ArtistProfile {
   travel?:          TravelPrefs                      // the artist's own
   party?:           string[]                         // people who travel with the artist (ids in the directory)
   partyTravel?:     Record<string, TravelPrefs>      // their open travel preferences, by person id
-  contacts?:        ProfileContact[]
+  contacts?:        ProfileContact[]   // retired: titles now live on each person on the Team page (nothing reads or writes this any more)
   drive?:           Partial<Record<'root' | 'agreements' | 'music' | 'touring' | 'content' | 'promoterMedia' | 'deals' | 'finance', string>>   // links to the artist's Drive folders
 }
 

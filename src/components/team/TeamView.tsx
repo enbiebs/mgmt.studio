@@ -7,6 +7,7 @@ import { CREW_ROLE_LABEL } from '@/components/tour/CrewView'
 import { ROLE_LABEL as STAKEHOLDER_ROLE_LABEL } from '@/components/songs/StatusView'
 import { AccessPanel } from '@/components/team/AccessPanel'
 import { SharingCard } from '@/components/team/SharingCard'
+import { KEY_ROLES, MAX_TITLE_CHARS, TITLE_SUGGESTIONS, cleanTitle, holdersOf } from '@/lib/team-roles'
 import type { Person, TravelItem } from '@/types'
 
 function travelLabel(item: TravelItem): string {
@@ -26,10 +27,13 @@ export function TeamView() {
   const canShare = useStore(s => s.myMemberId !== null && s.previewMemberId === null && (s.role === 'manager' || s.grants.some(g => g.section === 'admin' && g.clientId === s.clientId)))
   const [tab, setTab] = useState<'people' | 'sharing'>('people')
   const [addOpen, setAddOpen] = useState(false)
+  const [addTitle, setAddTitle] = useState<string | undefined>(undefined)   // a key role clicked on the strip pre-fills the new person's title
   const [openPersonId, setOpenPersonId] = useState<string | null>(null)
 
   if (!client) return null
   const people = client.people ?? []
+  // a crew role counts as a title for the key-roles strip, so nothing has to be typed twice
+  const crewRolesOf = (p: Person) => (client.tour.crew ?? []).filter(cm => cm.personId === p.id).map(cm => CREW_ROLE_LABEL[cm.role])
   const showSharing = canShare && !client.isDemo
   const view = showSharing ? tab : 'people'
   const openPerson = openPersonId ? people.find(p => p.id === openPersonId) ?? null : null
@@ -60,7 +64,7 @@ export function TeamView() {
         </div>
         {editable && view === 'people' && (
           <button
-            onClick={() => setAddOpen(true)}
+            onClick={() => { setAddTitle(undefined); setAddOpen(true) }}
             className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors flex-shrink-0"
           >
             + Add team member
@@ -83,6 +87,31 @@ export function TeamView() {
 
       {view === 'sharing' && <SharingCard client={client} />}
 
+      {view === 'people' && (
+        <section aria-label="Key roles" className="mb-4 rounded-xl border border-gray-100 p-3">
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">Key roles</div>
+          <div className="flex flex-wrap gap-1.5">
+            {KEY_ROLES.map(role => {
+              const holders = holdersOf(people, role, crewRolesOf)
+              if (holders.length > 0) {
+                return (
+                  <button key={role} onClick={() => setOpenPersonId(holders[0].id)} className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100">
+                    {role} · {holders.map(h => h.name).join(', ')}
+                  </button>
+                )
+              }
+              return editable ? (
+                <button key={role} onClick={() => { setAddTitle(role); setAddOpen(true) }} className="rounded-full border border-dashed border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50">
+                  + {role}
+                </button>
+              ) : (
+                <span key={role} className="rounded-full border border-gray-100 px-2.5 py-1 text-xs text-gray-400">{role} · nobody yet</span>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
       {view === 'people' && people.length === 0 && (
         <div className="text-sm text-gray-300 text-center py-12">No team members added yet</div>
       )}
@@ -98,6 +127,7 @@ export function TeamView() {
             >
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium">{p.name}{p.org && <span className="text-gray-400 font-normal"> · {p.org}</span>}</div>
+                {p.title && <div className="text-xs text-gray-600 mt-0.5">{p.title}</div>}
                 <div className="text-xs text-gray-400 mt-0.5">
                   {[p.email, p.phone].filter(Boolean).join(' · ') || '—'}
                 </div>
@@ -124,19 +154,20 @@ export function TeamView() {
         })}
       </div>}
 
-      {addOpen && <PersonModal onClose={() => setAddOpen(false)} />}
+      {addOpen && <PersonModal initialTitle={addTitle} onClose={() => setAddOpen(false)} />}
       {openPerson && <PersonModal person={openPerson} links={linksFor(openPerson.id)} onClose={() => setOpenPersonId(null)} />}
     </div>
   )
 }
 
-function PersonModal({ person, links, onClose }: { person?: Person; links?: string[]; onClose: () => void }) {
+function PersonModal({ person, links, initialTitle, onClose }: { person?: Person; links?: string[]; initialTitle?: string; onClose: () => void }) {
   const editable = useStore(s => s.canEdit('team'))
   const { addPerson, updatePerson } = useStore()
   const [name, setName] = useState(person?.name ?? '')
   const [email, setEmail] = useState(person?.email ?? '')
   const [phone, setPhone] = useState(person?.phone ?? '')
   const [org, setOrg] = useState(person?.org ?? '')
+  const [title, setTitle] = useState(person?.title ?? initialTitle ?? '')
   const [notes, setNotes] = useState(person?.notes ?? '')
   const [newLog, setNewLog] = useState('')
 
@@ -144,6 +175,7 @@ function PersonModal({ person, links, onClose }: { person?: Person; links?: stri
     if (!name.trim()) return
     const patch = {
       name: name.trim(),
+      title: cleanTitle(title),
       email: email.trim() || undefined,
       phone: phone.trim() || undefined,
       org: org.trim() || undefined,
@@ -174,6 +206,13 @@ function PersonModal({ person, links, onClose }: { person?: Person; links?: stri
     }>
       <FormField label="Name">
         <input className={inputClass} placeholder="Full name" value={name} onChange={e => setName(e.target.value)} autoFocus disabled={!editable} />
+      </FormField>
+      <FormField label="Title / role">
+        <input
+          className={inputClass} list="team-title-suggestions" placeholder="e.g. Tour Manager, Stylist, Business manager"
+          maxLength={MAX_TITLE_CHARS} value={title} onChange={e => setTitle(e.target.value)} disabled={!editable}
+        />
+        <datalist id="team-title-suggestions">{TITLE_SUGGESTIONS.map(t => <option key={t} value={t} />)}</datalist>
       </FormField>
       <div className="grid grid-cols-2 gap-3">
         <FormField label="Email">

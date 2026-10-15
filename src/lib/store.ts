@@ -339,8 +339,8 @@ interface StudioState {
   updateTrackCredits: (trackId: string, credits: TrackCredit[]) => void
 
   // ── People (shared directory) ──
-  addPerson: (patch: { name: string; email?: string; phone?: string; org?: string; notes?: string }) => string
-  updatePerson: (personId: string, patch: { name?: string; email?: string; phone?: string; org?: string; notes?: string; activity?: PersonActivity[] }) => void
+  addPerson: (patch: { name: string; email?: string; phone?: string; org?: string; title?: string; notes?: string }) => string
+  updatePerson: (personId: string, patch: { name?: string; email?: string; phone?: string; org?: string; title?: string; notes?: string; activity?: PersonActivity[] }) => void
   deletePerson: (personId: string) => void
 
   // ── Bank accounts (Plaid) ──

@@ -271,9 +271,9 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
   const clients: Client[] = clientRows.map(c => {
     const cPeople: Person[] = peopleRows
       .filter((p: { client_id: string }) => p.client_id === c.id)
-      .map((p: { id: string; name: string; email?: string; phone?: string; org?: string; notes?: string; activity?: PersonActivity[] }) => ({
+      .map((p: { id: string; name: string; email?: string; phone?: string; org?: string; title?: string | null; notes?: string; activity?: PersonActivity[] }) => ({
         id: p.id, name: p.name, email: p.email ?? undefined,
-        phone: p.phone ?? undefined, org: p.org ?? undefined, notes: p.notes ?? undefined,
+        phone: p.phone ?? undefined, org: p.org ?? undefined, title: p.title ?? undefined, notes: p.notes ?? undefined,
         activity: p.activity ?? [],
       }))
 
@@ -1179,7 +1179,7 @@ export async function upsertPerson(person: Person, clientId: string) {
   await supabase.from('people').upsert({
     id: person.id, client_id: clientId,
     name: person.name, email: person.email ?? null,
-    phone: person.phone ?? null, org: person.org ?? null, notes: person.notes ?? null,
+    phone: person.phone ?? null, org: person.org ?? null, title: person.title ?? null, notes: person.notes ?? null,
     activity: person.activity ?? [],
   })
 }
