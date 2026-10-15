@@ -4,6 +4,23 @@ import { fail, parseJson, requireUser, serverError } from '@/lib/api-guard'
 import { inviteBody } from '@/lib/api-schemas'
 import { inviteGrantRows } from '@/lib/invite-access'
 
+type Admin = ReturnType<typeof createAdminClient>
+
+/** The login this email already belongs to IN THIS COMPANY (never someone else's), so the screen can offer to send them a password link instead. */
+async function existingMemberId(admin: Admin, email: string, workspaceId: string): Promise<string | null> {
+  for (let page = 1; page <= 10; page++) {
+    const { data } = await admin.auth.admin.listUsers({ page, perPage: 200 })
+    const users = data?.users ?? []
+    const hit = users.find(u => u.email?.toLowerCase() === email)
+    if (hit) {
+      const { data: member } = await admin.from('workspace_members').select('id, role').eq('user_id', hit.id).eq('workspace_id', workspaceId).is('client_id', null).maybeSingle()
+      return member && member.role !== 'manager' ? member.id : null
+    }
+    if (users.length < 200) return null
+  }
+  return null
+}
+
 // Sends a real email invite that joins the invited person into the
 // caller's existing workspace (see handle_new_user() in
 // supabase/migrations/046 and 052) instead of spinning up a new one, with the
@@ -64,7 +81,9 @@ export async function POST(req: NextRequest) {
   if (error) {
     await clearMine()   // nothing was sent, so nothing stays pending
     if (error.code === 'email_exists' || /already.*registered/i.test(error.message)) {
-      return fail(409, "That email already has a login, so it can't be invited again.")
+      // Not an invitation any more: if they are already part of this company, say which login so a password link can be sent instead.
+      const existing = await existingMemberId(admin, address, wm.workspace_id)
+      return NextResponse.json({ error: "That email already has a login, so it can't be invited again.", existingMemberId: existing }, { status: 409 })
     }
     return serverError('Invite failed', error, "Couldn't send that invitation. Check the email address and try again.")
   }
