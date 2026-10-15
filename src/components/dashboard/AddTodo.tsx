@@ -8,7 +8,7 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { notify } from '@/lib/notify'
-import { parseQuickTodo, peopleFor } from '@/lib/tasks'
+import { aboutOptions, parseAbout, parseQuickTodo, peopleFor } from '@/lib/tasks'
 import { recallLastArtist, rememberLastArtist, useMe } from '@/lib/useToday'
 import { today } from '@/lib/utils'
 import { Icon } from '@/components/ui/Icon'
@@ -54,14 +54,11 @@ export function AddTodo({ forClient }: { forClient?: string } = {}) {
     return me && !list.some(p => p.userId === me) ? [{ userId: me, label: 'Me' }, ...list] : list
   }, [people, clientId, me])
   const given = assignee ?? me ?? ''
-  const shows = useMemo(() => {
-    if (!clientId || !hasAccess('tour', clientId, true)) return []     // a to-do about a show is saved under Tour, so it needs Tour edit access
-    const cutoff = today()
-    return (client?.tour.shows ?? [])
-      .filter(s => s.status !== 'cancelled' && !s.historyOnly && s.date >= cutoff)
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(0, 25)
-  }, [client, clientId, hasAccess])
+  // What the to-do could be about: shows, offers, songs, invoices, bills, contracts, projects (only what this person may edit)
+  const aboutGroups = useMemo(
+    () => (clientId && client ? aboutOptions(client, section => hasAccess(section, clientId, true), today()) : []),
+    [client, clientId, hasAccess],
+  )
 
   if (roster.length === 0) return null
 
@@ -74,7 +71,7 @@ export function AddTodo({ forClient }: { forClient?: string } = {}) {
       title: due ? typed : parsed.title,
       dueDate: due || parsed.dueDate,
       assigneeId: given || undefined,
-      link: about ? { type: 'show', id: about } : undefined,
+      link: parseAbout(about),
     })
     if (!id) return
     rememberLastArtist(client.id)
@@ -116,10 +113,14 @@ export function AddTodo({ forClient }: { forClient?: string } = {}) {
           {options.map(p => <option key={p.userId} value={p.userId}>{p.userId === me ? 'Me' : p.label}</option>)}
         </select>
         <input type="date" aria-label="Due date" value={due} onChange={e => setDue(e.target.value)} className={SELECT} />
-        {shows.length > 0 && (
-          <select aria-label="About a show" value={about} onChange={e => setAbout(e.target.value)} className={SELECT}>
-            <option value="">About a show (optional)</option>
-            {shows.map(s => <option key={s.id} value={s.id}>{[s.venue, s.city].filter(Boolean).join(' · ') || 'Show'} · {s.date.slice(5)}</option>)}
+        {aboutGroups.length > 0 && (
+          <select aria-label="About" value={about} onChange={e => setAbout(e.target.value)} className={SELECT}>
+            <option value="">About… (optional)</option>
+            {aboutGroups.map(g => (
+              <optgroup key={g.label} label={g.label}>
+                {g.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </optgroup>
+            ))}
           </select>
         )}
       </div>
