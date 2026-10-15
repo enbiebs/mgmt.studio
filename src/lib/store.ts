@@ -24,7 +24,7 @@ import type {
   LegalTemplate, LegalTemplateClause, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
   ReleaseType, Venue, TourOffer, Expense, Vendor, Run, Budget, BudgetBucket, CrewRate, FinanceSettings,
   OfferSheet, OfferSheetDetail, OfferTerms, Settlement, SettlementDraft, SettlementPayment,
-  Task, TaskLinkType, TaskSource, WorkspacePerson,
+  Task, TaskLinkType, TaskSource, WorkspacePerson, AgendaPoint, AgendaItemType,
 } from '@/types'
 import { DEMO_DATA } from '@/lib/demo-data'
 import { DEFAULT_LEGAL_TEMPLATES } from '@/lib/legal-templates-demo'
@@ -34,6 +34,7 @@ import { EMPTY_LEGAL } from '@/lib/legal-demo'
 import { EMPTY_FINANCE } from '@/lib/finance-demo'
 import { EMPTY_TOUR } from '@/lib/advance-demo'
 import { notify } from '@/lib/notify'
+import { nextPosition, pointsFor, MAX_AGENDA_POINTS } from '@/lib/agenda'
 import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE, today as localToday } from '@/lib/utils'
 import { buildNewBudget, snapshotOf, newLine, frozenRates, makeConverter, settlementEarned, BUCKET_LABEL, type FxRates } from '@/lib/budget'
 import { balanceOf } from '@/lib/settlement-math'
@@ -48,7 +49,7 @@ import {
   loadWorkspaceData, getMyMembership, getGrantsForMember, getPreviewableMembers,
   loadItemAccess, upsertItemAccess, deleteItemAccess,
   loadInboxState, saveInboxChoice, clearInboxChoice,
-  upsertTask, deleteTaskRow, loadWorkspacePeople,
+  upsertTask, deleteTaskRow, loadWorkspacePeople, upsertAgendaPoint, deleteAgendaPointRow,
   type AccessGrant, type PreviewMember,
   upsertClient, deleteClient as dbDeleteClient, setCalendarToken, saveSetupSkipped,
   upsertTrack, deleteTrack as dbDeleteTrack,
@@ -435,6 +436,14 @@ interface StudioState {
   deleteTask: (clientId: string, taskId: string) => void
   /** Internal: saves one changed to-do, undoing it on screen if the save fails. */
   applyTask: (clientId: string, after: Task, before: Task) => void
+
+  // ── Agenda (talking points around one to-do or project; see lib/agenda.ts) ──
+  /** Adds one point per line of text to an item's agenda (up to the limit). */
+  addAgendaPoints: (clientId: string, itemType: AgendaItemType, itemId: string, texts: string[]) => void
+  toggleAgendaPoint: (clientId: string, pointId: string) => void
+  removeAgendaPoint: (clientId: string, pointId: string) => void
+  /** Makes a point its own to-do (given to you, pointing at the same project or thing) and ticks the point off. */
+  agendaPointToTodo: (clientId: string, pointId: string) => void
 
   // ── Settlements (Stage 4, Part 3) ──
   /** Saves a confirmed settlement for the chosen shows, freezing today's exchange rates into it. */
@@ -2515,6 +2524,63 @@ export const useStore = create<StudioState>((set, get) => ({
     void _removed
     set({ inboxState: rest })
     clearInboxChoice(key).catch(e => { console.error(e); set({ inboxState: before }) })
+  },
+
+  // ── Agenda ──
+  addAgendaPoints: (clientId, itemType, itemId, texts) => {
+    const client = get().data.clients.find(c => c.id === clientId)
+    if (!client || !get().data.clients.length) return
+    const existing = pointsFor(client, itemType, itemId)
+    const room = Math.max(0, MAX_AGENDA_POINTS - existing.length)
+    if (texts.length > room) notify(room === 0 ? 'This agenda is full (60 points).' : `Only room for ${room} more point${room === 1 ? '' : 's'} here, so the rest were left out.`)
+    const start = nextPosition(existing)
+    const added: AgendaPoint[] = texts.filter(Boolean).slice(0, room).map((text, i) => ({
+      id: 'ap-' + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : uid() + uid() + uid()),
+      itemType, itemId, text, done: false, position: start + i,
+    }))
+    if (added.length === 0) return
+    set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, agenda: [...(c.agenda ?? []), ...added] } : c) } })
+    if (!get().workspaceId) return
+    Promise.all(added.map(p => upsertAgendaPoint(p, clientId))).catch(e => {
+      console.error(e)
+      const ids = new Set(added.map(p => p.id))
+      set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, agenda: (c.agenda ?? []).filter(p => !ids.has(p.id)) } : c) } })
+      notify("Couldn't save that agenda point. You may not have access to change this agenda.")
+    })
+  },
+
+  toggleAgendaPoint: (clientId, pointId) => {
+    const before = get().data.clients.find(c => c.id === clientId)?.agenda?.find(p => p.id === pointId)
+    if (!before) return
+    const put = (p: AgendaPoint) => set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, agenda: (c.agenda ?? []).map(x => x.id === p.id ? p : x) } : c) } })
+    const after = { ...before, done: !before.done }
+    put(after)
+    if (!get().workspaceId) return
+    upsertAgendaPoint(after, clientId).catch(e => { console.error(e); put(before); notify("Couldn't save that change.") })
+  },
+
+  removeAgendaPoint: (clientId, pointId) => {
+    const before = get().data.clients.find(c => c.id === clientId)?.agenda?.find(p => p.id === pointId)
+    if (!before) return
+    set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, agenda: (c.agenda ?? []).filter(p => p.id !== pointId) } : c) } })
+    if (!get().workspaceId) return
+    deleteAgendaPointRow(pointId).catch(e => {
+      console.error(e)
+      set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, agenda: [...(c.agenda ?? []), before] } : c) } })
+      notify("Couldn't remove that point.")
+    })
+  },
+
+  agendaPointToTodo: (clientId, pointId) => {
+    const client = get().data.clients.find(c => c.id === clientId)
+    const point = client?.agenda?.find(p => p.id === pointId)
+    if (!client || !point) return
+    // A point on a project points at that project; a point on a to-do points at whatever that to-do points at.
+    const parent = point.itemType === 'task' ? client.tasks?.find(t => t.id === point.itemId) : undefined
+    const link = point.itemType === 'project' ? { type: 'project' as const, id: point.itemId } : parent?.link
+    const id = get().addTask(clientId, { title: point.text, assigneeId: get().userId ?? undefined, link })
+    if (id && !point.done) get().toggleAgendaPoint(clientId, pointId)
+    if (id) notify('Made into a to-do', { label: 'Undo', run: () => { get().deleteTask(clientId, id); if (!point.done) get().toggleAgendaPoint(clientId, pointId) } })
   },
 
   // ── To-dos ──

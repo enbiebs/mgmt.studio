@@ -13,6 +13,7 @@ import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { ItemTodos } from '@/components/dashboard/ItemTodos'
 import type { ProjectType, ProjectStatus } from '@/types'
 import { AssigneeSelect, TaskRow } from '@/components/dashboard/todo-parts'
+import { AgendaButton, AgendaPanel } from '@/components/dashboard/AgendaPanel'
 import { useMe } from '@/lib/useToday'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 
@@ -47,6 +48,7 @@ export function ProjectsView() {
   const editable = useStore(s => s.canEdit('projects'))
   const { addProject, updateProjectStatus, assignProject, deleteProject, openModal, modal, closeModal } = useStore()
   const [filter, setFilter] = useState<'all' | ProjectStatus>('all')
+  const [agendaOpen, setAgendaOpen] = useState<Record<string, boolean>>({})
 
   if (!client) return null
   const projects = client.projects ?? []
@@ -126,14 +128,14 @@ export function ProjectsView() {
                   : 'border-gray-100 bg-canvas'
               }`}
             >
-              <div className="flex items-start gap-3">
+              <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
                 {/* Status dot */}
                 <div className="mt-1.5 flex-shrink-0">
                   <div className={`w-2 h-2 rounded-full ${sc.dot}`} />
                 </div>
 
                 {/* Main content */}
-                <div className="flex-1 min-w-0">
+                <div className="grow shrink basis-[220px] min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-sm">{project.title}</span>
                     {project.fromArtist && (
@@ -170,28 +172,32 @@ export function ProjectsView() {
                 </div>
 
                 {/* Actions */}
-                {editable && (
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <ItemTodos link={{ type: 'project', id: project.id }} suggest={`Follow up: ${project.title}`} />
-                    <ItemAccessButton itemType="project" itemId={project.id} />
-                    {next && (
+                <div className="flex flex-wrap items-center gap-2 ml-auto">
+                  <AgendaButton clientId={client.id} itemType="project" itemId={project.id} open={!!agendaOpen[project.id]} onToggle={() => setAgendaOpen(o => ({ ...o, [project.id]: !o[project.id] }))} />
+                  {editable && (
+                    <>
+                      <ItemTodos link={{ type: 'project', id: project.id }} suggest={`Follow up: ${project.title}`} />
+                      <ItemAccessButton itemType="project" itemId={project.id} />
+                      {next && (
+                        <button
+                          onClick={() => updateProjectStatus(project.id, next)}
+                          className="px-2.5 py-1 text-[11px] font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors whitespace-nowrap"
+                        >
+                          → {STATUS_CONFIG[next].label}
+                        </button>
+                      )}
                       <button
-                        onClick={() => updateProjectStatus(project.id, next)}
-                        className="px-2.5 py-1 text-[11px] font-medium border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors whitespace-nowrap"
+                        onClick={() => deleteProject(project.id)}
+                        className="text-gray-300 hover:text-red-400 transition-colors text-lg leading-none px-1"
+                        title="Remove"
                       >
-                        → {STATUS_CONFIG[next].label}
+                        ×
                       </button>
-                    )}
-                    <button
-                      onClick={() => deleteProject(project.id)}
-                      className="text-gray-300 hover:text-red-400 transition-colors text-lg leading-none px-1"
-                      title="Remove"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
+                    </>
+                  )}
+                </div>
               </div>
+              {agendaOpen[project.id] && <div className="pl-5 pt-1"><AgendaPanel clientId={client.id} itemType="project" itemId={project.id} canEdit={editable} /></div>}
             </div>
           )
         })}
