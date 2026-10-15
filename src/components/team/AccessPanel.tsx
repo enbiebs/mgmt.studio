@@ -5,21 +5,9 @@ import { uid } from '@/lib/utils'
 import { inputClass, selectClass } from '@/components/ui/Modal'
 import type { Person } from '@/types'
 import { ARTIST_SIDE_NAME } from '@/lib/brand'
-
-const SECTIONS: { key: string; label: string }[] = [
-  { key: 'profile', label: 'Profile' },
-  { key: 'music', label: 'Music' },
-  { key: 'tour', label: 'Tour' },
-  { key: 'content', label: 'Content' },
-  { key: 'finance', label: 'Finance' },
-  { key: 'team', label: 'Team' },
-  { key: 'projects', label: 'Projects' },
-  { key: 'analytics', label: 'Analytics' },
-  { key: 'legal', label: 'Legal' },
-]
+import { PRESETS, SECTIONS, matchPreset, planChanges, presetByKey, summarize, levelsOf, type GrantRow } from '@/lib/access-presets'
 
 type Level = 'none' | 'view' | 'edit'
-type GrantRow = { id: string; section: string; client_id: string | null; can_edit: boolean }
 type Member = { id: string; role: string } | null
 
 function levelOf(grants: GrantRow[], section: string, clientId: string): Level {
@@ -84,6 +72,37 @@ export function AccessPanel({ person }: { person: Person }) {
     }
   }
 
+  // Choose a ready-made level for one artist: fills in the same per-section choices the chips below show.
+  const [levelMessage, setLevelMessage] = useState<Record<string, string>>({})
+  async function applyLevel(clientId: string, key: string) {
+    if (!member) return
+    const levels = key === 'none' ? {} : presetByKey(key)?.levels
+    if (!levels) return
+    if (matchPreset(grants, clientId) === 'custom' && !confirm('This replaces the choices you made for this artist. Continue?')) return
+    const plan = planChanges(grants, clientId, levels)
+    const { createClient } = await import('@/lib/supabase/client')
+    const supabase = createClient()
+    const added = plan.add.map(a => ({ id: 'grant-' + uid(), workspace_member_id: member.id, section: a.section, client_id: clientId, can_edit: a.canEdit }))
+    const results = await Promise.all([
+      plan.remove.length ? supabase.from('access_grants').delete().in('id', plan.remove) : null,
+      ...plan.update.map(u => supabase.from('access_grants').update({ can_edit: u.canEdit }).eq('id', u.id)),
+      added.length ? supabase.from('access_grants').insert(added) : null,
+    ])
+    if (results.some(r => r?.error)) {
+      setLevelMessage(m => ({ ...m, [clientId]: "Couldn't change their access. Please try again." }))
+      fetchAccess(person.id).then(r => setGrants(r.grants))   // show what is really saved
+      return
+    }
+    setLevelMessage(m => ({ ...m, [clientId]: '' }))
+    setGrants(g => [
+      ...g.filter(row => !plan.remove.includes(row.id)).map(row => {
+        const u = plan.update.find(x => x.id === row.id)
+        return u ? { ...row, can_edit: u.canEdit } : row
+      }),
+      ...added.map(({ id, section, client_id, can_edit }) => ({ id, section, client_id, can_edit })),
+    ])
+  }
+
   async function cycleGrant(clientId: string, section: string) {
     if (!member) return
     const current = levelOf(grants, section, clientId)
@@ -143,13 +162,37 @@ export function AccessPanel({ person }: { person: Person }) {
       <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 mt-3">
         Access — has a real login
       </div>
+      {grants.length === 0 && (
+        <div className="text-xs text-amber-700 bg-amber-50 rounded-lg px-2.5 py-2 mb-2">
+          They can log in, but they can&apos;t see anything yet. Pick a level for each artist below.
+        </div>
+      )}
       <div className="text-xs text-gray-400 mb-2">
-        Click a section to grant view, click again for edit, click again to remove. Default is view-only.
+        Pick a level for each artist, then fine-tune any section below it: click once for view, again for edit, again to remove.
       </div>
-      <div className="flex flex-col gap-3">
-        {clients.filter(c => !c.isDemo).map(c => (
+      <div className="flex flex-col gap-4">
+        {clients.filter(c => !c.isDemo).map(c => {
+          const current = matchPreset(grants, c.id)
+          const preset = presetByKey(current)
+          return (
           <div key={c.id}>
-            <div className="text-xs font-semibold mb-1">{c.name}</div>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="text-xs font-semibold flex-1 min-w-0 truncate">{c.name}</div>
+              <select
+                aria-label={`Access level for ${c.name}`}
+                value={current}
+                onChange={e => { if (e.target.value !== 'custom') applyLevel(c.id, e.target.value) }}
+                className="px-2 py-1 text-xs bg-gray-50 border border-gray-100 rounded-lg text-gray-600 hover:border-gray-200 max-w-[190px]"
+              >
+                <option value="none">No access</option>
+                {PRESETS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+                {current === 'custom' && <option value="custom" disabled>Custom (fine-tuned)</option>}
+              </select>
+            </div>
+            <div className="text-[11px] text-gray-400 mb-1.5">
+              {preset ? `${preset.blurb} Can't see: ${preset.hidden}.` : current === 'custom' ? summarize(levelsOf(grants, c.id)) : 'Cannot see anything for this artist.'}
+            </div>
+            {levelMessage[c.id] && <div className="text-[11px] text-red-500 mb-1">{levelMessage[c.id]}</div>}
             <div className="flex flex-wrap gap-1">
               {SECTIONS.map(s => {
                 const level = levelOf(grants, s.key, c.id)
@@ -172,7 +215,8 @@ export function AccessPanel({ person }: { person: Person }) {
               })}
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
