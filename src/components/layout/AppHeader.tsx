@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useInbox } from '@/lib/useInbox'
 import { SHOW_UNFINISHED_KEY, analyticsHasData } from '@/lib/unfinished'
 import type { MainSection } from '@/types'
+import { ARTIST_SIDE_NAME, PRODUCT_NAME } from '@/lib/brand'
 
 const ROLE_LABEL: Record<string, string> = { manager: 'Manager', artist: 'Artist', agent: 'Agent', lawyer: 'Lawyer', team: 'Team' }
 
@@ -74,7 +75,7 @@ export function AppHeader() {
       )}
 
       {/* Logo */}
-      <div className={`font-serif font-semibold text-base tracking-tight flex-shrink-0 ${view === 'studio' && role !== 'artist' ? 'hidden md:block' : ''}`}>Mgmt Studio</div>
+      <div className={`font-serif font-semibold text-base tracking-tight flex-shrink-0 ${view === 'studio' && role !== 'artist' ? 'hidden md:block' : ''}`}>{role === 'artist' ? ARTIST_SIDE_NAME : PRODUCT_NAME}</div>
 
       {/* Main nav (studio mode, everyone except artist — artists get their own dashboard-style view) */}
       {view === 'studio' && role !== 'artist' && (

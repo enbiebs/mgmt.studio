@@ -24,6 +24,7 @@ import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal
 import { STATUS_CONFIG, STAKEHOLDER_TOOLTIPS } from '@/components/manager/ProjectsView'
 import { OfferSheetsCard } from '@/components/artist/OfferSheets'
 import { analyticsHasData } from '@/lib/unfinished'
+import { ARTIST_SIDE_NAME } from '@/lib/brand'
 
 /** Compact number formatter for big at-a-glance stats: 1.8M, 220K, 940 */
 function fmtCompact(n: number): string {
@@ -121,6 +122,7 @@ export function ArtistView() {
             {initials(client.name)}
           </div>
           <div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">{ARTIST_SIDE_NAME}</div>
             <h1 className="font-serif text-2xl font-medium">{client.name}</h1>
             <p className="text-sm text-gray-400 mt-0.5">{client.genre}</p>
           </div>

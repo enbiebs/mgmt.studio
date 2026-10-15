@@ -17,6 +17,7 @@ import { AddShowModal } from '@/components/tour/TourView'
 import { PostModal } from '@/components/content/ManageView'
 import { AddProjectModal } from '@/components/manager/ProjectsView'
 import { SetupChecklist } from '@/components/calendar/SetupChecklist'
+import { PRODUCT_NAME } from '@/lib/brand'
 
 const ALL_DOMAINS: CalendarEventDomain[] = ['show', 'offer', 'release', 'post', 'invoice', 'contract', 'project', 'bill']
 
@@ -325,7 +326,7 @@ function GoogleCalendarPanel({ clientId }: { clientId: string }) {
           ) : connected ? (
             <>
               <div className="text-gray-500 mb-2">
-                Shows, Posts, and Projects sync to a dedicated Google Calendar. Editing or deleting them there updates Mgmt Studio too.
+                Shows, Posts, and Projects sync to a dedicated Google Calendar. Editing or deleting them there updates {PRODUCT_NAME} too.
               </div>
               <button
                 onClick={disconnect}

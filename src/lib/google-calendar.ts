@@ -4,6 +4,7 @@
 // see src/lib/google-calendar-sync.ts for the Supabase-facing glue.
 import { google } from 'googleapis'
 import type { calendar_v3 } from 'googleapis'
+import { PRODUCT_NAME } from '@/lib/brand'
 
 const SCOPES = ['https://www.googleapis.com/auth/calendar']
 
@@ -54,7 +55,7 @@ function clientFor(accessToken: string): calendar_v3.Calendar {
 export async function createDedicatedCalendar(accessToken: string, clientName: string): Promise<string> {
   const calendar = clientFor(accessToken)
   const res = await calendar.calendars.insert({
-    requestBody: { summary: `Mgmt Studio — ${clientName}` },
+    requestBody: { summary: `${PRODUCT_NAME} — ${clientName}` },
   })
   if (!res.data.id) throw new Error('Google did not return a calendar id')
   return res.data.id

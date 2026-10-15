@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { CountryCode, Products } from 'plaid'
 import { plaidClient } from '@/lib/plaid'
 import { createClient } from '@/lib/supabase/server'
+import { PRODUCT_NAME } from '@/lib/brand'
 
 // Starts a bank connection for one artist. The browser calls this to get a
 // short-lived link_token, then hands it to Plaid's own Link widget — the
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
   if (error || !client) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
 
   const response = await plaidClient.linkTokenCreate({
-    client_name: 'Mgmt Studio',
+    client_name: PRODUCT_NAME,
     language: 'en',
     country_codes: [CountryCode.Us],
     user: { client_user_id: `${user.id}:${clientId}` },

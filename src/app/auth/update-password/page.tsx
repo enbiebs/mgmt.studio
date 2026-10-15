@@ -8,6 +8,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { PRODUCT_NAME } from '@/lib/brand'
 
 export default function UpdatePasswordPage() {
   const [password, setPassword] = useState('')
@@ -40,7 +41,7 @@ export default function UpdatePasswordPage() {
   return (
     <div className="min-h-screen bg-canvas flex flex-col items-center justify-center px-4">
       <div className="mb-8 text-center">
-        <div className="font-serif font-semibold text-2xl tracking-tight mb-1">Mgmt Studio</div>
+        <div className="font-serif font-semibold text-2xl tracking-tight mb-1">{PRODUCT_NAME}</div>
         <div className="text-sm text-gray-400">Set a new password</div>
       </div>
 
@@ -94,7 +95,7 @@ export default function UpdatePasswordPage() {
       </div>
 
       <div className="mt-12 text-[10px] uppercase tracking-widest text-gray-300">
-        Mgmt Studio · Music Management · v0.1
+        {PRODUCT_NAME} · Music Management · v0.1
       </div>
     </div>
   )
