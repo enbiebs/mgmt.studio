@@ -20,6 +20,7 @@ export const LIMITS = {
   file:   { max: 120,  windowSeconds: 60 },     // opening or removing a stored file, downloading a PDF
   bank:   { max: 60,   windowSeconds: 3600 },   // connecting or syncing a bank
   invite: { max: 10,   windowSeconds: 3600 },   // sending a login invitation email
+  reveal: { max: 60,   windowSeconds: 600 },    // opening or saving an artist's private details
   sync:   { max: 1000, windowSeconds: 3600 },   // Google Calendar pushes: one import can touch many shows
   api:    { max: 300,  windowSeconds: 60 },     // everything else a signed-in person does
   public: { max: 60,   windowSeconds: 60 },     // endpoints that have no sign-in (calendar feed, error reports)
@@ -61,7 +62,7 @@ export async function requireUser(limit: LimitName = 'api') {
   return { user, supabase }
 }
 
-type Section = 'finance' | 'tour' | 'content' | 'projects'
+type Section = 'finance' | 'tour' | 'content' | 'projects' | 'profile' | 'vault'
 
 /**
  * The signed-in person, checked against ONE artist: they need access to the section (edit access when

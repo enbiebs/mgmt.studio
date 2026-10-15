@@ -257,6 +257,42 @@ export interface CatalogWork {
   ppl: RegStatus
 }
 
+// ── Artist profile (open details; the private ones live only on the server) ──
+export interface TravelPrefs {
+  legalName?:  string    // exactly as it appears on their ID, for bookings
+  homeAirport?: string
+  seat?:       string
+  hotelPrefs?: string
+  roomType?:   string
+  dietary?:    string
+  requests?:   string
+}
+export interface ProfileContact {
+  id:       string
+  role:     string        // "Agent", "Business manager", "Lawyer"...
+  personId?: string       // → Person in the artist's directory (their email and phone live there)
+  firm?:    string
+  notes?:   string
+}
+export interface ArtistProfile {
+  legalName?:       string
+  phone?:           string
+  email?:           string
+  altEmail?:        string
+  website?:         string
+  businessName?:    string
+  businessAddress?: string
+  bioShort?:        string
+  bioLong?:         string
+  notes?:           string
+  social?:          Partial<Record<'instagram' | 'tiktok' | 'twitter' | 'youtube' | 'facebook' | 'spotify' | 'appleMusic' | 'soundcloud' | 'bandcamp' | 'other', string>>
+  sizes?:           Partial<Record<'shirt' | 'jacket' | 'jeans' | 'pants' | 'shoe', string>>
+  travel?:          TravelPrefs                      // the artist's own
+  party?:           string[]                         // people who travel with the artist (ids in the directory)
+  partyTravel?:     Record<string, TravelPrefs>      // their open travel preferences, by person id
+  contacts?:        ProfileContact[]
+}
+
 export interface Client {
   id: string
   name: string
@@ -284,6 +320,7 @@ export interface Client {
   agentData:   AgentData
   legal:       LegalData
   finance:     ClientFinance
+  profile?:    ArtistProfile    // the open details; private details are never held in the app's data (see lib/profile-fields.ts)
   // Sections where this client has at least one item the viewer can load.
   // For someone with no grant for a section, an item there means it was shared
   // with them (see src/lib/item-access.ts). Computed on load, not stored.
@@ -421,7 +458,7 @@ export interface AnalyticsData {
 }
 
 // ── Section / view routing ──────────────────────────────────
-export type MainSection  = 'calendar' | 'songs' | 'tour' | 'content' | 'finance' | 'projects' | 'analytics' | 'team' | 'legal' | 'activity'
+export type MainSection  = 'calendar' | 'profile' | 'songs' | 'tour' | 'content' | 'finance' | 'projects' | 'analytics' | 'team' | 'legal' | 'activity'
 export type SongsSub     = 'tracks' | 'labelcopy' | 'checklist' | 'status'
 export type ContentSub   = 'manage' | 'studio' | 'lab'
 export type BizSub       = 'royalties' | 'banking' | 'catalog' | 'pl' | 'invoices' | 'payments'
