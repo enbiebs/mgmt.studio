@@ -2,12 +2,15 @@
 //  Sharing: the list of who can open ONE artist, built from the team list and that artist's access rows.
 //  Pure logic (no screen, no database), so it can be tested.
 //
-//  Three kinds of row:
+//  The Team page is ONE list: each team card (a person's contact details) with the access its login has for this artist
+//  underneath. buildTeamList() joins the two; the rest of this file is about the access side.
+//
+//  Three kinds of access row:
 //    manager   sees every artist; nobody but another manager changes that
 //    company   has a company-wide grant (every artist), set by a manager; shown so the list never lies about who can open this
 //    person    has rows for THIS artist: a Point Person or a role, and the one kind a Point Person can change
 // ──────────────────────────────────────────────────────────
-import type { WorkspacePerson } from '@/types'
+import type { Person, WorkspacePerson } from '@/types'
 import { ADMIN_KEY, matchPreset, levelsOf, presetByKey, summarize, type GrantRow } from '@/lib/access-presets'
 
 export interface SharingGrant { id: string; memberId: string; section: string; clientId: string | null; canEdit: boolean }
@@ -101,4 +104,51 @@ export const STATUS_LABEL: Record<PersonStatus, string> = {
   waiting: 'Invited, waiting to accept',
   'has-access': 'Has access',
   'not-shared': 'Has a login, not shared with this artist',
+}
+
+// ── the one Team list ────────────────────────────────────────────────────────
+
+/** A team card (contact details) joined with its login, if it has one, and what that login can do for THIS artist. */
+export interface TeamCard { contact: Person; login: WorkspacePerson | null; row: SharingRow | null; status: PersonStatus }
+export interface TeamList {
+  /** One per team card: Point People first, then people with access, then logins not shared yet, then people with no login. */
+  cards: TeamCard[]
+  /** Logins that can open this artist but have no team card (managers, company-wide people, older invitations). */
+  logins: SharingRow[]
+  /** Logins with no team card and no access to this artist yet: they stay out of the way until someone shares with them. */
+  others: WorkspacePerson[]
+}
+
+/** A login with nothing for this artist yet, drawn like everyone else so a role can simply be chosen for them. */
+export const unsharedRow = (person: WorkspacePerson): SharingRow => ({ kind: 'person', person, grants: [], levelKey: 'none', alsoCompanyWide: person.allClients })
+const sharable = (p: WorkspacePerson) => p.role !== 'manager' && p.role !== 'artist'
+
+const CARD_RANK = (c: TeamCard) =>
+  !c.login ? 4
+  : c.row?.kind === 'person' && c.row.grants.length === 0 ? 3
+  : c.row?.kind === 'person' ? (c.row.levelKey === ADMIN_KEY ? 0 : 1)
+  : 2
+
+/** Joins the team cards with the logins (matched by person_id) and this artist's access rows into the one list the page draws. */
+export function buildTeamList(contacts: Person[], logins: WorkspacePerson[], rows: SharingRow[], clientId: string): TeamList {
+  const rowOf = new Map(rows.map(r => [r.person.memberId, r]))
+  const used = new Set<string>()
+  const cards: TeamCard[] = contacts.map(contact => {
+    const login = logins.find(l => l.personId === contact.id && l.role !== 'artist') ?? null
+    if (login) used.add(login.memberId)
+    const row = login ? rowOf.get(login.memberId) ?? (sharable(login) ? unsharedRow(login) : null) : null
+    return { contact, login, row, status: personStatus(contact.id, logins, clientId) }
+  })
+  return {
+    cards: cards.sort((a, b) => CARD_RANK(a) - CARD_RANK(b)),   // a stable sort, so cards of the same kind keep the order they were added in
+    logins: rows.filter(r => !used.has(r.person.memberId)),
+    others: addablePeople(logins, rows).filter(p => !used.has(p.memberId)),
+  }
+}
+
+/** What the "send again" button on someone's card says and does: a fresh invitation until they have signed in once, then a password link. */
+export function resendWording(invited: boolean): { button: string; sent: string } {
+  return invited
+    ? { button: 'Resend invite', sent: 'Invite sent again. If they cannot find it, ask them to check spam.' }
+    : { button: 'Send password link', sent: 'Password link sent. If they cannot find it, ask them to check spam.' }
 }
