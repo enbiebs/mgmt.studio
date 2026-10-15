@@ -14,6 +14,7 @@ import { useStore } from '@/lib/store'
 import { effectiveSub, shareOnlyTabs } from '@/lib/item-access'
 import { canOpenSection, visibleTourTabs } from '@/lib/tour-tabs'
 import { CompanyView } from '@/components/company/CompanyView'
+import { CompanySetupCard } from '@/components/dashboard/CompanySetupCard'
 import { AppHeader }  from '@/components/layout/AppHeader'
 import { Subnav }     from '@/components/layout/Subnav'
 import { Rail }       from '@/components/layout/Rail'
@@ -100,6 +101,7 @@ export function StudioApp() {
           const roster = visibleIds === 'all' ? data.clients : data.clients.filter(c => visibleIds.includes(c.id))
           return (
             <main className="flex-1 overflow-auto p-4 md:p-8">
+              <CompanySetupCard />
               <TodayList />
 
               <div className="flex items-end justify-between mb-4">

@@ -21,6 +21,7 @@ export function Rail() {
   const goToDashboard = useStore(s => s.goToDashboard)
   const goToCompany = useStore(s => s.goToCompany)
   const isManager = useStore(s => s.role === 'manager')
+  const companyName = useStore(s => s.companyName)
   const openClient = useStore(s => s.openClient)
   const setSection = useStore(s => s.setSection)
   const inbox = useInbox().total
@@ -32,8 +33,11 @@ export function Rail() {
 
   return (
     <aside aria-label="Main" className="hidden md:flex w-[232px] flex-shrink-0 flex-col gap-1 border-r border-gray-100 bg-gray-50 px-3 py-4 overflow-y-auto">
-      <div className="flex items-center gap-2 px-2 pb-3 font-serif font-semibold text-[17px]">
-        <BrandMark /> {PRODUCT_NAME}
+      <div className="px-2 pb-3">
+        <div className="flex items-center gap-2 font-serif font-semibold text-[17px]">
+          <BrandMark /> {PRODUCT_NAME}
+        </div>
+        {companyName && <div className="mt-0.5 truncate pl-[26px] text-[11px] font-medium text-gray-400" title={companyName}>{companyName}</div>}
       </div>
 
       <button
