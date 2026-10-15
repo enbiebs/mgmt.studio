@@ -57,7 +57,10 @@ export async function POST(req: NextRequest) {
   })
   if (saveErr) return serverError('Invite could not be recorded', saveErr, "Couldn't send that invitation. Please try again.")
 
-  const { data: invited, error } = await admin.auth.admin.inviteUserByEmail(email)
+  // The button in the email must come back to THIS site's accept page. Without an address of its own the email falls
+  // back to the project's "Site URL" setting, and a bare "mgmtpath.com" there (no https://) is what made the first
+  // real invite end on a blank error page.
+  const { data: invited, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo: `${new URL(req.url).origin}/auth/accept` })
   if (error) {
     await clearMine()   // nothing was sent, so nothing stays pending
     if (error.code === 'email_exists' || /already.*registered/i.test(error.message)) {

@@ -6,11 +6,18 @@
 //  a new password, not for general use.
 // ──────────────────────────────────────────────────────────
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { PRODUCT_NAME } from '@/lib/brand'
 
 export default function UpdatePasswordPage() {
+  return <Suspense><UpdatePasswordForm /></Suspense>
+}
+
+function UpdatePasswordForm() {
+  // Someone arriving from an invitation (the accept page adds ?welcome=1) is finishing a brand-new login, not resetting one.
+  const welcome = useSearchParams().get('welcome') === '1'
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
@@ -42,7 +49,7 @@ export default function UpdatePasswordPage() {
     <div className="min-h-screen bg-canvas flex flex-col items-center justify-center px-4">
       <div className="mb-8 text-center">
         <div className="font-serif font-semibold text-2xl tracking-tight mb-1">{PRODUCT_NAME}</div>
-        <div className="text-sm text-gray-400">Set a new password</div>
+        <div className="text-sm text-gray-400">{welcome ? 'Welcome — choose a password to finish setting up your login' : 'Set a new password'}</div>
       </div>
 
       <div className="w-full max-w-sm">

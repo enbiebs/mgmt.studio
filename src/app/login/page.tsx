@@ -5,8 +5,9 @@
 //  Supports: email+password login, signup, and magic link.
 // ──────────────────────────────────────────────────────────
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { hasAuthHash } from '@/lib/auth-hash'
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from '@/lib/brand'
 
 type Mode = 'login' | 'signup' | 'magic' | 'reset'
@@ -18,6 +19,12 @@ export default function LoginPage() {
   const [workspaceName, setWorkspaceName] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(null)
+
+  // An invitation link that came back to the home page (so the gate sent it here) still carries the person's sign-in
+  // details after the "#". Hand them to the accept page instead of showing a sign-in form they have no password for.
+  useEffect(() => {
+    if (hasAuthHash(window.location.hash)) window.location.replace('/auth/accept' + window.location.hash)
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
