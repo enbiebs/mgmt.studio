@@ -15,6 +15,9 @@ import type { Currency, Show } from '@/types'
 export function TourView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('tour'))
+  // What a show pays is Deals & fees, not Tour: someone with only Tour never sees the fees block (the database hides the numbers too).
+  const canSeeDeals = useStore(s => s.hasAccess('deals'))
+  const canEditDeals = useStore(s => s.canEdit('deals'))
   const {
     selectedShowId, setSelectedShow, setTourSub, updateShowStatus, updateShowFinancials, deleteShow,
     enableCalendarFeed, disableCalendarFeed,
@@ -279,7 +282,7 @@ export function TourView() {
               </div>
             </div>
 
-            <ShowFinancials key={selected.id} show={selected} editable={editable} onViewOffer={() => setTourSub('offers')} />
+            {canSeeDeals && <ShowFinancials key={selected.id} show={selected} editable={canEditDeals} onViewOffer={() => setTourSub('offers')} />}
 
             {editable && selected.date < today() && (
               <label className="flex items-start gap-2 text-xs text-gray-500 mb-4 cursor-pointer">
@@ -369,6 +372,9 @@ function ShowFinancials({ show, editable, onViewOffer }: { show: Show; editable:
   const invoices = useStore(s => s.getClient()?.finance?.invoices ?? [])
   const setSection = useStore(s => s.setSection)
   const setBizSub = useStore(s => s.setBizSub)
+  // An invoice is Finance and the fee behind it is Deals & fees: making one needs edit access to both.
+  const canInvoice = useStore(s => s.canEdit('finance') && s.canEdit('deals'))
+  const canSeeFinance = useStore(s => s.hasAccess('finance'))
   const [guarantee, setGuarantee] = useState(String(show.guarantee ?? ''))
   const [deposit, setDeposit] = useState(String(show.deposit ?? ''))
   const [currency, setCurrency] = useState<Currency>(show.currency ?? 'USD')
@@ -467,14 +473,16 @@ function ShowFinancials({ show, editable, onViewOffer }: { show: Show; editable:
       )}
 
       {show.guarantee != null && (
-        linkedInvoice ? (
+        linkedInvoice && canSeeFinance ? (
           <button onClick={viewInvoice} className="flex items-center gap-1.5 text-xs text-accent hover:text-accent-hover mb-1">
             <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${INVOICE_STATUS_CONFIG[isOverdue(linkedInvoice) ? 'overdue' : linkedInvoice.status].bg} ${INVOICE_STATUS_CONFIG[isOverdue(linkedInvoice) ? 'overdue' : linkedInvoice.status].color}`}>
               {INVOICE_STATUS_CONFIG[isOverdue(linkedInvoice) ? 'overdue' : linkedInvoice.status].label}
             </span>
             View invoice →
           </button>
-        ) : editable && (
+        ) : show.invoiceId ? (
+          <span className="text-xs text-gray-400 block mb-1">An invoice was made for this show (in Finance).</span>
+        ) : canInvoice && (
           <button onClick={() => generateInvoiceFromShow(show.id)} className="text-xs text-accent hover:text-accent-hover mb-1">
             Generate invoice
           </button>

@@ -1,6 +1,7 @@
 'use client'
 import { useStore } from '@/lib/store'
 import { shareOnlyTabs, effectiveSub } from '@/lib/item-access'
+import { visibleTourTabs } from '@/lib/tour-tabs'
 import { SECTION_FOLDER, folderLabel, folderLink } from '@/lib/drive-links'
 import { Icon } from '@/components/ui/Icon'
 
@@ -25,14 +26,18 @@ export function Subnav() {
   const allowed = shareOnly ? shareOnlyTabs(section, client ?? undefined) : undefined
   // Budgets and settlements are money: management side only (Finance access, never the artist).
   const canSeeBudgets = useStore(s => s.role !== 'artist' && s.hasAccess('finance'))
+  const hasTour = useStore(s => s.hasAccess('tour'))
+  const hasDeals = useStore(s => s.hasAccess('deals'))
   const showUnfinished = useStore(s => s.showUnfinished)
-  const subs = (SUBNAV[section] ?? []).filter(([, key]) => (!allowed || allowed.includes(key)) && ((key !== 'budget' && key !== 'settlements') || canSeeBudgets) && (key !== 'lab' || showUnfinished))
+  // The Tour page is Tour (schedule side) + Deals & fees (Offers) + Finance (budgets, settlements): each person gets the tabs they have.
+  const tourTabs = visibleTourTabs({ tour: hasTour, deals: hasDeals, finance: canSeeBudgets, sharedTabs: allowed })
+  const subs = (SUBNAV[section] ?? []).filter(([, key]) => section === 'tour' ? tourTabs.includes(key) : (!allowed || allowed.includes(key)) && (key !== 'lab' || showUnfinished))
 
   function isActive(key: string) {
     if (section === 'songs')     return effectiveSub(songsSub, allowed) === key
     if (section === 'content')   return effectiveSub(contentSub, allowed) === key
     if (section === 'finance')   return effectiveSub(bizSub, allowed) === key
-    if (section === 'tour')      return effectiveSub(tourSub, allowed) === key
+    if (section === 'tour')      return effectiveSub(tourSub, tourTabs) === key
     if (section === 'analytics') return analyticsSub === key
     if (section === 'legal')     return legalSub === key
     return false

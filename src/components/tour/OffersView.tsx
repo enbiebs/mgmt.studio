@@ -42,7 +42,8 @@ type AgentTab = 'pipeline' | 'settled' | 'routing'
 
 export function OffersView() {
   const client = useStore(s => s.getClient())
-  const editable = useStore(s => s.canEdit('tour'))
+  // Booking offers are Deals & fees (not Tour): changing them needs edit access to that page.
+  const editable = useStore(s => s.canEdit('deals'))
   const [tab, setTab] = useState<AgentTab>('pipeline')
   const [addOpen, setAddOpen] = useState(false)
   const [editingOffer, setEditingOffer] = useState<TourOffer | null>(null)
@@ -152,8 +153,8 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
   const { addOffer, updateOffer, deleteOffer, addBudget, setSelectedBudget, setTourSub } = useStore()
   const client = useStore(s => s.getClient())
   const canSeeBudgets = useStore(s => s.role !== 'artist' && s.hasAccess('finance'))
-  // Sheets carry budget numbers, so sending needs edit access to both Tour and Finance.
-  const canSendSheets = useStore(s => s.role !== 'artist' && s.canEdit('tour') && s.canEdit('finance'))
+  // Sheets carry budget numbers, so sending needs edit access to both Deals & fees and Finance.
+  const canSendSheets = useStore(s => s.role !== 'artist' && s.canEdit('deals') && s.canEdit('finance'))
   const allSheets = useStore(s => s.getClient()?.tour.offerSheets)
   const sheets = useMemo(() => (initial ? (allSheets ?? []).filter(sh => sh.offerId === initial.id) : []), [allSheets, initial])
   // A new offer can start from what was read out of pasted text.

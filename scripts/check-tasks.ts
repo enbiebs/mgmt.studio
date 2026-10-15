@@ -170,9 +170,10 @@ assert.deepEqual(parseAbout('invoice:i-early'), { type: 'invoice', id: 'i-early'
 assert.deepEqual(parseAbout('song:t1'), { type: 'song', id: 't1' })
 assert.deepEqual(parseAbout('expense:e-open'), { type: 'expense', id: 'e-open' })
 assert.equal(parseAbout(''), undefined); assert.equal(parseAbout('vault:x'), undefined); assert.equal(parseAbout('show:'), undefined); assert.equal(parseAbout('nonsense'), undefined)
-// only what the person may edit: Tour covers shows and offers, Finance covers invoices and bills, and so on
+// only what the person may edit: Tour covers shows, Deals & fees covers offers, Finance covers invoices and bills, and so on
 assert.deepEqual(groupsOf(s => s === 'finance').map(g => g.label), ['Invoices', 'Bills'])
-assert.deepEqual(groupsOf(s => s === 'tour').map(g => g.label), ['Shows', 'Offers'])
+assert.deepEqual(groupsOf(s => s === 'tour').map(g => g.label), ['Shows'])
+assert.deepEqual(groupsOf(s => s === 'deals').map(g => g.label), ['Offers'])
 assert.deepEqual(groupsOf(s => s === 'songs').map(g => g.label), ['Songs'])
 assert.deepEqual(groupsOf(s => s === 'legal').map(g => g.label), ['Contracts'])
 assert.deepEqual(groupsOf(s => s === 'projects').map(g => g.label), ['Projects'])
@@ -209,6 +210,8 @@ assert.deepEqual(taskDestination({ type: 'invoice', id: 'i1' }), { section: 'fin
 assert.equal(taskDestination({ type: 'song', id: 'x' }).section, 'songs')
 assert.equal(taskSection(undefined), 'projects')              // a to-do that points at nothing belongs to Projects
 assert.equal(taskSection({ type: 'invoice', id: 'i' }), 'finance')
+assert.equal(taskSection({ type: 'offer', id: 'o' }), 'deals')                 // saved under Deals & fees (the database says the same) ...
+assert.deepEqual(taskDestination({ type: 'offer', id: 'o' }), { section: 'tour', sub: 'offers', showId: undefined })   // ... but "Open" still lands on the Offers tab
 
 // ── quick add ──
 const q = (s: string) => parseQuickTodo(s, TODAY)

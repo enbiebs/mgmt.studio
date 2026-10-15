@@ -4,7 +4,7 @@
 //  The entries themselves are written by the database (migration 035); this only words them.
 // ──────────────────────────────────────────────────────────
 
-export type ActivityEntityType = 'show' | 'offer' | 'offer_sheet' | 'budget' | 'settlement' | 'invoice' | 'expense' | 'contract'
+export type ActivityEntityType = 'show' | 'show_deal' | 'offer' | 'offer_sheet' | 'budget' | 'settlement' | 'invoice' | 'expense' | 'contract'
 
 export interface ActivityEntry {
   id: string
@@ -23,14 +23,15 @@ export interface ActivityEntry {
 }
 
 const NOUN: Record<ActivityEntityType, [string, string]> = {
-  show: ['show', 'shows'], offer: ['offer', 'offers'], offer_sheet: ['offer sheet', 'offer sheets'],
+  show: ['show', 'shows'], show_deal: ['fees for', 'fees for'], offer: ['offer', 'offers'], offer_sheet: ['offer sheet', 'offer sheets'],
   budget: ['budget', 'budgets'], settlement: ['settlement', 'settlements'], invoice: ['invoice', 'invoices'],
   expense: ['bill', 'bills'], contract: ['contract', 'contracts'],
 }
 
 // The groups on the filter bar.
 export const ACTIVITY_GROUPS: { key: string; label: string; types: ActivityEntityType[] }[] = [
-  { key: 'tour', label: 'Shows & offers', types: ['show', 'offer', 'offer_sheet'] },
+  { key: 'tour', label: 'Shows', types: ['show'] },
+  { key: 'deals', label: 'Offers & fees', types: ['offer', 'offer_sheet', 'show_deal'] },
   { key: 'money', label: 'Money', types: ['budget', 'settlement', 'invoice', 'expense'] },
   { key: 'legal', label: 'Contracts', types: ['contract'] },
 ]

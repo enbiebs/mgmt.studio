@@ -11,7 +11,8 @@
 //      who else has access" (migration 050).
 //
 //  What a section covers (so the descriptions are honest):
-//    Tour     the schedule, advance, day sheets, travel, guest list, crew, AND the booking offers with their fees
+//    Tour     the schedule, advance, day sheets, travel, guest list and crew
+//    Deals    booking offers and the money on each show (guarantee, deposit, agency and management commissions)
 //    Finance  money: invoices, bills, budgets, settlements, banking, crew pay
 //    Legal    contracts
 //    Profile  the artist's details and accounts list
@@ -25,6 +26,7 @@ export const SECTIONS = [
   { key: 'profile', label: 'Profile' },
   { key: 'music', label: 'Music' },
   { key: 'tour', label: 'Tour' },
+  { key: 'deals', label: 'Deals & fees' },
   { key: 'content', label: 'Content' },
   { key: 'finance', label: 'Finance' },
   { key: 'team', label: 'Team' },
@@ -49,25 +51,25 @@ export const PRESETS: AccessPreset[] = [
     key: 'full', label: 'Full access',
     blurb: 'Everything for this artist, including money, contracts and the private profile, and can change all of it. Can\u2019t manage who else has access (that is a Point Person).',
     hidden: 'Nothing',
-    levels: { profile: 'edit', music: 'edit', tour: 'edit', content: 'edit', finance: 'edit', team: 'edit', projects: 'edit', analytics: 'edit', legal: 'edit' },
+    levels: { profile: 'edit', music: 'edit', tour: 'edit', deals: 'edit', content: 'edit', finance: 'edit', team: 'edit', projects: 'edit', analytics: 'edit', legal: 'edit' },
   },
   {
     key: 'tourmanager', label: 'Tour or Production Manager',
-    blurb: 'Runs the road: shows, advance, day sheets, travel and crew, and the tour money (budgets, settlements, invoices).',
+    blurb: 'Runs the road: shows, advance, day sheets, travel and crew, and the tour money (budgets, settlements, invoices). Can look at show fees and booking offers, but not change them.',
     hidden: 'Contracts, music, content, projects, analytics and the profile (private details such as ID numbers and home address live there)',
-    levels: { tour: 'edit', finance: 'edit', team: 'view' },
+    levels: { tour: 'edit', deals: 'view', finance: 'edit', team: 'view' },
   },
   {
     key: 'businessmanager', label: 'Business Manager',
-    blurb: 'Sees and handles all of the money: invoices, bills, budgets, settlements and banking. Can read contracts. No tour calendar.',
-    hidden: 'Shows and the tour calendar, music, content, projects and the profile. Booking offers, with their fees, are part of Tour for now, so they stay hidden too',
-    levels: { finance: 'edit', legal: 'view' },
+    blurb: 'Sees and handles all of the money: invoices, bills, budgets, settlements and banking, plus the fees on shows and booking offers. Can read contracts. No tour calendar.',
+    hidden: 'Shows and the tour calendar, music, content, projects and the profile',
+    levels: { deals: 'edit', finance: 'edit', legal: 'view' },
   },
   {
     key: 'agent', label: 'Agent',
-    blurb: 'Books the shows: works on the schedule and booking offers, and can look at the artist\u2019s people and projects.',
-    hidden: 'Money (finance), contracts, music, content and the profile. Booking offers, with their fees, are part of Tour, so they show',
-    levels: { tour: 'edit', team: 'view', projects: 'view' },
+    blurb: 'Books the shows: works on the schedule, booking offers and show fees, and can look at the artist\u2019s people and projects.',
+    hidden: 'Money (finance: invoices, bills, budgets), contracts, music, content and the profile',
+    levels: { tour: 'edit', deals: 'edit', team: 'view', projects: 'view' },
   },
   {
     key: 'lawyer', label: 'Lawyer',
@@ -77,21 +79,21 @@ export const PRESETS: AccessPreset[] = [
   },
   {
     key: 'assistant', label: 'Day-to-day team',
-    blurb: 'Works on shows, projects, content and music, and can look at the artist\u2019s people and analytics.',
-    hidden: 'Money (finance), contracts and the profile (private details such as ID numbers and home address live there). Booking offers, with their fees, are part of Tour, so they show',
-    levels: { music: 'edit', tour: 'edit', content: 'edit', team: 'view', projects: 'edit', analytics: 'view' },
+    blurb: 'Works on shows (with their booking offers and fees), projects, content and music, and can look at the artist\u2019s people and analytics.',
+    hidden: 'Money (finance: invoices, bills, budgets), contracts and the profile (private details such as ID numbers and home address live there)',
+    levels: { music: 'edit', tour: 'edit', deals: 'edit', content: 'edit', team: 'view', projects: 'edit', analytics: 'view' },
   },
   {
     key: 'crew', label: 'Touring Crew',
     blurb: 'Sees the schedule, advance, day sheets, travel, guest list and crew for this artist, and can\u2019t change anything.',
-    hidden: 'Money, contracts, music, content and the profile. Booking offers, with their fees, are part of Tour, so they show',
+    hidden: 'Money, booking offers and show fees, contracts, music, content and the profile',
     levels: { tour: 'view' },
   },
   {
     key: 'bookkeeper', label: 'Bookkeeper',
-    blurb: 'Handles the money: invoices, bills, budgets, settlements and banking. Can look at the shows they relate to.',
+    blurb: 'Handles the money: invoices, bills, budgets, settlements and banking, and the fees on shows. Can look at the shows they relate to.',
     hidden: 'Contracts, music, content, the profile and projects',
-    levels: { finance: 'edit', tour: 'view' },
+    levels: { finance: 'edit', tour: 'view', deals: 'edit' },
   },
   {
     key: 'creative', label: 'Creative team',
@@ -102,7 +104,7 @@ export const PRESETS: AccessPreset[] = [
   {
     key: 'readonly', label: 'Look only',
     blurb: 'Can look at shows, music, content, projects and analytics, but can\u2019t change anything.',
-    hidden: 'Money, contracts, the profile and the artist\u2019s people. Booking offers, with their fees, are part of Tour, so they show',
+    hidden: 'Money, booking offers and show fees, contracts, the profile and the artist\u2019s people',
     levels: { music: 'view', tour: 'view', content: 'view', projects: 'view', analytics: 'view' },
   },
 ]

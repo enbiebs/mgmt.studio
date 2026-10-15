@@ -29,7 +29,7 @@ export function useInbox() {
     const clients = ids === 'all' ? data.clients : data.clients.filter(c => ids.includes(c.id))
     const day = today()
     const all = clients
-      .flatMap(c => buildInbox(c, day, { finance: hasAccess('finance', c.id), tour: hasAccess('tour', c.id) }))
+      .flatMap(c => buildInbox(c, day, { finance: hasAccess('finance', c.id), tour: hasAccess('tour', c.id), deals: hasAccess('deals', c.id) }))
       .sort((a, b) => RANK[a.severity] - RANK[b.severity] || (a.date ?? '').localeCompare(b.date ?? ''))
     const visible = all.filter(i => !isHidden(inboxState[i.key], day))
     const hidden = all.filter(i => isHidden(inboxState[i.key], day))

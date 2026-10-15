@@ -27,6 +27,7 @@ import { rowToOfferSheet, type OfferSheetRow } from '@/lib/offer-sheet'
 import type { InboxChoice } from '@/lib/inbox'
 import { sectionsWithItems, type ItemException, type ItemType, type ItemEffect } from '@/lib/item-access'
 import { planSteps, type GrantChanges } from '@/lib/access-presets'
+import { dealFromRow, showDealRow, type DealKey, type ShowDealRow } from '@/lib/show-deals'
 import type { SharingGrant } from '@/lib/sharing'
 import { uid } from '@/lib/utils'
 
@@ -57,7 +58,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems, flightLegs, travelItemShows,
     people, bankAccounts, bankTransactions,
     trackRounds, trackNotes, trackNoteReplies, trackCredits, venues, vendors,
-    runsQ, budgetsQ, crewRatesQ, financeSettingsQ, expenseShowsQ, offerSheetsQ, settlementsQ, settlementShowsQ, profilesQ, accountsQ, tasksQ, agendaQ,
+    runsQ, budgetsQ, crewRatesQ, financeSettingsQ, expenseShowsQ, offerSheetsQ, settlementsQ, settlementShowsQ, profilesQ, accountsQ, tasksQ, agendaQ, showDealsQ,
   ] = await Promise.all([
     supabase.from('albums').select('*').in('client_id', clientIds),
     supabase.from('tracks').select('*'),
@@ -104,8 +105,11 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     supabase.from('artist_accounts').select('*').in('client_id', clientIds).order('platform'),
     supabase.from('tasks').select('*').in('client_id', clientIds),
     supabase.from('agenda_points').select('*').in('client_id', clientIds).order('position').order('created_at'),
+    // A show's money (migration 055): the database only returns the rows this person may read, so a person without Deals & fees gets none.
+    supabase.from('show_deals').select('*').in('client_id', clientIds),
   ])
 
+  const dealsByShow = new Map<string, ShowDealRow>((showDealsQ.data ?? []).map((d: ShowDealRow) => [d.show_id, d]))
   const albumRows     = albums.data       ?? []
   const trackRows     = tracks.data       ?? []
   const albumIds      = albumRows.map(a => a.id)
@@ -344,16 +348,13 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
 
     const cShows = (shows.data ?? [])
       .filter((s: { client_id: string }) => s.client_id === c.id)
-      .map((s: { id: string; date: string; city: string; venue: string; time: string; status: string; notes?: string; guarantee?: number; deposit?: number; currency?: string; tour_offer_id?: string; via_agency?: boolean; agency_name?: string; agency_commission_pct?: number; management_commission_pct?: number; invoice_id?: string; run_id?: string; history_only?: boolean; drive_url?: string }) => ({
+      .map((s: { id: string; date: string; city: string; venue: string; time: string; status: string; notes?: string; tour_offer_id?: string; run_id?: string; history_only?: boolean; drive_url?: string }) => ({
         id: s.id, date: s.date, city: s.city,
         venue: s.venue, time: s.time,
         status: s.status as Show['status'], notes: s.notes,
-        guarantee: s.guarantee ?? undefined, deposit: s.deposit ?? undefined,
-        currency: s.currency as Show['currency'], tourOfferId: s.tour_offer_id ?? undefined,
-        viaAgency: s.via_agency ?? undefined, agencyName: s.agency_name ?? undefined,
-        agencyCommissionPct: s.agency_commission_pct ?? undefined,
-        managementCommissionPct: s.management_commission_pct ?? undefined,
-        invoiceId: s.invoice_id ?? undefined,
+        tourOfferId: s.tour_offer_id ?? undefined,
+        // The money comes from show_deals only (never from the old columns on shows), and only when this person may read it.
+        ...dealFromRow(dealsByShow.get(s.id)),
         runId: s.run_id ?? undefined,
         historyOnly: s.history_only ? true : undefined,
         driveUrl: s.drive_url ?? undefined,
@@ -1197,17 +1198,19 @@ export async function upsertShow(show: Show, clientId: string) {
     date: show.date, city: show.city,
     venue: show.venue, time: show.time,
     status: show.status, notes: show.notes ?? null,
-    guarantee: show.guarantee ?? null, deposit: show.deposit ?? null,
-    currency: show.currency ?? null, tour_offer_id: show.tourOfferId ?? null,
-    via_agency: show.viaAgency ?? null, agency_name: show.agencyName ?? null,
-    agency_commission_pct: show.agencyCommissionPct ?? null,
-    management_commission_pct: show.managementCommissionPct ?? null,
-    invoice_id: show.invoiceId ?? null,
+    tour_offer_id: show.tourOfferId ?? null,
     run_id: show.runId ?? null,
     history_only: show.historyOnly ?? false,
     drive_url: show.driveUrl ?? null,
     updated_at: new Date().toISOString(),
   })
+  if (error) throw error
+}
+
+/** Saves a show's money to its own table (show_deals). Needs Deals & fees edit access; the show itself must already exist. */
+export async function upsertShowDeal(show: Pick<Show, 'id' | DealKey>, clientId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('show_deals').upsert(showDealRow(show, clientId))
   if (error) throw error
 }
 

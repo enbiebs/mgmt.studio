@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
-import { requireTourEditAccess } from '@/lib/tour-access'
+import { requireDealsEditAccess } from '@/lib/tour-access'
 import {
   readOffer, docxText, offerFileKind, offerReadingConfigured, MAX_OFFER_FILE_BYTES, MAX_OFFER_TEXT_CHARS,
 } from '@/lib/offer-paste-server'
@@ -12,7 +12,7 @@ export const maxDuration = 60
 // Nothing is saved here - the browser opens the offer form with the answers filled in.
 export async function POST(req: NextRequest) {
   const form = await req.formData()
-  const gate = await requireTourEditAccess(form.get('clientId'), 'ai')
+  const gate = await requireDealsEditAccess(form.get('clientId'), 'ai')
   if (gate.error) return gate.error
   if (!offerReadingConfigured()) return NextResponse.json({ error: "Automatic reading isn't switched on yet." }, { status: 503 })
 

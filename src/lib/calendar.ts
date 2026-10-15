@@ -17,7 +17,7 @@ export type CalendarEventDomain = 'show' | 'release' | 'post' | 'invoice' | 'con
 // getCalendarEvents (e.g. ClientCard.tsx's dashboard stats).
 export const DOMAIN_SECTION: Record<CalendarEventDomain, MainSection> = {
   show: 'tour', release: 'songs', post: 'content',
-  invoice: 'finance', contract: 'legal', project: 'projects', bill: 'finance', offer: 'tour',
+  invoice: 'finance', contract: 'legal', project: 'projects', bill: 'finance', offer: 'deals',
 }
 
 // Bills live in Finance, which the artist's own login can otherwise view -
