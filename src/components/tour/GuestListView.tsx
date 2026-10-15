@@ -25,7 +25,7 @@ export function GuestListView() {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('tour'))
   const { toggleGuestCheckedIn, deleteGuest } = useStore()
-  const [selectedShowId, setSelectedShowId] = useState<string | null>(null)
+  const [selectedShowId, setSelectedShowId] = useState<string | null>(() => useStore.getState().selectedShowId)
   const [addOpen, setAddOpen] = useState(false)
   const [editGuest, setEditGuest] = useState<GuestListEntry | null>(null)
   const pane = useMobilePane()
@@ -59,7 +59,7 @@ export function GuestListView() {
             return (
               <button
                 key={s.id}
-                onClick={() => { setSelectedShowId(s.id); pane.openDetail() }}
+                onClick={() => { setSelectedShowId(s.id); useStore.getState().setSelectedShow(s.id); pane.openDetail() }}
                 className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${(show?.id === s.id) ? 'bg-accent-soft' : ''}`}
               >
                 <div className="text-xs font-semibold text-gray-800 truncate">{s.venue}</div>

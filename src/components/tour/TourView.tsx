@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { CalendarImportModal } from '@/components/tour/CalendarImportModal'
+import { DealPanel } from '@/components/tour/DealPanel'
 import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { MONTH_NAMES, MONTH_SHORT, today } from '@/lib/utils'
@@ -138,8 +139,11 @@ export function TourView() {
       {/* Main */}
       <div className={`${detailPaneClass(pane.detail)} flex-1 overflow-auto p-4 md:p-6`}>
         <BackToList onClick={pane.closeDetail} label="All shows" className="-mx-4 -mt-4 mb-4" />
-        {editable && (
-          <div className="flex justify-end mb-3 relative">
+        <div className="flex items-center justify-between mb-3 relative">
+          {selected ? (
+            <button onClick={() => setSelectedShow(null)} className="text-xs text-gray-500 hover:text-gray-900 transition-colors">← Overview</button>
+          ) : <span />}
+          {editable && (<>
             <button
               onClick={() => setCalendarOpen(v => !v)}
               className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors"
@@ -192,9 +196,11 @@ export function TourView() {
                 )}
               </div>
             )}
-          </div>
-        )}
+          </>)}
+        </div>
 
+        {/* Overview: the numbers and what needs attention, until a show is opened (then the deal leads) */}
+        {!selected && (<>
         {/* Stats */}
         <div className="flex gap-3.5 mb-6">
           {[[String(shows.length), 'Shows'],[String(upcoming.length), 'Upcoming'],[String(shows.filter(s => s.status === 'confirmed').length), 'Confirmed']].map(([n, l]) => (
@@ -227,10 +233,13 @@ export function TourView() {
           </div>
         )}
 
+        </>)}
+
         {/* Show detail */}
         {selected ? (
           <div className="border border-gray-100 rounded-2xl p-5">
             <div className="font-serif text-xl font-medium mb-4">{selected.city} · {selected.venue}</div>
+            <DealPanel show={selected} />
             <div className="grid grid-cols-2 gap-4 mb-5">
               {[
                 ['Date', (() => { const d = new Date(selected.date+'T00:00:00'); return `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}` })()],
@@ -287,10 +296,7 @@ export function TourView() {
             <div className="flex gap-2 flex-wrap mb-4">
               {[
                 ['Maps ↗', () => window.open(`https://maps.google.com/?q=${encodeURIComponent(`${selected.venue}, ${selected.city}`)}`, '_blank')],
-                ['Advance', () => { setSelectedShow(selected.id); setTourSub('advance') }],
                 ['Day Sheet', () => { setSelectedShow(selected.id); setTourSub('daysheet') }],
-                ['Hotels', () => { setSelectedShow(selected.id); setTourSub('travel') }],
-                ['Flights', () => { setSelectedShow(selected.id); setTourSub('travel') }],
               ].map(([l, fn]) => (
                 <button
                   key={l as string}

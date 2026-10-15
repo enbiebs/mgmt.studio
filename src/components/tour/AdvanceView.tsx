@@ -172,6 +172,7 @@ export function AdvanceView() {
 
   function selectShow(show: Show) {
     pane.openDetail()
+    useStore.getState().setSelectedShow(show.id)      // keeps the deal bar (and the other per-show screens) on the same show
     setSelectedShowId(show.id)
     setAdvance(getAdvance(show.id))
     setTab('schedule')

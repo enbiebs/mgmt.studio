@@ -46,6 +46,9 @@ export function OffersView() {
   const [addOpen, setAddOpen] = useState(false)
   const [editingOffer, setEditingOffer] = useState<TourOffer | null>(null)
   const [pasteOpen, setPasteOpen] = useState(false)
+  // The ⌘K bar can ask for the paste box from anywhere; it opens here and the request is cleared once handled.
+  const pasteRequested = useStore(s => s.offerPasteRequest)
+  const clearPasteRequest = useStore(s => s.clearOfferPasteRequest)
   // An offer that was read from pasted text: the form opens with it filled in.
   const [pasted, setPasted] = useState<{ offer: OfferPrefill; notices: string[] } | null>(null)
   const [sendingOfferId, setSendingOfferId] = useState<string | null>(null)
@@ -119,10 +122,10 @@ export function OffersView() {
         {tab === 'settled'  && <HistoryTab  settled={settled} cancelled={cancelled} />}
       </div>
 
-      {pasteOpen && (
+      {(pasteOpen || pasteRequested) && (
         <PasteOfferModal
-          onClose={() => setPasteOpen(false)}
-          onRead={(offer, notices) => { setPasteOpen(false); setPasted({ offer, notices }) }}
+          onClose={() => { setPasteOpen(false); clearPasteRequest() }}
+          onRead={(offer, notices) => { setPasteOpen(false); clearPasteRequest(); setPasted({ offer, notices }) }}
         />
       )}
       {(addOpen || editingOffer || pasted) && (

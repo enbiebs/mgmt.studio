@@ -13,7 +13,7 @@ export interface NavGroup { label: string; items: NavItem[] }
 export const NAV_GROUPS: NavGroup[] = [
   { label: 'Work', items: [
     { key: 'calendar', label: 'Calendar', icon: 'calendar' },
-    { key: 'tour',     label: 'Tour',     icon: 'tour' },
+    { key: 'tour',     label: 'Deals',    icon: 'tour' },
     { key: 'finance',  label: 'Finance',  icon: 'finance' },
     { key: 'legal',    label: 'Legal',    icon: 'legal' },
   ] },

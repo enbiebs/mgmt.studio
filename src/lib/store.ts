@@ -32,6 +32,7 @@ import { EMPTY_AGENT } from '@/lib/agent-demo'
 import { EMPTY_LEGAL } from '@/lib/legal-demo'
 import { EMPTY_FINANCE } from '@/lib/finance-demo'
 import { EMPTY_TOUR } from '@/lib/advance-demo'
+import { notify } from '@/lib/notify'
 import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE, today as localToday } from '@/lib/utils'
 import { buildNewBudget, snapshotOf, newLine, frozenRates, makeConverter, settlementEarned, BUCKET_LABEL, type FxRates } from '@/lib/budget'
 import { balanceOf } from '@/lib/settlement-math'
@@ -209,6 +210,8 @@ interface StudioState {
   analyticsSub: AnalyticsSub
   legalSub: LegalSub
   selectedShowId: string | null
+  /** Set by the ⌘K bar: the Offers screen opens its "paste an offer" box and clears this. */
+  offerPasteRequest: boolean
   // Which release (single/EP/album) the Label Copy / Checklist / Status
   // sub-tabs are showing — mirrors selectedShowId's role for Tour.
   selectedAlbumId: string | null
@@ -266,6 +269,8 @@ interface StudioState {
   setAnalyticsSub: (sub: AnalyticsSub) => void
   setLegalSub: (sub: LegalSub) => void
   setSelectedShow: (id: string | null) => void
+  requestOfferPaste: () => void
+  clearOfferPasteRequest: () => void
   setSelectedAlbum: (id: string | null) => void
   setStudioConcept: (name: string) => void
   calPrev: () => void
@@ -492,6 +497,7 @@ export const useStore = create<StudioState>((set, get) => ({
   analyticsSub:  'overview',
   legalSub:      'pipeline',
   selectedShowId: null,
+  offerPasteRequest: false,
   selectedAlbumId: null,
   studioConcept: null,
 
@@ -707,6 +713,8 @@ export const useStore = create<StudioState>((set, get) => ({
   setAnalyticsSub: (sub) => set({ analyticsSub: sub }),
   setLegalSub:     (sub) => set({ legalSub: sub }),
   setSelectedShow: (id) => set({ selectedShowId: id }),
+  requestOfferPaste: () => set({ offerPasteRequest: true }),
+  clearOfferPasteRequest: () => set({ offerPasteRequest: false }),
   setSelectedAlbum: (id) => set({ selectedAlbumId: id }),
   setStudioConcept: (name) => set({ studioConcept: name }),
 
@@ -2167,6 +2175,7 @@ export const useStore = create<StudioState>((set, get) => ({
     let updatedOffer: TourOffer | undefined
     let newShow: Show | undefined
     let lockedBudget: Budget | undefined
+    let newAdvance: ShowAdvance | undefined
     let withdrewSheets = false
     const updated = {
       clients: data.clients.map(c => {
@@ -2186,6 +2195,15 @@ export const useStore = create<StudioState>((set, get) => ({
               managementCommissionPct: updatedOffer.managementCommissionPct,
             }
             updatedOffer = { ...updatedOffer, showId: newShow.id }
+            // ...and starts its advance, with what the offer already says filled in.
+            const t = updatedOffer.terms
+            newAdvance = {
+              id: 'adv-' + uid(), showId: newShow.id, status: 'draft',
+              schedule: { ...(t?.doors ? { doorsOpen: t.doors } : {}), ...(t?.setStart ? { headlineOn: t.setStart } : {}) },
+              production: t?.production ? { notes: t.production } : {},
+              hospitality: t?.hospitality ? { notes: t.hospitality } : {},
+              logistics: {}, contacts: [],
+            }
           }
           return updatedOffer
         })
@@ -2203,7 +2221,11 @@ export const useStore = create<StudioState>((set, get) => ({
             }
           : c.finance
         let tour = newShow
-          ? { ...c.tour, shows: [...c.tour.shows, newShow].sort((a, b) => a.date.localeCompare(b.date)) }
+          ? {
+              ...c.tour,
+              shows: [...c.tour.shows, newShow].sort((a, b) => a.date.localeCompare(b.date)),
+              advances: newAdvance ? [...(c.tour.advances ?? []), newAdvance] : c.tour.advances,
+            }
           : c.tour
         // A cancelled offer shouldn't keep asking the artist for an answer.
         if (patch.status === 'cancelled' && (tour.offerSheets ?? []).some(sh => sh.offerId === offerId && sh.status === 'sent')) {
@@ -2224,8 +2246,14 @@ export const useStore = create<StudioState>((set, get) => ({
       upsertShow(newShow, clientId)
         .then(() => { if (workspaceId && updatedOffer) return upsertOffer(updatedOffer, clientId) })
         .then(() => { if (workspaceId && lockedBudget) return upsertBudget(lockedBudget, clientId) })
+        .then(() => { if (workspaceId && newAdvance) return upsertAdvance(newAdvance) })
         .catch(console.error)
       pushToGoogleCalendar(clientId, 'show', newShow)
+      const showId = newShow.id
+      notify(
+        `${newShow.venue} is confirmed: added to the calendar, ${lockedBudget ? 'budget locked, ' : ''}advance started.`,
+        { label: 'Open deal', run: () => { const st = get(); st.setSection('tour'); st.setTourSub('tour'); st.setSelectedShow(showId) } },
+      )
     } else if (workspaceId && clientId && updatedOffer) {
       upsertOffer(updatedOffer, clientId).catch(console.error)
     }
