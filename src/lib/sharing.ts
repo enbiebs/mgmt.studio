@@ -57,3 +57,31 @@ export function describeRow(row: Extract<SharingRow, { kind: 'person' }>, client
 
 /** How many Point People the list has (for the "no Point Person yet" nudge). */
 export const pointPeopleCount = (rows: SharingRow[]) => rows.filter(r => r.kind === 'person' && r.levelKey === ADMIN_KEY).length
+
+export const POINT_PERSON_WARNING = 'A Point Person can see and change everything for this artist, including money, contracts and private details, and can decide who else has access.'
+
+/** What to tell the person before a level change goes through (null = nothing to warn about). */
+export function levelChangeWarning(from: string, to: string, ctx: { isMe: boolean; isManager: boolean }): string | null {
+  if (to === from || to === 'custom') return null
+  if (to === ADMIN_KEY) return POINT_PERSON_WARNING
+  if (from === ADMIN_KEY) {
+    return ctx.isMe && !ctx.isManager
+      ? 'You are a Point Person for this artist. If you step down you can no longer manage who has access.'
+      : 'They will no longer be able to manage who has access to this artist.'
+  }
+  if (from === 'custom') return 'This replaces the pages you picked for them.'
+  return null
+}
+
+/** What to tell the person before someone is taken off an artist. Honest about company-wide access, which stays. */
+export function removalWarning(o: { label: string; artist: string; isMe: boolean; isManager: boolean; alsoCompanyWide: boolean }): string {
+  const self = o.isMe && !o.isManager
+  if (o.alsoCompanyWide) {
+    return self
+      ? 'You will lose the access to this artist you were given here, including managing sharing. You keep the company-wide access a manager gave you.'
+      : `${o.label} loses the access set up for ${o.artist}. They can still open every artist through the company-wide access a manager gave them.`
+  }
+  return self
+    ? 'You will lose all access to this artist, including the ability to manage sharing.'
+    : `${o.label} will no longer be able to open ${o.artist}.`
+}

@@ -1,6 +1,6 @@
 // Checks the access-level bundles.  Run with:  npx tsx scripts/check-access-presets.ts
 import assert from 'node:assert/strict'
-import { ADMIN_KEY, LEVELS, POINT_PERSON, PRESETS, SECTIONS, isPointPerson, levelsOf, matchPreset, otherAccess, planChanges, presetByKey, summarize, type GrantRow } from '../src/lib/access-presets'
+import { ADMIN_KEY, LEVELS, POINT_PERSON, PRESETS, SECTIONS, isPointPerson, levelsOf, matchPreset, otherAccess, planChanges, planSteps, presetByKey, summarize, type GrantRow } from '../src/lib/access-presets'
 
 const row = (id: string, section: string, clientId: string | null, canEdit: boolean): GrantRow => ({ id, section, client_id: clientId, can_edit: canEdit })
 
@@ -106,5 +106,20 @@ assert.deepEqual(planChanges(pp, 'a', {}, true), { remove: [], update: [], add: 
 assert.deepEqual(planChanges(pp, 'a', presetByKey('crew')!.levels), { remove: ['a1'], update: [], add: [{ section: 'tour', canEdit: false }] })
 assert.deepEqual(planChanges(pp, 'a', {}), { remove: ['a1'], update: [], add: [] })        // "no access" removes the admin row too
 assert.deepEqual(planChanges([row('a1', 'admin', 'a', true), row('x', 'admin', 'b', true)], 'a', {}).remove, ['a1'])   // never another artist's admin row
+
+
+// ── the order changes are saved in: a Point Person's own admin row always goes LAST ──
+const stepPlan = { remove: ['a1', 'g1', 'g2'], update: [{ id: 'u1', canEdit: true }], add: [{ section: 'tour' as const, canEdit: false }] }
+assert.deepEqual(planSteps(stepPlan, ['a1']), { add: stepPlan.add, update: stepPlan.update, remove: ['g1', 'g2'], removeLast: ['a1'] })
+assert.deepEqual(planSteps(stepPlan), { add: stepPlan.add, update: stepPlan.update, remove: ['a1', 'g1', 'g2'], removeLast: [] })
+const stepDown = planSteps(planChanges(pp, 'a', presetByKey('crew')!.levels), ['a1'])
+assert.deepEqual(stepDown.add, [{ section: 'tour', canEdit: false }])                      // the new level is written first ...
+assert.deepEqual(stepDown.removeLast, ['a1'])                                               // ... and the admin row is the very last thing to go
+
+// ── leftovers from a half-finished change are reconciled, not trusted ──
+const leftovers = [row('a1', 'admin', 'a', true), row('l1', 'tour', 'a', false), row('l2', 'finance', 'a', true)]
+assert.equal(matchPreset(leftovers, 'a'), ADMIN_KEY)
+assert.deepEqual(planChanges(leftovers, 'a', {}, true), { remove: ['l1', 'l2'], update: [], add: [] })               // staying a Point Person clears the redundant rows
+assert.deepEqual(planChanges(leftovers, 'a', presetByKey('crew')!.levels), { remove: ['a1', 'l2'], update: [], add: [] })   // stepping down keeps what already fits
 
 console.log('access-presets: all checks passed')

@@ -23,7 +23,7 @@ export function TeamView() {
   const editable = useStore(s => s.canEdit('team'))
   const { deletePerson } = useStore()
   // Sharing is for managers and for this artist's Point People (the database enforces it; this just hides the tab from everyone else).
-  const canShare = useStore(s => s.role === 'manager' || s.grants.some(g => g.section === 'admin' && g.clientId === s.clientId))
+  const canShare = useStore(s => s.myMemberId !== null && s.previewMemberId === null && (s.role === 'manager' || s.grants.some(g => g.section === 'admin' && g.clientId === s.clientId)))
   const [tab, setTab] = useState<'people' | 'sharing'>('people')
   const [addOpen, setAddOpen] = useState(false)
   const [openPersonId, setOpenPersonId] = useState<string | null>(null)

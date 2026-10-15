@@ -174,6 +174,26 @@ export function planChanges(grants: GrantRow[], clientId: string, levels: Partia
   return out
 }
 
+export interface GrantSteps {
+  add: GrantChanges['add']
+  update: GrantChanges['update']
+  remove: string[]
+  removeLast: string[]
+}
+
+/**
+ * The order to run a plan in: adds and changes first, ordinary removals next, and the rows in `lastIds` (a Point
+ * Person's own admin row) very last, so someone stepping down or removing themselves keeps the right to finish the job.
+ */
+export function planSteps(plan: GrantChanges, lastIds: string[] = []): GrantSteps {
+  return {
+    add: plan.add,
+    update: plan.update,
+    remove: plan.remove.filter(id => !lastIds.includes(id)),
+    removeLast: plan.remove.filter(id => lastIds.includes(id)),
+  }
+}
+
 /** One line for a preset: "Can see: …; can change: …". */
 export function summarize(levels: Partial<Record<SectionKey, Level>>): string {
   const names = (l: Level) => SECTIONS.filter(s => levels[s.key] === l).map(s => s.label)

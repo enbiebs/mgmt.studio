@@ -1,6 +1,6 @@
 // Checks the Sharing list for one artist.  Run with:  npx tsx scripts/check-sharing.ts
 import assert from 'node:assert/strict'
-import { addablePeople, buildSharingRows, describeRow, levelLabel, pointPeopleCount, type SharingGrant } from '../src/lib/sharing'
+import { POINT_PERSON_WARNING, addablePeople, buildSharingRows, describeRow, levelChangeWarning, levelLabel, pointPeopleCount, removalWarning, type SharingGrant } from '../src/lib/sharing'
 import type { WorkspacePerson } from '../src/types'
 
 const person = (id: string, label: string, role: WorkspacePerson['role'], allClients = false): WorkspacePerson =>
@@ -55,5 +55,32 @@ assert.ok(both[0].kind === 'person' && both[0].alsoCompanyWide)
 // a vault-only grant is a row (so it can be seen) but no page level
 const vaultOnly = buildSharingRows([person('v', 'Vee', 'team')], [grant('v1', 'v', 'vault', 'a')], 'a')
 assert.equal(vaultOnly[0].kind === 'person' && vaultOnly[0].levelKey, 'none')
+
+// being a Point Person for ANOTHER artist does not put someone on this artist's list
+assert.equal(buildSharingRows([person('z', 'Zed', 'team')], [grant('z1', 'z', 'admin', 'b', true)], 'a').length, 0)
+
+// two Point People sort by name, and one with company-wide access is flagged
+const twoAdmins = buildSharingRows([person('q', 'Quin', 'team'), person('p', 'Pat', 'team', true)], [grant('p1', 'p', 'admin', 'a', true), grant('q1', 'q', 'admin', 'a', true)], 'a')
+assert.deepEqual(twoAdmins.map(r => r.person.label), ['Pat', 'Quin'])
+assert.ok(twoAdmins[0].kind === 'person' && twoAdmins[0].alsoCompanyWide && !(twoAdmins[1].kind === 'person' && twoAdmins[1].alsoCompanyWide))
+assert.equal(pointPeopleCount(twoAdmins), 2)
+
+// what the person is told before a level change
+const me = { isMe: true, isManager: false }, mgr = { isMe: false, isManager: true }
+assert.equal(levelChangeWarning('crew', 'admin', mgr), POINT_PERSON_WARNING)
+assert.equal(levelChangeWarning('admin', 'admin', mgr), null)
+assert.match(levelChangeWarning('admin', 'crew', me)!, /step down/)
+assert.match(levelChangeWarning('admin', 'crew', mgr)!, /no longer be able to manage/)       // a manager demoting someone is told too
+assert.match(levelChangeWarning('custom', 'crew', mgr)!, /replaces the pages/)
+assert.equal(levelChangeWarning('crew', 'assistant', mgr), null)
+assert.equal(levelChangeWarning('crew', 'custom', mgr), null)
+assert.match(levelChangeWarning('admin', 'none', mgr)!, /no longer be able to manage/)       // "no access" from a Point Person
+
+// what the person is told before someone is removed
+const rm = { label: 'Dana', artist: 'Nimino' }
+assert.equal(removalWarning({ ...rm, ...mgr, alsoCompanyWide: false }), 'Dana will no longer be able to open Nimino.')
+assert.match(removalWarning({ ...rm, ...mgr, alsoCompanyWide: true }), /can still open every artist/)         // company-wide access stays, and it says so
+assert.match(removalWarning({ ...rm, ...me, alsoCompanyWide: false }), /lose all access/)
+assert.match(removalWarning({ ...rm, ...me, alsoCompanyWide: true }), /keep the company-wide access/)
 
 console.log('sharing: all checks passed')

@@ -1,13 +1,14 @@
 -- Run in the Supabase SQL editor any time (it only reads). It is the "nothing was forgotten" check for access:
 --   • every table must have row-level security switched on
 --   • every table must use one of the access helpers (has_section_access, can_see_item, can_open_client,
---     can_see_task_item, is_management_side, is_artist_admin, has_workspace_legal_template_access), OR be listed
+--     can_see_task_item, is_management_side, is_artist_admin, can_change_grant, can_see_artist_grant,
+--     has_workspace_legal_template_access), OR be listed
 --     below with the reason it does not
 -- A new table that forgets its access rule makes this fail with the table's name, instead of quietly leaking.
 -- Ends with an intentional message ("ALL GATE COVERAGE CHECKS PASSED") so it never changes anything.
 do $$
 declare
-  gated constant text := 'has_section_access|can_see_item|can_open_client|can_see_task_item|is_management_side|is_artist_admin|has_workspace_legal_template_access';
+  gated constant text := 'has_section_access|can_see_item|can_open_client|can_see_task_item|is_management_side|is_artist_admin|can_change_grant|can_see_artist_grant|has_workspace_legal_template_access';
   -- no policies on purpose: only the server (service key) ever touches these
   server_only constant text[] := array['bank_connections', 'google_calendar_connections', 'google_calendar_event_links', 'pending_invites', 'profile_secure', 'rate_limits'];
   -- gated some other way, each reason spelled out

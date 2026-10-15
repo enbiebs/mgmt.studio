@@ -46,7 +46,7 @@ import {
   type ItemException, type ItemType, type ItemEffect, type Viewer,
 } from '@/lib/item-access'
 import {
-  loadWorkspaceData, getMyMembership, getGrantsForMember, getPreviewableMembers,
+  loadWorkspaceData, getMyMembership, getGrantsForMember, fetchGrantsForMember, getPreviewableMembers,
   loadItemAccess, upsertItemAccess, deleteItemAccess,
   loadInboxState, saveInboxChoice, clearInboxChoice,
   insertTask, saveTask, deleteTaskRow, loadWorkspacePeople, insertAgendaPoints, saveAgendaPoint, deleteAgendaPointRow,
@@ -273,6 +273,8 @@ interface StudioState {
   previewAs: (memberId: string | null) => Promise<void>
   // Re-reads what the signed-in person may open and the team list, after access was changed from the Sharing screen.
   refreshMyAccess: () => Promise<void>
+  // After someone's access to an artist changed: forget what was cached about them and re-read the team list.
+  afterAccessChange: (memberId?: string) => Promise<void>
 
   // ── Navigation actions ──
   goToDashboard: () => void
@@ -731,9 +733,17 @@ export const useStore = create<StudioState>((set, get) => ({
     if (s.previewMemberId || !s.myMemberId || !s.authRole || s.authRole === 'artist') return
     const [workspacePeople, grants] = await Promise.all([
       loadWorkspacePeople().catch(() => s.workspacePeople),
-      s.authRole === 'manager' ? Promise.resolve(s.grants) : getGrantsForMember(s.myMemberId),
+      // A failed read must keep what we had: an empty list would look like "no access to anything".
+      s.authRole === 'manager' ? Promise.resolve(s.grants) : fetchGrantsForMember(s.myMemberId).catch(e => { console.error(e); return s.grants }),
     ])
     set({ workspacePeople, grants })
+  },
+
+  afterAccessChange: async (memberId) => {
+    const { memberGrants } = get()
+    if (memberId && memberGrants[memberId]) set({ memberGrants: Object.fromEntries(Object.entries(memberGrants).filter(([id]) => id !== memberId)) })
+    const workspacePeople = await loadWorkspacePeople().catch(() => null)
+    if (workspacePeople) set({ workspacePeople })
   },
 
   loadMemberGrants: async () => {
