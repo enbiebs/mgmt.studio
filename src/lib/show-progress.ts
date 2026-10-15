@@ -1,10 +1,10 @@
 // ──────────────────────────────────────────────────────────
-//  A "deal" is one show followed from offer to paid. Where it stands is worked out from the
+//  A show followed from offer to paid. Where it stands is worked out from the
 //  records the app already has (advance, travel, settlement, invoice...), never stored, so it
 //  can't drift out of date. This file decides:
-//    - the seven steps and which one the deal is on,
+//    - the seven steps and which one the show is on,
 //    - the single "next step" worth doing,
-//    - a short status line for each part of the deal (advance, travel, money...).
+//    - a short status line for each part of the show (advance, travel, money...).
 //  Pure logic (no store, no screen), like inbox.ts.
 // ──────────────────────────────────────────────────────────
 
@@ -24,35 +24,35 @@ export const STEPS = [
 ] as const
 
 export type StepKey = (typeof STEPS)[number]['key']
-// 'open' = not started, but it does not hold the deal up (travel when nothing has been added: a local show needs none).
+// 'open' = not started, but it does not hold the show up (travel when nothing has been added: a local show needs none).
 export type StepState = 'done' | 'now' | 'next' | 'open'
 
 /** Where a button takes you. */
-export type DealLink = { section: 'tour'; sub: TourSub } | { section: 'finance'; sub: 'invoices' | 'payments' }
+export type ProgressLink = { section: 'tour'; sub: TourSub } | { section: 'finance'; sub: 'invoices' | 'payments' }
 
-export interface DealStep { key: StepKey; label: string; state: StepState }
-export interface NextStep { label: string; detail?: string; go: DealLink }
-export interface DealFact {
+export interface ProgressStep { key: StepKey; label: string; state: StepState }
+export interface NextStep { label: string; detail?: string; go: ProgressLink }
+export interface ProgressFact {
   key: string
   label: string
   value: string
   tone: 'ok' | 'todo' | 'quiet'
-  go: DealLink
+  go: ProgressLink
   money?: boolean            // needs Finance access to be shown
 }
 
-export interface Deal {
+export interface ShowProgress {
   cancelled: boolean
-  steps: DealStep[]
-  current: number            // index of the step the deal is on; STEPS.length when everything is done
+  steps: ProgressStep[]
+  current: number            // index of the step the show is on; STEPS.length when everything is done
   next: NextStep | null
   waiting?: string           // when there is nothing to do yet ("Show day is in 41 days")
-  facts: DealFact[]
+  facts: ProgressFact[]
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
-export function dealForShow(client: Client, show: Show, today: string): Deal {
+export function progressForShow(client: Client, show: Show, today: string): ShowProgress {
   const advance = (client.tour.advances ?? []).find(a => a.showId === show.id)
   const travel = (client.tour.travel ?? []).filter(t => t.showIds?.includes(show.id) && t.status !== 'cancelled')
   const travelPending = travel.filter(t => t.status === 'needed' || t.status === 'pending')
@@ -79,7 +79,7 @@ export function dealForShow(client: Client, show: Show, today: string): Deal {
   const open = (key: StepKey) => key === 'travel' && travel.length === 0 && !past
 
   let current: number = STEPS.length
-  const steps: DealStep[] = STEPS.map((s, i) => {
+  const steps: ProgressStep[] = STEPS.map((s, i) => {
     let state: StepState
     if (done[s.key]) state = 'done'
     else if (open(s.key)) state = 'open'
@@ -116,7 +116,7 @@ export function dealForShow(client: Client, show: Show, today: string): Deal {
   }
 
   // ── Where each part stands ──────────────────────────────
-  const facts: DealFact[] = [
+  const facts: ProgressFact[] = [
     {
       key: 'advance', label: 'Advance', go: { section: 'tour', sub: 'advance' },
       ...(advance?.status === 'complete' ? { value: 'Complete', tone: 'ok' as const }

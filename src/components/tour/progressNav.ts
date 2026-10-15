@@ -1,9 +1,9 @@
 'use client'
 import { useStore } from '@/lib/store'
-import type { DealLink } from '@/lib/deal'
+import type { ProgressLink } from '@/lib/show-progress'
 
-/** Opens the place a deal button points to, keeping the same show selected. */
-export function goDeal(showId: string, link: DealLink): void {
+/** Opens the place a progress button points to, keeping the same show selected. */
+export function goShowStep(showId: string, link: ProgressLink): void {
   const s = useStore.getState()
   if (link.section === 'finance') {
     s.setSection('finance')

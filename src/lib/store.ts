@@ -2252,7 +2252,7 @@ export const useStore = create<StudioState>((set, get) => ({
       const showId = newShow.id
       notify(
         `${newShow.venue} is confirmed: added to the calendar, ${lockedBudget ? 'budget locked, ' : ''}advance started.`,
-        { label: 'Open deal', run: () => { const st = get(); st.setSection('tour'); st.setTourSub('tour'); st.setSelectedShow(showId) } },
+        { label: 'Open show', run: () => { const st = get(); st.setSection('tour'); st.setTourSub('tour'); st.setSelectedShow(showId) } },
       )
     } else if (workspaceId && clientId && updatedOffer) {
       upsertOffer(updatedOffer, clientId).catch(console.error)

@@ -16,7 +16,7 @@ import { AppHeader }  from '@/components/layout/AppHeader'
 import { Subnav }     from '@/components/layout/Subnav'
 import { Rail }       from '@/components/layout/Rail'
 import { CommandBar } from '@/components/layout/CommandBar'
-import { DealBar } from '@/components/tour/DealBar'
+import { ShowProgressBar } from '@/components/tour/ShowProgressBar'
 import { Toaster } from '@/components/ui/Toaster'
 import { CalendarView } from '@/components/calendar/CalendarView'
 
@@ -132,7 +132,7 @@ export function StudioApp() {
           hasAccess(section) ? (
             <>
               <Subnav />
-              {section === 'tour' && ['advance', 'daysheet', 'travel', 'guests'].includes(tourSub) && <DealBar />}
+              {section === 'tour' && ['advance', 'daysheet', 'travel', 'guests'].includes(tourSub) && <ShowProgressBar />}
               <div className="flex-1 min-h-0 flex overflow-hidden">
                 {section === 'songs'    && (
                   songsSub === 'labelcopy' ? <LabelCopyView /> :

@@ -77,8 +77,8 @@ export function CommandBar() {
     for (const c of pasteFor) {
       if (!hasAccess('tour', c.id, true)) continue
       out.push({
-        id: `paste-offer-${c.id}`, group: 'Actions', icon: 'tour', label: `Paste an offer for ${c.name}`,
-        hint: 'Read an email or PDF into a new offer', keywords: 'new offer add email paste',
+        id: `paste-offer-${c.id}`, group: 'Actions', icon: 'tour', label: `Paste a booking offer for ${c.name}`,
+        hint: 'Read an email or PDF into a new booking offer', keywords: 'new offer add email paste',
         run: () => jump(c.id, 'tour', st => { st.setTourSub('offers'); st.requestOfferPaste() }),
       })
     }

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { CalendarImportModal } from '@/components/tour/CalendarImportModal'
-import { DealPanel } from '@/components/tour/DealPanel'
+import { ShowProgressPanel } from '@/components/tour/ShowProgressPanel'
 import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { MONTH_NAMES, MONTH_SHORT, today } from '@/lib/utils'
@@ -199,7 +199,7 @@ export function TourView() {
           </>)}
         </div>
 
-        {/* Overview: the numbers and what needs attention, until a show is opened (then the deal leads) */}
+        {/* Overview: the numbers and what needs attention, until a show is opened (then the show leads) */}
         {!selected && (<>
         {/* Stats */}
         <div className="flex gap-3.5 mb-6">
@@ -239,7 +239,7 @@ export function TourView() {
         {selected ? (
           <div className="border border-gray-100 rounded-2xl p-5">
             <div className="font-serif text-xl font-medium mb-4">{selected.city} · {selected.venue}</div>
-            <DealPanel show={selected} />
+            <ShowProgressPanel show={selected} />
             <div className="grid grid-cols-2 gap-4 mb-5">
               {[
                 ['Date', (() => { const d = new Date(selected.date+'T00:00:00'); return `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}` })()],
