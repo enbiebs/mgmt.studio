@@ -6,6 +6,8 @@ import { fmt, initials, today } from '@/lib/utils'
 import { getCalendarEvents, canSeeCalendarDomain } from '@/lib/calendar'
 import { useInbox } from '@/lib/useInbox'
 import { useSetup } from '@/lib/useSetup'
+import { useMe } from '@/lib/useToday'
+import { isMine } from '@/lib/tasks'
 import type { CalendarEventDomain } from '@/lib/calendar'
 import type { Client } from '@/types'
 
@@ -19,6 +21,8 @@ export function ClientCard({ client: c }: { client: Client }) {
   const { openClient, openModal, deleteClient } = useStore()
   const inbox = useInbox().byClient[c.id]
   const setup = useSetup(c)
+  const me = useMe()
+  const myTodos = (c.tasks ?? []).filter(t => !t.doneAt && isMine(t, me)).length
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -118,8 +122,9 @@ export function ClientCard({ client: c }: { client: Client }) {
         {upcoming     > 0 && <Badge variant="green">{upcoming} upcoming</Badge>}
         {pendingSplit > 0 && <Badge variant="amber">{pendingSplit} to split</Badge>}
         {regIssues    > 0 && <Badge variant="red">{regIssues} reg issues</Badge>}
+        {myTodos > 0 && <Badge variant="blue">{myTodos} to-do{myTodos === 1 ? '' : 's'} for you</Badge>}
         {setup && !setup.complete && <Badge variant="blue">Setup {setup.done}/{setup.total}</Badge>}
-        {!upcoming && !pendingSplit && !regIssues && !inbox?.urgent && !inbox?.soon && !(setup && !setup.complete) && <Badge variant="gray">All clear</Badge>}
+        {!upcoming && !pendingSplit && !regIssues && !inbox?.urgent && !inbox?.soon && !(setup && !setup.complete) && myTodos === 0 && <Badge variant="gray">All clear</Badge>}
         <button
           className="ml-auto text-sm font-medium px-2.5 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
           onClick={e => { e.stopPropagation(); openClient(c.id) }}
