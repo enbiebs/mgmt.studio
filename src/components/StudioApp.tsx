@@ -55,7 +55,7 @@ import { CrewView }      from '@/components/tour/CrewView'
 import { OffersView }    from '@/components/tour/OffersView'
 import { BudgetView }    from '@/components/tour/BudgetView'
 import { SettlementsView } from '@/components/tour/SettlementsView'
-import { InboxPanel } from '@/components/dashboard/InboxPanel'
+import { TodayList } from '@/components/dashboard/TodayList'
 import { ActivityView } from '@/components/activity/ActivityView'
 import { ProfileView } from '@/components/profile/ProfileView'
 import { ARTIST_SIDE_NAME, PRODUCT_NAME } from '@/lib/brand'
@@ -93,14 +93,14 @@ export function StudioApp() {
           const roster = visibleIds === 'all' ? data.clients : data.clients.filter(c => visibleIds.includes(c.id))
           return (
             <main className="flex-1 overflow-auto p-4 md:p-8">
-              <div className="flex items-end justify-between mb-7">
+              <TodayList />
+
+              <div className="flex items-end justify-between mb-4">
                 <div>
-                  <h1 className="font-serif text-[26px] font-medium leading-tight">Your Roster</h1>
+                  <h2 className="font-serif text-xl font-medium leading-tight">Your artists</h2>
                   <p className="text-sm text-gray-400 mt-0.5">{roster.length} client{roster.length !== 1 ? 's' : ''}</p>
                 </div>
               </div>
-
-              <InboxPanel />
 
               <div className="grid grid-cols-[repeat(auto-fill,minmax(min(310px,100%),1fr))] gap-4">
                 {roster.map(c => <ClientCard key={c.id} client={c} />)}

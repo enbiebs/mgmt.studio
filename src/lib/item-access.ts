@@ -14,6 +14,7 @@
 
 import type { Client, MainSection, UserRole } from '@/types'
 import type { AccessGrant } from '@/lib/db'
+import { taskSection } from '@/lib/tasks'
 
 export type ItemType = 'show' | 'album' | 'post' | 'project' | 'invoice' | 'contract' | 'expense'
 export type ItemEffect = 'hide' | 'share'
@@ -34,6 +35,7 @@ export interface Viewer {
   role: UserRole
   clientId: string | null   // the artist's own client; null for team logins
   grants: AccessGrant[]
+  userId?: string           // their login, to tell which to-dos were given to them
 }
 
 export const ITEM_TYPES: ItemType[] = ['show', 'album', 'post', 'project', 'invoice', 'contract', 'expense']
@@ -178,6 +180,8 @@ export function filterClientForViewer(c: Client, v: Viewer, exceptions: ItemExce
       settlements: vendorsVisible ? c.finance.settlements : [],
     },
     agentData: { ...c.agentData, offers: offersVisible ? c.agentData.offers : [] },
+    // To-dos: never the artist's, and otherwise what is given to them or sits in a section they can open.
+    tasks: v.role === 'artist' ? [] : (c.tasks ?? []).filter(t => (!!v.userId && t.assigneeId === v.userId) || hasSectionGrant(v, taskSection(t.link), c.id)),
   }
   return { ...filtered, itemSections: sectionsWithItems(filtered) }
 }

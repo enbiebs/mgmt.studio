@@ -17,7 +17,7 @@ import type {
   CrewMember, GuestListEntry, TravelItem, Currency, Person, PersonActivity, CatalogWork,
   LegalTemplate, LegalTemplateClause, Stage, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
   ArtistAccount, ArtistProfile, Venue, FlightLeg, Vendor, Run, Budget, CrewRate, FinanceSettings, BudgetLine, BudgetCommission, BudgetSnapshot, Currency as Cur,
-  OfferSheet, OfferTerms, Settlement,
+  OfferSheet, OfferTerms, Settlement, Task, TaskLinkType, TaskSource, WorkspacePerson,
 } from '@/types'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
 import { EMPTY_AGENT }     from '@/lib/agent-demo'
@@ -54,7 +54,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems, flightLegs, travelItemShows,
     people, bankAccounts, bankTransactions,
     trackRounds, trackNotes, trackNoteReplies, trackCredits, venues, vendors,
-    runsQ, budgetsQ, crewRatesQ, financeSettingsQ, expenseShowsQ, offerSheetsQ, settlementsQ, settlementShowsQ, profilesQ, accountsQ,
+    runsQ, budgetsQ, crewRatesQ, financeSettingsQ, expenseShowsQ, offerSheetsQ, settlementsQ, settlementShowsQ, profilesQ, accountsQ, tasksQ,
   ] = await Promise.all([
     supabase.from('albums').select('*').in('client_id', clientIds),
     supabase.from('tracks').select('*'),
@@ -99,6 +99,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     supabase.from('settlement_shows').select('*'),
     supabase.from('artist_profiles').select('client_id, data').in('client_id', clientIds),
     supabase.from('artist_accounts').select('*').in('client_id', clientIds).order('platform'),
+    supabase.from('tasks').select('*').in('client_id', clientIds),
   ])
 
   const albumRows     = albums.data       ?? []
@@ -678,6 +679,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       projects:    cProjects,
       artistTodos: cTodos,
       accounts:    ((accountsQ.data ?? []) as AccountRow[]).filter(r => r.client_id === c.id).map(rowToAccount),
+      tasks:       ((tasksQ.data ?? []) as TaskRow[]).filter(r => r.client_id === c.id).map(rowToTask),
       profile:     ((profilesQ.data ?? []) as { client_id: string; data: ArtistProfile }[]).find(p => p.client_id === c.id)?.data,
       agentData:   { offers: cOffers },
       legal:       { contracts: cContracts },
@@ -722,6 +724,50 @@ export async function clearInboxChoice(itemKey: string) {
   const supabase = createClient()
   const { error } = await supabase.from('inbox_state').delete().eq('item_key', itemKey)
   if (error) throw error
+}
+
+// ── To-dos (the Home list; see lib/tasks.ts) ───────────────
+export interface TaskRow {
+  id: string; client_id: string; title: string; notes: string | null; due_date: string | null
+  assignee: string | null; link_type: string | null; link_id: string | null; source: string
+  created_by: string | null; created_at: string; done_at: string | null; done_by: string | null
+}
+
+export function rowToTask(r: TaskRow): Task {
+  return {
+    id: r.id, title: r.title, notes: r.notes ?? undefined, dueDate: r.due_date ?? undefined,
+    assigneeId: r.assignee ?? undefined,
+    link: r.link_type && r.link_id ? { type: r.link_type as TaskLinkType, id: r.link_id } : undefined,
+    source: r.source as TaskSource, createdBy: r.created_by ?? undefined, createdAt: r.created_at,
+    doneAt: r.done_at ?? undefined, doneBy: r.done_by ?? undefined,
+  }
+}
+
+// Only what a person can set is sent; who wrote it, when it was checked off, and which section it belongs to
+// are filled in by the database itself (see migration 040), so a changed browser cannot fake them.
+export async function upsertTask(task: Task, clientId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('tasks').upsert({
+    id: task.id, client_id: clientId, title: task.title, notes: task.notes ?? null, due_date: task.dueDate ?? null,
+    assignee: task.assigneeId ?? null, link_type: task.link?.type ?? null, link_id: task.link?.id ?? null,
+    source: task.source, done_at: task.doneAt ?? null,
+  })
+  if (error) throw error
+}
+
+export async function deleteTaskRow(taskId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('tasks').delete().eq('id', taskId)
+  if (error) throw error
+}
+
+/** The teammates on the management side, and which artists each can open. Empty for an artist's own login. */
+export async function loadWorkspacePeople(): Promise<WorkspacePerson[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc('workspace_people')
+  if (error) throw error
+  return ((data ?? []) as { member_id: string; user_id: string; label: string; role: string; all_clients: boolean; client_ids: string[] }[])
+    .map(r => ({ memberId: r.member_id, userId: r.user_id, label: r.label, role: r.role as UserRole, allClients: r.all_clients, clientIds: r.client_ids ?? [] }))
 }
 
 export async function loadItemAccess(): Promise<ItemException[]> {

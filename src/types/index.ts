@@ -336,6 +336,7 @@ export interface Client {
   }
   projects:    Project[]
   artistTodos: ArtistTodo[]
+  tasks?:      Task[]           // the management side's to-dos for this artist (see lib/tasks.ts); never shown to the artist's own login
   analytics:   AnalyticsData
   agentData:   AgentData
   legal:       LegalData
@@ -383,6 +384,36 @@ export interface ArtistTodo {
   done: boolean
   dueDate?: string
   createdAt: string
+}
+
+// ── Tasks (the Home to-do list) ─────────────────────────────
+// A hand-written to-do that belongs to one artist and is given to one teammate. What points at a show
+// or an invoice carries the link so "Open" lands in the right place; who may see it follows that link.
+export type TaskLinkType = 'show' | 'offer' | 'invoice' | 'expense' | 'contract' | 'song' | 'project'
+export type TaskSource = 'manual' | 'command_bar' | 'agent'
+
+export interface Task {
+  id: string
+  title: string
+  notes?: string
+  dueDate?: string            // YYYY-MM-DD
+  assigneeId?: string         // the login it is given to (a WorkspacePerson.userId); none = nobody yet
+  link?: { type: TaskLinkType; id: string }
+  source: TaskSource
+  createdBy?: string
+  createdAt: string           // ISO timestamp
+  doneAt?: string             // ISO timestamp; set = checked off
+  doneBy?: string
+}
+
+/** A teammate on the management side, and which artists they can open (from the database, by the server). */
+export interface WorkspacePerson {
+  memberId: string
+  userId: string
+  label: string
+  role: UserRole
+  allClients: boolean
+  clientIds: string[]
 }
 
 // ── Analytics ───────────────────────────────────────────────

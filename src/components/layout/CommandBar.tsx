@@ -6,7 +6,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '@/lib/store'
-import { fromDateStr } from '@/lib/utils'
+import { fromDateStr, today } from '@/lib/utils'
+import { notify } from '@/lib/notify'
+import { dueLabel, parseQuickTodo, todoPrefix } from '@/lib/tasks'
+import { recallLastArtist, rememberLastArtist, useMe } from '@/lib/useToday'
 import { searchCommands, type Searchable } from '@/lib/command-search'
 import { DRIVE_FOLDERS, folderLink } from '@/lib/drive-links'
 import { Icon, type IconName } from '@/components/ui/Icon'
@@ -37,6 +40,7 @@ export function CommandBar() {
   const data = useStore(s => s.data)
   const hasAccess = useStore(s => s.hasAccess)
   const accessibleClientIds = useStore(s => s.accessibleClientIds)
+  const me = useMe()
   const nav = useVisibleNav()
 
   const [open, setOpen] = useState(false)
@@ -45,9 +49,9 @@ export function CommandBar() {
   const listRef = useRef<HTMLDivElement>(null)
   const returnFocus = useRef<HTMLElement | null>(null)
 
-  const show = useCallback(() => {
+  const show = useCallback((initial = '') => {
     returnFocus.current = document.activeElement as HTMLElement | null
-    setQuery(''); setSel(0); setOpen(true)
+    setQuery(initial); setSel(0); setOpen(true)
   }, [])
   const hide = useCallback(() => { setOpen(false); returnFocus.current?.focus?.() }, [])
 
@@ -55,9 +59,11 @@ export function CommandBar() {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if (open) hide(); else show() }
     }
+    // Other parts of the app can open the bar with some text already typed (the event's detail).
+    const onOpen = (e: Event) => { const text = (e as CustomEvent<string | undefined>).detail; show(typeof text === 'string' ? text : '') }
     window.addEventListener('keydown', onKey)
-    window.addEventListener(OPEN_COMMAND_BAR, show)
-    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener(OPEN_COMMAND_BAR, show) }
+    window.addEventListener(OPEN_COMMAND_BAR, onOpen)
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener(OPEN_COMMAND_BAR, onOpen) }
   }, [open, show, hide])
 
   const items = useMemo<Command[]>(() => {
@@ -81,6 +87,12 @@ export function CommandBar() {
         id: `paste-offer-${c.id}`, group: 'Actions', icon: 'tour', label: `Paste a booking offer for ${c.name}`,
         hint: 'Read an email or PDF into a new booking offer', keywords: 'new offer add email paste',
         run: () => jump(c.id, 'tour', st => { st.setTourSub('offers'); st.requestOfferPaste() }),
+      })
+    }
+    if (roster.some(c => hasAccess('projects', c.id, true))) {
+      out.push({
+        id: 'add-todo', group: 'Actions', icon: 'plus', label: 'Add a to-do', hint: 'Type: to-do: call the promoter friday', keywords: 'task reminder note todo',
+        run: () => { window.dispatchEvent(new CustomEvent(OPEN_COMMAND_BAR, { detail: 'to-do: ' })) },
       })
     }
     if (role === 'manager') {
@@ -135,7 +147,30 @@ export function CommandBar() {
     return out
   }, [open, data, clientId, view, role, nav, hasAccess, accessibleClientIds])
 
-  const results = useMemo(() => searchCommands(items, query), [items, query])
+  // "to-do: call the promoter friday" shows where it will be filed; Enter files it for you (with an Undo).
+  const todoItems = useMemo<Command[]>(() => {
+    const typed = open ? todoPrefix(query) : null
+    if (!typed) return []
+    const ids = accessibleClientIds()
+    const roster = (ids === 'all' ? data.clients : data.clients.filter(c => ids.includes(c.id))).filter(c => hasAccess('projects', c.id, true))
+    const current = view === 'studio' ? roster.find(c => c.id === clientId) : undefined
+    const last = recallLastArtist()
+    const targets = current ? [current] : [...roster.filter(c => c.id === last), ...roster.filter(c => c.id !== last)].slice(0, 8)
+    const parsed = parseQuickTodo(typed, today())
+    return targets.map(c => ({
+      id: `todo-${c.id}`, group: 'Add a to-do', icon: 'plus' as IconName, label: `“${parsed.title}”`,
+      hint: `${c.name}${parsed.dueDate ? ` · due ${dueLabel(parsed.dueDate, today())}` : ''}${me ? ' · for you' : ''}`,
+      run: () => {
+        const st = useStore.getState()
+        const id = st.addTask(c.id, { title: parsed.title, dueDate: parsed.dueDate, assigneeId: me ?? undefined, source: 'command_bar' })
+        if (!id) return
+        rememberLastArtist(c.id)
+        notify(`To-do added for ${c.name}`, { label: 'Undo', run: () => useStore.getState().deleteTask(c.id, id) })
+      },
+    }))
+  }, [open, query, data, view, clientId, me, hasAccess, accessibleClientIds])
+
+  const results = useMemo(() => (todoItems.length > 0 ? todoItems : searchCommands(items, query)), [todoItems, items, query])
   const active = Math.min(sel, Math.max(0, results.length - 1))
 
   useEffect(() => {
@@ -170,7 +205,7 @@ export function CommandBar() {
             aria-expanded="true"
             aria-controls="command-list"
             aria-activedescendant={results[active] ? `cmd-${results[active].id}` : undefined}
-            placeholder="Jump to an artist, show, offer, invoice, or page"
+            placeholder="Jump to anything, or type “to-do: …” to add one"
             autoComplete="off"
             className="flex-1 py-4 text-[15px] bg-transparent outline-none placeholder:text-gray-400"
           />
