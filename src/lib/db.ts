@@ -16,7 +16,7 @@ import type {
   AdvanceHospitality, AdvanceLogistics,
   CrewMember, GuestListEntry, TravelItem, Currency, Person, PersonActivity, CatalogWork,
   LegalTemplate, LegalTemplateClause, Stage, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
-  ArtistProfile, Venue, FlightLeg, Vendor, Run, Budget, CrewRate, FinanceSettings, BudgetLine, BudgetCommission, BudgetSnapshot, Currency as Cur,
+  ArtistAccount, ArtistProfile, Venue, FlightLeg, Vendor, Run, Budget, CrewRate, FinanceSettings, BudgetLine, BudgetCommission, BudgetSnapshot, Currency as Cur,
   OfferSheet, OfferTerms, Settlement,
 } from '@/types'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
@@ -54,7 +54,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems, flightLegs, travelItemShows,
     people, bankAccounts, bankTransactions,
     trackRounds, trackNotes, trackNoteReplies, trackCredits, venues, vendors,
-    runsQ, budgetsQ, crewRatesQ, financeSettingsQ, expenseShowsQ, offerSheetsQ, settlementsQ, settlementShowsQ, profilesQ,
+    runsQ, budgetsQ, crewRatesQ, financeSettingsQ, expenseShowsQ, offerSheetsQ, settlementsQ, settlementShowsQ, profilesQ, accountsQ,
   ] = await Promise.all([
     supabase.from('albums').select('*').in('client_id', clientIds),
     supabase.from('tracks').select('*'),
@@ -98,6 +98,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     supabase.from('settlements').select('*').in('client_id', clientIds),
     supabase.from('settlement_shows').select('*'),
     supabase.from('artist_profiles').select('client_id, data').in('client_id', clientIds),
+    supabase.from('artist_accounts').select('*').in('client_id', clientIds).order('platform'),
   ])
 
   const albumRows     = albums.data       ?? []
@@ -675,6 +676,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       },
       projects:    cProjects,
       artistTodos: cTodos,
+      accounts:    ((accountsQ.data ?? []) as AccountRow[]).filter(r => r.client_id === c.id).map(rowToAccount),
       profile:     ((profilesQ.data ?? []) as { client_id: string; data: ArtistProfile }[]).find(p => p.client_id === c.id)?.data,
       agentData:   { offers: cOffers },
       legal:       { contracts: cContracts },
@@ -1256,6 +1258,34 @@ export async function upsertFinanceSettings(s: FinanceSettings, clientId: string
   const { error } = await supabase.from('client_finance_settings').upsert({
     client_id: clientId, home_currency: s.homeCurrency, default_commissions: s.defaultCommissions,
   })
+  if (error) throw error
+}
+
+interface AccountRow {
+  id: string; client_id: string; platform: string; category: string; label: string | null; username: string | null
+  owner: string | null; access: ArtistAccount['access']; two_factor: ArtistAccount['twoFactor']
+  login_url: string | null; vault_url: string | null; last_changed: string | null; notes: string | null
+}
+const rowToAccount = (r: AccountRow): ArtistAccount => ({
+  id: r.id, platform: r.platform, category: r.category, label: r.label ?? undefined, username: r.username ?? undefined,
+  owner: r.owner ?? undefined, access: r.access, twoFactor: r.two_factor, loginUrl: r.login_url ?? undefined,
+  vaultUrl: r.vault_url ?? undefined, lastChanged: r.last_changed ?? undefined, notes: r.notes ?? undefined,
+})
+
+export async function upsertAccounts(clientId: string, accounts: ArtistAccount[]) {
+  const supabase = createClient()
+  const now = new Date().toISOString()
+  const { error } = await supabase.from('artist_accounts').upsert(accounts.map(a => ({
+    id: a.id, client_id: clientId, platform: a.platform, category: a.category, label: a.label ?? null, username: a.username ?? null,
+    owner: a.owner ?? null, access: a.access, two_factor: a.twoFactor, login_url: a.loginUrl ?? null, vault_url: a.vaultUrl ?? null,
+    last_changed: a.lastChanged ?? null, notes: a.notes ?? null, updated_at: now,
+  })))
+  if (error) throw error
+}
+
+export async function deleteAccountRow(accountId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('artist_accounts').delete().eq('id', accountId)
   if (error) throw error
 }
 

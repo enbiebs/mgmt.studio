@@ -293,6 +293,24 @@ export interface ArtistProfile {
   contacts?:        ProfileContact[]
 }
 
+// ── Accounts list: where each login is kept and how the team gets in. Never holds a password. ──
+export type AccountAccess = 'platform' | 'manager' | 'artist' | 'unsorted'
+export type AccountTwoFactor = 'app' | 'sms' | 'email' | 'key' | 'none' | 'unknown'
+export interface ArtistAccount {
+  id:           string
+  platform:     string            // "Spotify for Artists", "DistroKid", "Bookings email"...
+  category:     string
+  label?:       string            // what it is used for
+  username?:    string            // the login name or email (never the password)
+  owner?:       string            // who legally owns the account: the artist, management, the label...
+  access:       AccountAccess     // how the team gets in
+  twoFactor:    AccountTwoFactor  // what protects it besides the password
+  loginUrl?:    string            // the platform's sign-in page
+  vaultUrl?:    string            // the shared entry in the team's password manager
+  lastChanged?: string            // when the password was last changed (ISO date)
+  notes?:       string
+}
+
 export interface Client {
   id: string
   name: string
@@ -320,6 +338,7 @@ export interface Client {
   agentData:   AgentData
   legal:       LegalData
   finance:     ClientFinance
+  accounts?:   ArtistAccount[]  // where each login is kept (no passwords)
   profile?:    ArtistProfile    // the open details; private details are never held in the app's data (see lib/profile-fields.ts)
   // Sections where this client has at least one item the viewer can load.
   // For someone with no grant for a section, an item there means it was shared
