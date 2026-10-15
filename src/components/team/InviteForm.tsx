@@ -10,6 +10,7 @@ import { inputClass } from '@/components/ui/Modal'
 import { ADMIN_KEY, cyclePage, levelsForRole, overallLevel, presetByKey, setAllPages, summarize, type PageLevels, type SectionKey } from '@/lib/access-presets'
 import { inviteIsEmpty, loginTypeFor, type InviteArtistAccess } from '@/lib/invite-access'
 import { upsertPerson } from '@/lib/db'
+import { MAX_TITLE_CHARS, TITLE_SUGGESTIONS, cleanTitle } from '@/lib/team-roles'
 import type { Person } from '@/types'
 import { RoleMenu } from './RoleMenu'
 import { PagesPanel } from './PagesPanel'
@@ -28,6 +29,7 @@ export function InviteForm({ person, defaultClientId, onSent }: {
 
   const [name, setName] = useState(person?.name ?? '')
   const [email, setEmail] = useState(person?.email ?? '')
+  const [title, setTitle] = useState('')
   const [roleKey, setRoleKey] = useState('')
   const [levels, setLevels] = useState<PageLevels>({})
   const [pointPerson, setPointPerson] = useState(false)
@@ -71,7 +73,7 @@ export function InviteForm({ person, defaultClientId, onSent }: {
       let personId = person?.id
       if (!personId) {
         // a brand-new person gets a card in the directory first, saved before the server looks for it
-        personId = store.addPerson({ name: name.trim(), email: email.trim() })
+        personId = store.addPerson({ name: name.trim(), email: email.trim(), title: cleanTitle(title) })
         const created = store.getClient(defaultClientId)?.people.find(p => p.id === personId)
         if (created) await upsertPerson(created, defaultClientId)
       } else if (email.trim() !== (person?.email ?? '')) {
@@ -84,7 +86,7 @@ export function InviteForm({ person, defaultClientId, onSent }: {
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error ?? 'Could not send that invitation')
       setDone(json.warning ?? `Invitation sent to ${email.trim()}. Their access is already set up and starts when they accept.`)
-      if (!person) { setName(''); setEmail(''); setRoleKey(''); setLevels({}); setPointPerson(false); setChosen(artists.some(a => a.id === defaultClientId) ? [defaultClientId] : []) }
+      if (!person) { setName(''); setEmail(''); setTitle(''); setRoleKey(''); setLevels({}); setPointPerson(false); setChosen(artists.some(a => a.id === defaultClientId) ? [defaultClientId] : []) }
       await afterAccessChange()
       onSent?.()
     } catch (e) {
@@ -105,6 +107,14 @@ export function InviteForm({ person, defaultClientId, onSent }: {
           <label className="block">
             <span className={LABEL}>Email</span>
             <input className={inputClass} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="name@company.com" autoComplete="off" />
+          </label>
+          <label className="block sm:col-span-2">
+            <span className={LABEL}>Title / role (optional, type anything)</span>
+            <input
+              className={inputClass} list="invite-title-suggestions" value={title} onChange={e => setTitle(e.target.value)}
+              placeholder="e.g. Tour Manager, Stylist" maxLength={MAX_TITLE_CHARS} autoComplete="off"
+            />
+            <datalist id="invite-title-suggestions">{TITLE_SUGGESTIONS.map(t => <option key={t} value={t} />)}</datalist>
           </label>
         </div>
       )}

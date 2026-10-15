@@ -7,10 +7,8 @@
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { PersonPicker } from '@/components/people/PersonPicker'
-import { inputClass, selectClass } from '@/components/ui/Modal'
-import { uid } from '@/lib/utils'
 import { SEAT_OPTIONS, SIZE_FIELDS, SOCIAL_FIELDS } from '@/lib/profile-fields'
-import type { ArtistProfile, Client, ProfileContact, TravelPrefs } from '@/types'
+import type { ArtistProfile, Client, TravelPrefs } from '@/types'
 import { AccessLog } from './AccessLog'
 import { AccountsTab } from './AccountsTab'
 import { BrandingCard } from './BrandingCard'
@@ -19,11 +17,9 @@ import { Card, FieldsCard, type FieldDef } from './FieldsCard'
 import { PrivateBlock } from './PrivateBlock'
 import { useProfileSecure } from './useProfileSecure'
 
-const TABS = [['overview', 'Overview'], ['travel', 'Travel'], ['team', 'Team'], ['accounts', 'Accounts'], ['log', 'Who looked']] as const
+const TABS = [['overview', 'Overview'], ['travel', 'Travel'], ['accounts', 'Accounts'], ['log', 'Who looked']] as const
 type Tab = (typeof TABS)[number][0]
 
-const CONTACT_ROLES = ['Agent', 'Business manager', 'Lawyer', 'Label', 'Publisher', 'Publicist', 'Tour manager', 'Artwork / design', 'Website developer', 'Booking assistant', 'Other']
-const CORE_ROLES = ['Agent', 'Business manager', 'Lawyer', 'Label', 'Publicist', 'Tour manager']
 
 const CONTACT_FIELDS: FieldDef[] = [
   { key: 'legalName', label: 'Legal name' }, { key: 'phone', label: 'Phone' },
@@ -105,7 +101,6 @@ export function ProfileView() {
           )}
 
           {tab === 'travel' && <TravelTab client={client} p={p} canEdit={canEdit} save={save} secure={secure} />}
-          {tab === 'team' && <TeamTab client={client} p={p} canEdit={canEdit} save={save} />}
           {tab === 'accounts' && <AccountsTab client={client} canEdit={canEdit} />}
           {tab === 'log' && <AccessLog client={client} />}
         </div>
@@ -162,94 +157,6 @@ function TravelTab({ client, p, canEdit, save, secure }: { client: Client; p: Ar
           ) : (
             <button onClick={() => setAdding(true)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium hover:bg-gray-50">+ Add a person</button>
           )}
-        </Card>
-      )}
-    </>
-  )
-}
-
-// ── Team contacts ────────────────────────────────────────────
-function TeamTab({ client, p, canEdit, save }: { client: Client; p: ArtistProfile; canEdit: boolean; save: Save }) {
-  const contacts = p.contacts ?? []
-  const [form, setForm] = useState<ProfileContact | null>(null)
-  const [error, setError] = useState('')
-  const missing = CORE_ROLES.filter(r => !contacts.some(c => c.role === r))
-
-  async function commit(next: ProfileContact[]) {
-    setError('')
-    const r = await save({ contacts: next })
-    if (r.ok) setForm(null); else setError(r.error ?? "Couldn't save. Please try again.")
-  }
-
-  return (
-    <>
-      <Card title="Key contacts" hint="The people around the artist. Their email and phone come from the team list, so they are only kept in one place.">
-        {contacts.length === 0 && !form && <p className="text-sm text-gray-500">No contacts yet.</p>}
-        <ul className="divide-y divide-gray-100">
-          {contacts.map(c => {
-            const person = client.people.find(x => x.id === c.personId)
-            return (
-              <li key={c.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
-                <div className="min-w-0">
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{c.role}</div>
-                  <div className="text-sm font-medium">{person?.name ?? <span className="text-gray-400">No one chosen</span>}{(c.firm || person?.org) && <span className="font-normal text-gray-500"> · {c.firm || person?.org}</span>}</div>
-                  <div className="text-xs text-gray-500">{[person?.email, person?.phone].filter(Boolean).join(' · ')}</div>
-                  {c.notes && <div className="mt-1 text-xs text-gray-600">{c.notes}</div>}
-                </div>
-                {canEdit && (
-                  <div className="flex gap-3 text-xs">
-                    <button onClick={() => { setError(''); setForm(c) }} className="text-gray-500 hover:text-gray-900">Edit</button>
-                    <button onClick={() => commit(contacts.filter(x => x.id !== c.id))} className="text-gray-400 hover:text-red-500">Remove</button>
-                  </div>
-                )}
-              </li>
-            )
-          })}
-        </ul>
-
-        {canEdit && !form && (
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <button onClick={() => { setError(''); setForm({ id: 'contact-' + uid(), role: 'Agent' }) }} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium hover:bg-gray-50">+ Add a contact</button>
-            {missing.length > 0 && <span className="text-xs text-gray-400">Missing:</span>}
-            {missing.map(r => (
-              <button key={r} onClick={() => { setError(''); setForm({ id: 'contact-' + uid(), role: r }) }} className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-200">{r}</button>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      {form && (
-        <Card title={contacts.some(c => c.id === form.id) ? 'Edit contact' : 'Add a contact'}>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-xs font-semibold text-gray-500">Role</span>
-              <select className={selectClass} value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
-                {CONTACT_ROLES.map(r => <option key={r}>{r}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-semibold text-gray-500">Firm (if different from their company)</span>
-              <input className={inputClass} value={form.firm ?? ''} onChange={e => setForm({ ...form, firm: e.target.value })} />
-            </label>
-            <div className="sm:col-span-2"><PersonPicker value={form.personId ?? ''} onChange={id => setForm({ ...form, personId: id })} /></div>
-            <label className="block sm:col-span-2">
-              <span className="mb-1 block text-xs font-semibold text-gray-500">Notes</span>
-              <textarea className={`${inputClass} min-h-[64px]`} value={form.notes ?? ''} onChange={e => setForm({ ...form, notes: e.target.value })} />
-            </label>
-          </div>
-          {error && <p role="alert" className="mt-3 text-xs text-red-600">{error}</p>}
-          <div className="mt-4 flex justify-end gap-2">
-            <button onClick={() => setForm(null)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium hover:bg-gray-50">Cancel</button>
-            <button
-              disabled={!form.personId}
-              onClick={() => commit(contacts.some(c => c.id === form.id)
-                ? contacts.map(c => c.id === form.id ? { ...form, firm: form.firm?.trim() || undefined, notes: form.notes?.trim() || undefined } : c)
-                : [...contacts, { ...form, firm: form.firm?.trim() || undefined, notes: form.notes?.trim() || undefined }])}
-              className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-50"
-            >
-              Save
-            </button>
-          </div>
         </Card>
       )}
     </>
