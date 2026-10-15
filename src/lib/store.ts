@@ -22,7 +22,7 @@ import type {
   ArtistAccount, ArtistProfile, CrewMember, ShowAdvance, TravelItem, Person, PersonActivity, Currency,
   CatalogWork, RegStatus, Invoice, InvoiceLineItem, InvoiceStatus, RevenueStream,
   LegalTemplate, LegalTemplateClause, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
-  ReleaseType, Venue, TourOffer, Expense, Vendor, Run, Budget, BudgetBucket, BudgetLine, CrewRate, FinanceSettings,
+  ReleaseType, Venue, TourOffer, Expense, Vendor, Run, Budget, BudgetBucket, CrewRate, FinanceSettings,
   OfferSheet, OfferSheetDetail, OfferTerms, Settlement, SettlementDraft, SettlementPayment,
   Task, TaskLinkType, TaskSource, WorkspacePerson,
 } from '@/types'
