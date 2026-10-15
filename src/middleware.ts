@@ -24,6 +24,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request })
   }
 
+  // Browsers post content-policy reports with no sign-in; the route is tiny, capped, and rate limited.
+  if (request.nextUrl.pathname === '/api/csp-report') {
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildIcsFeed } from '@/lib/ics'
+import { addressKey, rateLimit } from '@/lib/api-guard'
+import { calendarTokenSchema } from '@/lib/api-schemas'
 
 // Public, unauthenticated feed — polled by calendar apps with no browser
 // session (see the middleware bypass for this path). The token itself is
@@ -8,6 +10,10 @@ import { buildIcsFeed } from '@/lib/ics'
 // service-role client rather than a user-scoped RLS query.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
+  // No sign-in here, so it is limited by the caller's address, and a malformed token never reaches the database.
+  const limited = await rateLimit(addressKey(req), 'public')
+  if (limited) return limited
+  if (!calendarTokenSchema.safeParse(token).success) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const supabase = createAdminClient()
 
   const { data: client } = await supabase
@@ -20,7 +26,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
 
   const { data: shows } = await supabase
     .from('shows')
-    .select('id, date, city, venue, time, status, notes')
+    .select('id, date, city, venue, time, status')
     .eq('client_id', client.id)
     .order('date')
 

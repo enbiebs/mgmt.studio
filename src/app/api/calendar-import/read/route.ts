@@ -10,7 +10,7 @@ export const maxDuration = 60
 // either - the browser shows a review screen first and only then creates the shows.
 export async function POST(req: NextRequest) {
   const form = await req.formData()
-  const gate = await requireTourEditAccess(form.get('clientId'))
+  const gate = await requireTourEditAccess(form.get('clientId'), 'ai')
   if (gate.error) return gate.error
   const file = form.get('file')
   if (!(file instanceof File)) return NextResponse.json({ error: 'No file was sent' }, { status: 400 })

@@ -2,13 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { SETTLEMENTS_BUCKET, SETTLEMENT_TYPES, requireSettlementAccess, type SettlementExt } from '@/lib/settlements'
 import { uid } from '@/lib/utils'
+import { parseJson } from '@/lib/api-guard'
+import { settlementUploadBody } from '@/lib/api-schemas'
 
 // Hands the browser a one-time signed URL to upload a settlement (PDF or photo/scan)
 // straight to private storage. Going direct sidesteps Vercel's 4.5MB request-body limit,
 // which a scanned statement easily exceeds.
 export async function POST(req: NextRequest) {
-  const { clientId, ext } = await req.json()
-  const gate = await requireSettlementAccess(clientId, true)
+  const body = await parseJson(req, settlementUploadBody)
+  if (body.error) return body.error
+  const { clientId, ext } = body.data
+  const gate = await requireSettlementAccess(clientId, true, 'upload')
   if (gate.error) return gate.error
   const kind = String(ext ?? 'pdf').toLowerCase() as SettlementExt
   if (!(kind in SETTLEMENT_TYPES)) return NextResponse.json({ error: 'Please use a PDF, JPG, PNG or WEBP file' }, { status: 400 })

@@ -12,7 +12,7 @@ export const maxDuration = 60
 // Nothing is saved here - the browser opens the offer form with the answers filled in.
 export async function POST(req: NextRequest) {
   const form = await req.formData()
-  const gate = await requireTourEditAccess(form.get('clientId'))
+  const gate = await requireTourEditAccess(form.get('clientId'), 'ai')
   if (gate.error) return gate.error
   if (!offerReadingConfigured()) return NextResponse.json({ error: "Automatic reading isn't switched on yet." }, { status: 503 })
 

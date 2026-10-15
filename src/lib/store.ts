@@ -100,8 +100,15 @@ function loadLocalData(): AppData {
   return defaultData()
 }
 
+// Demo mode (no database) keeps its sample data in the browser. Once a real workspace is loaded, nothing
+// is copied there: artists' finances and offers would otherwise sit unscrambled in browser storage.
+let keepLocalCopy = true
+const clearLocalCopies = () => {
+  try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem('studio-legal-templates-v1') } catch { /* ignore */ }
+}
+
 function saveData(data: AppData) {
-  if (typeof window === 'undefined') return
+  if (typeof window === 'undefined' || !keepLocalCopy) return
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
 }
 
@@ -124,7 +131,7 @@ function loadLocalLegalTemplates(): LegalTemplate[] {
 }
 
 function saveLegalTemplatesLocal(templates: LegalTemplate[]) {
-  if (typeof window === 'undefined') return
+  if (typeof window === 'undefined' || !keepLocalCopy) return
   localStorage.setItem(LEGAL_TEMPLATES_KEY, JSON.stringify(templates))
 }
 
@@ -614,8 +621,9 @@ export const useStore = create<StudioState>((set, get) => ({
           ? { view: 'studio' as const, clientId: memberClientId }
           : {}),
       })
-      // Clear localStorage since we now use Supabase
-      if (typeof window !== 'undefined') localStorage.removeItem('studio-v1')
+      // The database is the source of truth now: remove any old browser copy and stop making new ones.
+      keepLocalCopy = false
+      if (typeof window !== 'undefined') clearLocalCopies()
     } catch (err) {
       console.error('Failed to load from Supabase:', err)
       set({ isLoading: false })
@@ -625,6 +633,7 @@ export const useStore = create<StudioState>((set, get) => ({
   signOut: async () => {
     const { createClient } = await import('@/lib/supabase/client')
     await createClient().auth.signOut()
+    clearLocalCopies()
     window.location.href = '/login'
   },
 

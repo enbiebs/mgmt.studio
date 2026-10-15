@@ -1,24 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { fail, parseJson, requireUser, serverError } from '@/lib/api-guard'
+import { inviteBody } from '@/lib/api-schemas'
 
 // Sends a real email invite that joins the invited person into the
 // caller's existing workspace (see handle_new_user() in
 // supabase/migrations/012_team_invites.sql) instead of spinning up a
-// new one. Manager-only — checked here and enforced again by RLS on
+// new one. Manager-only - checked here and enforced again by RLS on
 // every table the invited person will ever touch.
 export async function POST(req: NextRequest) {
-  const { email, role, personId, clientId } = await req.json()
-  if (!email || !role) return NextResponse.json({ error: 'Missing email or role' }, { status: 400 })
+  const body = await parseJson(req, inviteBody)
+  if (body.error) return body.error
+  const { email, role, personId, clientId } = body.data
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
+  const who = await requireUser('invite')
+  if (who.error) return who.error
+  const { supabase, user } = who
 
   const { data: wm } = await supabase
     .from('workspace_members').select('workspace_id, role').eq('user_id', user.id).single()
-  if (!wm || wm.role !== 'manager') {
-    return NextResponse.json({ error: 'Only a manager can invite people to log in' }, { status: 403 })
+  if (!wm || wm.role !== 'manager') return fail(403, 'Only a manager can invite people to log in')
+
+  // The artist and the person named in the invitation must belong to the caller's own workspace.
+  // The row-level rules only ever show the caller their own workspace's rows, so "not found" covers both mistakes and tampering.
+  if (clientId) {
+    const { data } = await supabase.from('clients').select('id').eq('id', clientId).maybeSingle()
+    if (!data) return fail(400, 'That artist was not found')
+  }
+  if (personId) {
+    const { data } = await supabase.from('people').select('id').eq('id', personId).maybeSingle()
+    if (!data) return fail(400, 'That person was not found')
   }
 
   const admin = createAdminClient()
@@ -30,7 +41,7 @@ export async function POST(req: NextRequest) {
       invite_client_id: clientId ?? null,
     },
   })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return serverError('Invite failed', error, "Couldn't send that invitation. Check the email address and try again.")
 
   return NextResponse.json({ ok: true, userId: invited.user?.id })
 }

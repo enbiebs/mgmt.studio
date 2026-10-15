@@ -6,8 +6,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 import { z } from 'zod'
 import { createHmac } from 'node:crypto'
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { requireClientAccess, type LimitName } from '@/lib/api-guard'
 
 export const BILLS_BUCKET = 'bills'
 export const MAX_BILL_BYTES = 20 * 1024 * 1024
@@ -16,22 +15,8 @@ export const MAX_BILL_BYTES = 20 * 1024 * 1024
 // Bills are management-side only: the caller needs Finance access to the
 // client AND must not be the artist's own login. Both checks are the same
 // database functions the RLS policies on expenses/vendors use.
-export async function requireBillAccess(clientId: unknown, requireEdit: boolean) {
-  if (typeof clientId !== 'string' || !clientId) {
-    return { error: NextResponse.json({ error: 'Missing clientId' }, { status: 400 }) }
-  }
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: NextResponse.json({ error: 'Not signed in' }, { status: 401 }) }
-
-  const [section, management] = await Promise.all([
-    supabase.rpc('has_section_access', { target_client_id: clientId, target_section: 'finance', require_edit: requireEdit }),
-    supabase.rpc('is_management_side', { target_client_id: clientId }),
-  ])
-  if (section.data !== true || management.data !== true) {
-    return { error: NextResponse.json({ error: 'Not allowed' }, { status: 403 }) }
-  }
-  return { user }
+export async function requireBillAccess(clientId: unknown, requireEdit: boolean, limit: LimitName = 'api') {
+  return requireClientAccess(clientId, { section: 'finance', edit: requireEdit, limit, managementSide: true })
 }
 
 // Files live under "<clientId>/", so a caller can only ever name files in a

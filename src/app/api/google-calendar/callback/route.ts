@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { exchangeCodeForTokens, createDedicatedCalendar } from '@/lib/google-calendar'
-import { createClient } from '@/lib/supabase/server'
+import { requireClientAccess } from '@/lib/api-guard'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { uid } from '@/lib/utils'
 
@@ -25,12 +25,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(appUrl)
   }
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user || user.id !== userId) {
-    appUrl.searchParams.set('google_calendar_error', 'session_mismatch')
+  // Whoever finishes the connection must be the same signed-in person who started it, and still allowed to set it up.
+  const gate = await requireClientAccess(clientId, { section: 'tour', edit: true, managementSide: true })
+  if (gate.error || gate.user.id !== userId) {
+    appUrl.searchParams.set('google_calendar_error', gate.error ? 'not_allowed' : 'session_mismatch')
     return NextResponse.redirect(appUrl)
   }
+  const { supabase } = gate
 
   const { data: client, error } = await supabase.from('clients').select('id, name, workspace_id').eq('id', clientId).single()
   if (error || !client) {

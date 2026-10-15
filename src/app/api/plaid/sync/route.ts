@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { plaidClient } from '@/lib/plaid'
-import { createClient } from '@/lib/supabase/server'
+import { parseJson, requireClientAccess, serverError } from '@/lib/api-guard'
+import { clientOnly } from '@/lib/api-schemas'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { uid } from '@/lib/utils'
 import type { Transaction } from 'plaid'
@@ -9,21 +10,19 @@ import type { Transaction } from 'plaid'
 // artist has. Re-fetches full transaction history each call and upserts by
 // plaid_transaction_id, so calling this repeatedly is always safe.
 export async function POST(req: NextRequest) {
-  const { clientId } = await req.json()
-  if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
+  const body = await parseJson(req, clientOnly)
+  if (body.error) return body.error
+  const { clientId } = body.data
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
-
-  const { data: client, error: clientErr } = await supabase
-    .from('clients').select('id').eq('id', clientId).single()
-  if (clientErr || !client) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
+  // Syncing reads the stored bank key with the master client, so it needs the same access as linking the bank.
+  const gate = await requireClientAccess(clientId, { section: 'finance', edit: true, managementSide: true, limit: 'bank' })
+  if (gate.error) return gate.error
+  const { supabase } = gate
 
   const admin = createAdminClient()
   const { data: connections, error: connErr } = await admin
     .from('bank_connections').select('id, access_token').eq('client_id', clientId)
-  if (connErr) return NextResponse.json({ error: connErr.message }, { status: 500 })
+  if (connErr) return serverError('Reading bank connections failed', connErr, "Couldn't reach the bank connection. Please try again.")
   if (!connections?.length) return NextResponse.json({ ok: true, accountCount: 0, transactionCount: 0 })
 
   let accountCount = 0
@@ -74,7 +73,7 @@ export async function POST(req: NextRequest) {
     if (rows.length) {
       const { error: txErr } = await supabase
         .from('bank_transactions').upsert(rows, { onConflict: 'plaid_transaction_id' })
-      if (txErr) return NextResponse.json({ error: txErr.message }, { status: 500 })
+      if (txErr) return serverError('Saving bank transactions failed', txErr, "Couldn't save the transactions. Please try again.")
       transactionCount += rows.length
     }
   }
