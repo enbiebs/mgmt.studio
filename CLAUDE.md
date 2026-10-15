@@ -21,7 +21,7 @@ localStorage.removeItem('studio-v1'); location.reload();
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 ```
-When these are absent, the middleware and `AuthProvider` both short-circuit — the app runs fully off `localStorage` + demo data.
+When these are absent, the proxy (`src/proxy.ts`) and `AuthProvider` both short-circuit — the app runs fully off `localStorage` + demo data.
 
 ## Architecture
 
@@ -93,9 +93,9 @@ Each domain has its own demo file in `src/lib/`:
 ### Supabase integration
 
 `src/lib/supabase/client.ts` — `createBrowserClient` wrapper (client components)
-`src/lib/supabase/server.ts` — `createServerClient` wrapper (middleware/server)
+`src/lib/supabase/server.ts` — `createServerClient` wrapper (proxy/server)
 `src/lib/db.ts` — all Supabase reads/writes; `loadWorkspaceData()` hydrates the full `AppData` from ~15 tables in parallel on login
-`src/middleware.ts` — auth guard; redirects unauthenticated users to `/login`; skips entirely if env vars are absent
+`src/proxy.ts` — auth guard (called "middleware" before Next.js 16); redirects unauthenticated users to `/login`; skips entirely if env vars are absent
 `src/components/AuthProvider.tsx` — client-side session listener; calls `store.initFromSupabase(userId)` on login; skips entirely in demo mode
 `supabase/migrations/001_initial_schema.sql` — full schema with RLS policies
 
