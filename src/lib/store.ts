@@ -215,7 +215,7 @@ interface StudioState {
   fxRates: FxRates
 
   // Navigation
-  view: 'dashboard' | 'studio'
+  view: 'dashboard' | 'studio' | 'company'
   clientId: string | null
   section: MainSection
   songsSub: SongsSub
@@ -279,6 +279,7 @@ interface StudioState {
 
   // ── Navigation actions ──
   goToDashboard: () => void
+  goToCompany: () => void
   openClient: (id: string) => void
   setSection: (section: MainSection) => void
   setSongsSub: (sub: SongsSub) => void
@@ -775,6 +776,7 @@ export const useStore = create<StudioState>((set, get) => ({
 
   // ── Navigation ──
   goToDashboard: () => set({ view: 'dashboard', clientId: null, selectedShowId: null, selectedAlbumId: null }),
+  goToCompany: () => set({ view: 'company', clientId: null, selectedShowId: null, selectedAlbumId: null }),
   openClient: (id) => {
     const s = get()
     const firstAccessible = (s.role === 'manager' || s.role === 'artist') ? 'calendar' : (ALL_SECTIONS.find(sec => s.hasAccess(sec, id)) ?? 'songs')

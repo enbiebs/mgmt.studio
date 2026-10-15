@@ -23,7 +23,7 @@ export function AccessLine({ row, client, sharing: s, showName = false }: { row:
 
   const text =
     row.kind === 'manager' ? 'Manager: sees and changes everything, for every artist.'
-    : row.kind === 'company' ? (s.isManager ? 'Can open every artist. Open their card to change that.' : 'Can open every artist. Only a manager can change that.')
+    : row.kind === 'company' ? 'Can open every artist. This was set by a manager for the whole company.'
     : shared ? describeRow(row, client.id)
     : `Has a login, but cannot open ${client.name} yet. Choose a role to share it.`
 
@@ -95,9 +95,10 @@ function Actions({ row, client, sharing: s, waiting, shared }: { row: PersonRow;
   const id = row.person.memberId
   const label = row.person.label
   const link = 'font-medium text-gray-500 hover:text-gray-900 disabled:opacity-50'
-  // Sending an email is a manager's job (the route enforces it), and only for a login that has pages to start with or is waiting.
-  const canResend = s.isManager && row.person.memberId !== s.myMemberId && (shared || waiting)
-  if (!shared && !waiting) return null
+  // Sending an email is a manager's job (the route enforces it). Anyone with a login can be sent one, pages or not:
+  // someone who could not get in must be reachable from wherever they are listed.
+  const canResend = s.isManager && row.person.memberId !== s.myMemberId
+  if (!shared && !waiting && !canResend) return null
   return (
     <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
       {shared && row.levelKey !== ADMIN_KEY && (

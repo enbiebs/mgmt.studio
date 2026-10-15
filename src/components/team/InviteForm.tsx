@@ -17,21 +17,22 @@ import { PagesPanel } from './PagesPanel'
 const LABEL = 'mb-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-500'
 
 export function InviteForm({ person, defaultClientId, onSent }: {
-  /** The team member being invited: add them to the team first, then invite them. */
-  person: Person
-  defaultClientId: string
+  /** The team member being invited (add them to the team first, then invite them). Left out on the Company page, where someone is invited by email alone. */
+  person?: Person
+  /** The artist that starts ticked. */
+  defaultClientId?: string
   onSent?: () => void
 }) {
   const clients = useStore(s => s.data.clients)
   const artists = useMemo(() => clients.filter(c => !c.isDemo), [clients])
   const afterAccessChange = useStore(s => s.afterAccessChange)
 
-  const [email, setEmail] = useState(person.email ?? '')
+  const [email, setEmail] = useState(person?.email ?? '')
   const [roleKey, setRoleKey] = useState('')
   const [levels, setLevels] = useState<PageLevels>({})
   const [pointPerson, setPointPerson] = useState(false)
   // a demo artist is private to its owner and can't be invited to, so it is never pre-selected
-  const [chosen, setChosen] = useState<string[]>(() => artists.some(a => a.id === defaultClientId) ? [defaultClientId] : [])
+  const [chosen, setChosen] = useState<string[]>(() => defaultClientId && artists.some(a => a.id === defaultClientId) ? [defaultClientId] : [])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState('')
@@ -69,13 +70,15 @@ export function InviteForm({ person, defaultClientId, onSent }: {
     setBusy(true); setError(''); setDone(''); setExistingMember('')
     try {
       const store = useStore.getState()
-      if (email.trim() !== (person.email ?? '')) store.updatePerson(person.id, { email: email.trim() })
-      // make sure the team member's card is saved before the server looks for it
-      const current = store.getClient(defaultClientId)?.people.find(p => p.id === person.id)
-      if (current) await upsertPerson(current, defaultClientId)
+      if (person && defaultClientId) {
+        if (email.trim() !== (person.email ?? '')) store.updatePerson(person.id, { email: email.trim() })
+        // make sure the team member's card is saved before the server looks for it
+        const current = store.getClient(defaultClientId)?.people.find(p => p.id === person.id)
+        if (current) await upsertPerson(current, defaultClientId)
+      }
       const res = await fetch('/api/team/invite', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), role: loginTypeFor(roleKey), personId: person.id, access }),
+        body: JSON.stringify({ email: email.trim(), role: loginTypeFor(roleKey), personId: person?.id, access }),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) {

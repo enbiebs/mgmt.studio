@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { ADMIN_KEY, cyclePage, planChanges, presetByKey, setAllPages, type PageLevels, type SectionKey } from '@/lib/access-presets'
-import { buildSharingRows, levelChangeWarning, removalWarning, resendWording, type SharingGrant, type SharingRow } from '@/lib/sharing'
+import { buildSharingRows, levelChangeWarning, removalWarning, resendWording, withCardNames, type SharingGrant, type SharingRow } from '@/lib/sharing'
 import { applyGrantPlan, fetchArtistGrants, revokeArtistAccess } from '@/lib/db'
 
 export type PersonRow = Extract<SharingRow, { kind: 'person' }>
@@ -20,7 +20,9 @@ export type Confirm =
 export function useArtistSharing(clientId: string, clientName: string, enabled: boolean) {
   const role = useStore(s => s.role)
   const myMemberId = useStore(s => s.myMemberId)
-  const people = useStore(s => s.workspacePeople)
+  const rawPeople = useStore(s => s.workspacePeople)
+  const clientList = useStore(s => s.data.clients)
+  const people = useMemo(() => withCardNames(rawPeople, clientList), [rawPeople, clientList])
   const previewMembers = useStore(s => s.previewMembers)
   const previewAs = useStore(s => s.previewAs)
   const refreshMyAccess = useStore(s => s.refreshMyAccess)

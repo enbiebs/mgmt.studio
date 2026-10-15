@@ -10,8 +10,8 @@ import { uid, today as localToday } from '@/lib/utils'
 import { Modal, FormField, inputClass } from '@/components/ui/Modal'
 import { CREW_ROLE_LABEL } from '@/components/tour/CrewView'
 import { ROLE_LABEL as STAKEHOLDER_ROLE_LABEL } from '@/components/songs/StatusView'
-import { AccessPanel } from '@/components/team/AccessPanel'
 import { AccessLine } from '@/components/team/AccessLine'
+import { AddPersonModal } from '@/components/team/AddPersonModal'
 import { useArtistSharing } from '@/components/team/useArtistSharing'
 import { InviteStepModal } from '@/components/team/InviteStepModal'
 import { Badge } from '@/components/ui/Badge'
@@ -188,7 +188,9 @@ export function TeamView() {
                 </div>
                 {editable && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); if (confirm(`Delete ${p.name}? This also removes them from anywhere they're linked (crew, stakeholders).`)) deletePerson(p.id) }}
+                    onClick={(e) => { e.stopPropagation(); if (confirm(card.login
+                      ? `Delete ${p.name}'s card? This removes them from anywhere they're linked (crew, stakeholders). Their login stays, and so does what they can open: use their role menu first if you want them off ${client.name}.`
+                      : `Delete ${p.name}? This also removes them from anywhere they're linked (crew, stakeholders).`)) deletePerson(p.id) }}
                     className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
                   >
                     ✕
@@ -218,7 +220,7 @@ export function TeamView() {
       {ready && list.others.length > 0 && (
         <details className="mt-4">
           <summary className="cursor-pointer text-xs font-medium text-gray-500 hover:text-gray-900">
-            Other logins in your company ({list.others.length}) — share {client.name} with them
+            {list.others.length} {list.others.length === 1 ? 'person' : 'people'} in your company can&apos;t open {client.name} yet — share it with them
           </summary>
           <div className="mt-2 flex flex-col gap-2">
             {list.others.map(person => (
@@ -230,22 +232,25 @@ export function TeamView() {
         </details>
       )}
 
-      {addOpen && <PersonModal initialTitle={addTitle} canInvite={isManager && !client.isDemo} onSaved={id => setInviteFor(id)} onClose={() => setAddOpen(false)} />}
+      {addOpen && <AddPersonModal initialTitle={addTitle} sharing={sharing} canInvite={isManager && !client.isDemo} onInvite={id => setInviteFor(id)} onOpenCard={id => setOpenPersonId(id)} onClose={() => setAddOpen(false)} />}
       {inviteFor && <InviteStepModal personId={inviteFor} onClose={() => setInviteFor(null)} />}
       {openPerson && <PersonModal person={openPerson} links={linksFor(openPerson.id)} onClose={() => setOpenPersonId(null)} />}
     </div>
   )
 }
 
-function PersonModal({ person, links, initialTitle, canInvite, onSaved, onClose }: { person?: Person; links?: string[]; initialTitle?: string; canInvite?: boolean; onSaved?: (id: string) => void; onClose: () => void }) {
+/** A team card, opened to read or change. (Adding someone new has its own screen: AddPersonModal.) */
+function PersonModal({ person, links, onClose }: { person: Person; links?: string[]; onClose: () => void }) {
   const editable = useStore(s => s.canEdit('team'))
-  const { addPerson, updatePerson } = useStore()
-  const [name, setName] = useState(person?.name ?? '')
-  const [email, setEmail] = useState(person?.email ?? '')
-  const [phone, setPhone] = useState(person?.phone ?? '')
-  const [org, setOrg] = useState(person?.org ?? '')
-  const [title, setTitle] = useState(person?.title ?? initialTitle ?? '')
-  const [notes, setNotes] = useState(person?.notes ?? '')
+  const isManager = useStore(s => s.role === 'manager')
+  const goToCompany = useStore(s => s.goToCompany)
+  const { updatePerson } = useStore()
+  const [name, setName] = useState(person.name)
+  const [email, setEmail] = useState(person.email ?? '')
+  const [phone, setPhone] = useState(person.phone ?? '')
+  const [org, setOrg] = useState(person.org ?? '')
+  const [title, setTitle] = useState(person.title ?? '')
+  const [notes, setNotes] = useState(person.notes ?? '')
   const [newLog, setNewLog] = useState('')
 
   function handleSave() {
@@ -258,27 +263,23 @@ function PersonModal({ person, links, initialTitle, canInvite, onSaved, onClose 
       org: org.trim() || undefined,
       notes: notes.trim() || undefined,
     }
-    if (person) updatePerson(person.id, patch)
-    else {
-      const id = addPerson(patch)
-      if (canInvite) onSaved?.(id)     // adding someone and sharing with them are one motion: the invite step opens next
-    }
+    updatePerson(person.id, patch)
     onClose()
   }
 
   function handleLogEntry() {
-    if (!person || !newLog.trim()) return
+    if (!newLog.trim()) return
     const entry = { id: 'act-' + uid(), date: localToday(), text: newLog.trim() }
     updatePerson(person.id, { activity: [entry, ...(person.activity ?? [])] })
     setNewLog('')
   }
 
   return (
-    <Modal title={person ? person.name : 'Add a team member'} onClose={onClose} footer={
+    <Modal title={person.name} onClose={onClose} footer={
       editable ? (
         <>
           <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-          <button onClick={handleSave} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">{person ? 'Save' : canInvite ? 'Add, then invite →' : 'Add'}</button>
+          <button onClick={handleSave} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">Save</button>
         </>
       ) : (
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Close</button>
@@ -309,45 +310,46 @@ function PersonModal({ person, links, initialTitle, canInvite, onSaved, onClose 
         <input className={inputClass} value={notes} onChange={e => setNotes(e.target.value)} disabled={!editable} />
       </FormField>
 
-      {person && (
-        <>
-          {links && links.length > 0 && (
-            <div className="pt-1 border-t border-gray-100 mt-1">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 mt-3">Linked everywhere</div>
-              <div className="flex flex-wrap gap-1">
-                {links.map((l, i) => <span key={i} className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700">{l}</span>)}
-              </div>
-            </div>
-          )}
-
-          <div className="pt-1 border-t border-gray-100 mt-3">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 mt-3">Comms log</div>
-            {editable && (
-              <div className="flex gap-2 mb-2">
-                <input
-                  className={inputClass}
-                  placeholder="e.g. Reminded her to confirm the flight"
-                  value={newLog}
-                  onChange={e => setNewLog(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleLogEntry() } }}
-                />
-                <button type="button" onClick={handleLogEntry} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 flex-shrink-0">Log</button>
-              </div>
-            )}
-            <div className="flex flex-col gap-1.5 max-h-32 overflow-auto">
-              {(person.activity ?? []).length === 0 && (
-                <div className="text-xs text-gray-300">Nothing logged yet</div>
-              )}
-              {(person.activity ?? []).map(a => (
-                <div key={a.id} className="text-xs text-gray-500">
-                  <span className="text-gray-300">{a.date}</span> — {a.text}
-                </div>
-              ))}
-            </div>
+      {links && links.length > 0 && (
+        <div className="pt-1 border-t border-gray-100 mt-1">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 mt-3">Linked everywhere</div>
+          <div className="flex flex-wrap gap-1">
+            {links.map((l, i) => <span key={i} className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700">{l}</span>)}
           </div>
+        </div>
+      )}
 
-          <AccessPanel person={person} />
-        </>
+      <div className="pt-1 border-t border-gray-100 mt-3">
+        <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 mt-3">Comms log</div>
+        {editable && (
+          <div className="flex gap-2 mb-2">
+            <input
+              className={inputClass}
+              placeholder="e.g. Reminded her to confirm the flight"
+              value={newLog}
+              onChange={e => setNewLog(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleLogEntry() } }}
+            />
+            <button type="button" onClick={handleLogEntry} className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 flex-shrink-0">Log</button>
+          </div>
+        )}
+        <div className="flex flex-col gap-1.5 max-h-32 overflow-auto">
+          {(person.activity ?? []).length === 0 && (
+            <div className="text-xs text-gray-300">Nothing logged yet</div>
+          )}
+          {(person.activity ?? []).map(a => (
+            <div key={a.id} className="text-xs text-gray-500">
+              <span className="text-gray-300">{a.date}</span> — {a.text}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {isManager && (
+        <div className="mt-3 border-t border-gray-100 pt-3 text-xs text-gray-500">
+          What they can open is set on their card on the Team page (this artist) or on the{' '}
+          <button type="button" onClick={() => { onClose(); goToCompany() }} className="font-medium text-accent hover:underline">Company page</button> (every artist at once).
+        </div>
       )}
     </Modal>
   )

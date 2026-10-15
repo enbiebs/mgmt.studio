@@ -1,6 +1,6 @@
 // Checks the Sharing list for one artist.  Run with:  npx tsx scripts/check-sharing.ts
 import assert from 'node:assert/strict'
-import { POINT_PERSON_WARNING, STATUS_LABEL, addablePeople, buildTeamList, personStatus, buildSharingRows, describeRow, levelChangeWarning, levelLabel, pointPeopleCount, removalWarning, resendWording, unsharedRow, type SharingGrant } from '../src/lib/sharing'
+import { POINT_PERSON_WARNING, STATUS_LABEL, addablePeople, buildTeamList, loginFor, personStatus, withCardNames, buildSharingRows, describeRow, levelChangeWarning, levelLabel, pointPeopleCount, removalWarning, resendWording, unsharedRow, type SharingGrant } from '../src/lib/sharing'
 import type { Person, WorkspacePerson } from '../src/types'
 
 const person = (id: string, label: string, role: WorkspacePerson['role'], allClients = false): WorkspacePerson =>
@@ -85,13 +85,20 @@ assert.match(removalWarning({ ...rm, ...me, alsoCompanyWide: true }), /keep the 
 
 // where a person from the Team page stands: no login, waiting, has access, or a login not shared with this artist
 const login = (personId: string | undefined, extra: Partial<WorkspacePerson> = {}): WorkspacePerson => ({ ...person('m' + personId, 'L', 'team'), personId, ...extra })
-assert.equal(personStatus('p1', [], 'a'), 'no-login')
-assert.equal(personStatus('p1', [login('other', { clientIds: ['a'] })], 'a'), 'no-login')              // someone else's login does not count
-assert.equal(personStatus('p1', [login('p1', { invited: true, clientIds: ['a'] })], 'a'), 'waiting')  // never signed in yet
-assert.equal(personStatus('p1', [login('p1', { clientIds: ['a'] })], 'a'), 'has-access')
-assert.equal(personStatus('p1', [login('p1', { allClients: true })], 'a'), 'has-access')               // company-wide access covers every artist
-assert.equal(personStatus('p1', [login('p1', { role: 'manager' })], 'a'), 'has-access')
-assert.equal(personStatus('p1', [login('p1', { clientIds: ['b'] })], 'a'), 'not-shared')               // has a login, but for another artist
+assert.equal(personStatus({ id: 'p1' }, [], 'a'), 'no-login')
+assert.equal(personStatus({ id: 'p1' }, [login('other', { clientIds: ['a'] })], 'a'), 'no-login')              // someone else's login does not count
+assert.equal(personStatus({ id: 'p1' }, [login('p1', { invited: true, clientIds: ['a'] })], 'a'), 'waiting')  // never signed in yet
+assert.equal(personStatus({ id: 'p1' }, [login('p1', { clientIds: ['a'] })], 'a'), 'has-access')
+assert.equal(personStatus({ id: 'p1' }, [login('p1', { allClients: true })], 'a'), 'has-access')               // company-wide access covers every artist
+assert.equal(personStatus({ id: 'p1' }, [login('p1', { role: 'manager' })], 'a'), 'has-access')
+assert.equal(personStatus({ id: 'p1' }, [login('p1', { clientIds: ['b'] })], 'a'), 'not-shared')               // has a login, but for another artist
+// a card and a login with the same email are the same person (any capitals), even if nobody linked them by an invitation
+assert.equal(personStatus({ id: 'p9', email: 'Morgan@Noted.com' }, [login(undefined, { email: 'morgan@noted.com', clientIds: ['a'] })], 'a'), 'has-access')
+assert.equal(personStatus({ id: 'p9', email: ' morgan@noted.com ' }, [login(undefined, { email: 'morgan@noted.com', clientIds: ['b'] })], 'a'), 'not-shared')
+assert.equal(personStatus({ id: 'p9', email: 'someone@else.com' }, [login(undefined, { email: 'morgan@noted.com' })], 'a'), 'no-login')   // a different email is a different person
+assert.equal(personStatus({ id: 'p9' }, [login(undefined, { email: 'morgan@noted.com' })], 'a'), 'no-login')                          // a card with no email is never matched by email
+assert.equal(personStatus({ id: 'p9', email: 'art@noted.com' }, [login(undefined, { email: 'art@noted.com', role: 'artist' })], 'a'), 'no-login')   // an artist's own login is never a team card
+assert.equal(loginFor({ id: 'p9', email: 'a@b.com' }, [login('p9', { email: 'zzz@b.com' }), login(undefined, { email: 'a@b.com' })])?.email, 'zzz@b.com')   // the invitation link wins
 assert.equal(STATUS_LABEL['no-login'], 'No login yet')
 assert.equal(STATUS_LABEL.waiting, 'Invited, waiting to accept')
 
@@ -144,6 +151,21 @@ assert.equal(withArtist.cards[0].row, null)
 const same = buildTeamList([card('x', 'Zed'), card('y', 'Amy')], [], [], 'a')
 assert.deepEqual(same.cards.map(c => c.contact.name), ['Zed', 'Amy'])
 assert.equal(unsharedRow(accounts[0]).kind, 'person')
+
+// a card with the same email as a login is matched without any invitation link, so one person is one row
+const byEmail = buildTeamList(
+  [{ id: 'c-m', name: 'Morgan', email: 'Morgan@Noted.com' }],
+  [lg('mm', undefined, 'Morgan Stewart', 'team', { email: 'morgan@noted.com', clientIds: ['a'] })],
+  buildSharingRows([lg('mm', undefined, 'Morgan Stewart', 'team', { email: 'morgan@noted.com', clientIds: ['a'] })], [grant('g1', 'mm', 'tour', 'a')], 'a'), 'a')
+assert.equal(byEmail.cards[0].login?.memberId, 'mm')
+assert.equal(byEmail.cards[0].row?.kind, 'person')
+assert.equal(byEmail.logins.length, 0); assert.equal(byEmail.others.length, 0)                 // nothing left over: she is not listed twice
+
+// a login known only by its email is shown by the name on a card with the same email, on any artist
+const named = withCardNames(
+  [lg('n1', undefined, 'morgan@noted.com', 'team', { email: 'morgan@noted.com' }), lg('n2', undefined, 'Gon Carpel', 'team', { email: 'gon@noted.com' }), lg('n3', undefined, 'zed@noted.com', 'team', { email: 'zed@noted.com' }), lg('n4', undefined, 'someone@noted.com', 'team')],
+  [{ people: [{ id: 'x', name: 'Morgan Stewart', email: 'Morgan@Noted.com' }] }, { people: [{ id: 'y', name: 'Wrong Gon', email: 'gon@noted.com' }] }])
+assert.deepEqual(named.map(p => p.label), ['Morgan Stewart', 'Gon Carpel', 'zed@noted.com', 'someone@noted.com'])   // a real name is never replaced; no matching card = unchanged
 
 // the send-again button: a fresh invite until they have signed in, then a password link
 assert.equal(resendWording(true).button, 'Resend invite')

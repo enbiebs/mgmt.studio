@@ -89,11 +89,27 @@ export function removalWarning(o: { label: string; artist: string; isMe: boolean
     : `${o.label} will no longer be able to open ${o.artist}.`
 }
 
+/** A login that is only known by its email is shown by the name on a team card with the same email, on any artist. */
+export function withCardNames(people: WorkspacePerson[], clients: { people?: Person[] }[]): WorkspacePerson[] {
+  const byEmail = new Map<string, string>()
+  for (const c of clients) for (const p of c.people ?? []) {
+    const email = p.email?.trim().toLowerCase()
+    if (email && p.name.trim() && !byEmail.has(email)) byEmail.set(email, p.name.trim())
+  }
+  return people.map(l => (l.email && l.label.includes('@') && byEmail.has(l.email) ? { ...l, label: byEmail.get(l.email)! } : l))
+}
+
+/** The login a team card belongs to: the one it was invited from, or the one with the same email (a manager is given the emails). */
+export function loginFor(contact: Pick<Person, 'id' | 'email'>, logins: WorkspacePerson[]): WorkspacePerson | null {
+  const email = contact.email?.trim().toLowerCase()
+  return logins.find(l => l.role !== 'artist' && (l.personId === contact.id || (!!email && l.email === email))) ?? null
+}
+
 export type PersonStatus = 'no-login' | 'waiting' | 'has-access' | 'not-shared'
 
 /** Where a person from the Team page stands for this artist: no login yet, invited and waiting, has access, or has a login that is not shared with this artist. */
-export function personStatus(personId: string, logins: WorkspacePerson[], clientId: string): PersonStatus {
-  const login = logins.find(l => l.personId === personId)
+export function personStatus(contact: Pick<Person, 'id' | 'email'>, logins: WorkspacePerson[], clientId: string): PersonStatus {
+  const login = loginFor(contact, logins)
   if (!login) return 'no-login'
   if (login.invited) return 'waiting'
   return login.role === 'manager' || login.allClients || login.clientIds.includes(clientId) ? 'has-access' : 'not-shared'
@@ -134,10 +150,10 @@ export function buildTeamList(contacts: Person[], logins: WorkspacePerson[], row
   const rowOf = new Map(rows.map(r => [r.person.memberId, r]))
   const used = new Set<string>()
   const cards: TeamCard[] = contacts.map(contact => {
-    const login = logins.find(l => l.personId === contact.id && l.role !== 'artist') ?? null
+    const login = loginFor(contact, logins)
     if (login) used.add(login.memberId)
     const row = login ? rowOf.get(login.memberId) ?? (sharable(login) ? unsharedRow(login) : null) : null
-    return { contact, login, row, status: personStatus(contact.id, logins, clientId) }
+    return { contact, login, row, status: personStatus(contact, logins, clientId) }
   })
   return {
     cards: cards.sort((a, b) => CARD_RANK(a) - CARD_RANK(b)),   // a stable sort, so cards of the same kind keep the order they were added in
