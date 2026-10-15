@@ -7,8 +7,13 @@ import { CREW_ROLE_LABEL } from '@/components/tour/CrewView'
 import { ROLE_LABEL as STAKEHOLDER_ROLE_LABEL } from '@/components/songs/StatusView'
 import { AccessPanel } from '@/components/team/AccessPanel'
 import { SharingCard } from '@/components/team/SharingCard'
+import { InviteStepModal } from '@/components/team/InviteStepModal'
+import { Badge } from '@/components/ui/Badge'
+import { STATUS_LABEL, personStatus, type PersonStatus } from '@/lib/sharing'
 import { KEY_ROLES, MAX_TITLE_CHARS, TITLE_SUGGESTIONS, cleanTitle, holdersOf } from '@/lib/team-roles'
 import type { Person, TravelItem } from '@/types'
+
+const STATUS_VARIANT: Record<PersonStatus, 'gray' | 'amber' | 'green' | 'blue'> = { 'no-login': 'gray', waiting: 'amber', 'has-access': 'green', 'not-shared': 'blue' }
 
 function travelLabel(item: TravelItem): string {
   if (item.kind === 'flight') {
@@ -28,6 +33,10 @@ export function TeamView() {
   const [tab, setTab] = useState<'people' | 'sharing'>('people')
   const [addOpen, setAddOpen] = useState(false)
   const [addTitle, setAddTitle] = useState<string | undefined>(undefined)   // a key role clicked on the strip pre-fills the new person's title
+  const isManager = useStore(s => s.role === 'manager')
+  const logins = useStore(s => s.workspacePeople)
+  const showStatus = useStore(s => s.role !== 'artist' && s.workspacePeople.length > 0)
+  const [inviteFor, setInviteFor] = useState<string | null>(null)   // the person just added (or picked) who is being sent an invite
   const [openPersonId, setOpenPersonId] = useState<string | null>(null)
 
   if (!client) return null
@@ -85,7 +94,7 @@ export function TeamView() {
         </div>
       )}
 
-      {view === 'sharing' && <SharingCard client={client} />}
+      {view === 'sharing' && <SharingCard client={client} onAddMember={() => { setAddTitle(undefined); setAddOpen(true) }} />}
 
       {view === 'people' && (
         <section aria-label="Key roles" className="mb-4 rounded-xl border border-gray-100 p-3">
@@ -131,6 +140,22 @@ export function TeamView() {
                 <div className="text-xs text-gray-400 mt-0.5">
                   {[p.email, p.phone].filter(Boolean).join(' · ') || '—'}
                 </div>
+                {showStatus && !client.isDemo && (() => {
+                  const status = personStatus(p.id, logins, client.id)
+                  return (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      <Badge variant={STATUS_VARIANT[status]}>{STATUS_LABEL[status]}</Badge>
+                      {status === 'no-login' && isManager && (
+                        <button
+                          onClick={e => { e.stopPropagation(); setInviteFor(p.id) }}
+                          className="rounded-lg border border-accent/40 bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent hover:bg-accent-soft/70"
+                        >
+                          Invite →
+                        </button>
+                      )}
+                    </div>
+                  )
+                })()}
                 {links.length > 0 ? (
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     {links.map((l, i) => (
@@ -154,13 +179,14 @@ export function TeamView() {
         })}
       </div>}
 
-      {addOpen && <PersonModal initialTitle={addTitle} onClose={() => setAddOpen(false)} />}
+      {addOpen && <PersonModal initialTitle={addTitle} canInvite={isManager && !client.isDemo} onSaved={id => setInviteFor(id)} onClose={() => setAddOpen(false)} />}
+      {inviteFor && <InviteStepModal personId={inviteFor} onClose={() => setInviteFor(null)} />}
       {openPerson && <PersonModal person={openPerson} links={linksFor(openPerson.id)} onClose={() => setOpenPersonId(null)} />}
     </div>
   )
 }
 
-function PersonModal({ person, links, initialTitle, onClose }: { person?: Person; links?: string[]; initialTitle?: string; onClose: () => void }) {
+function PersonModal({ person, links, initialTitle, canInvite, onSaved, onClose }: { person?: Person; links?: string[]; initialTitle?: string; canInvite?: boolean; onSaved?: (id: string) => void; onClose: () => void }) {
   const editable = useStore(s => s.canEdit('team'))
   const { addPerson, updatePerson } = useStore()
   const [name, setName] = useState(person?.name ?? '')
@@ -182,7 +208,10 @@ function PersonModal({ person, links, initialTitle, onClose }: { person?: Person
       notes: notes.trim() || undefined,
     }
     if (person) updatePerson(person.id, patch)
-    else addPerson(patch)
+    else {
+      const id = addPerson(patch)
+      if (canInvite) onSaved?.(id)     // adding someone and sharing with them are one motion: the invite step opens next
+    }
     onClose()
   }
 
@@ -198,7 +227,7 @@ function PersonModal({ person, links, initialTitle, onClose }: { person?: Person
       editable ? (
         <>
           <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-          <button onClick={handleSave} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">Save</button>
+          <button onClick={handleSave} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">{person ? 'Save' : canInvite ? 'Add, then invite →' : 'Add'}</button>
         </>
       ) : (
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Close</button>

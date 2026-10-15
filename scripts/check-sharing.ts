@@ -1,6 +1,6 @@
 // Checks the Sharing list for one artist.  Run with:  npx tsx scripts/check-sharing.ts
 import assert from 'node:assert/strict'
-import { POINT_PERSON_WARNING, addablePeople, buildSharingRows, describeRow, levelChangeWarning, levelLabel, pointPeopleCount, removalWarning, type SharingGrant } from '../src/lib/sharing'
+import { POINT_PERSON_WARNING, STATUS_LABEL, addablePeople, personStatus, buildSharingRows, describeRow, levelChangeWarning, levelLabel, pointPeopleCount, removalWarning, type SharingGrant } from '../src/lib/sharing'
 import type { WorkspacePerson } from '../src/types'
 
 const person = (id: string, label: string, role: WorkspacePerson['role'], allClients = false): WorkspacePerson =>
@@ -82,5 +82,17 @@ assert.equal(removalWarning({ ...rm, ...mgr, alsoCompanyWide: false }), 'Dana wi
 assert.match(removalWarning({ ...rm, ...mgr, alsoCompanyWide: true }), /can still open every artist/)         // company-wide access stays, and it says so
 assert.match(removalWarning({ ...rm, ...me, alsoCompanyWide: false }), /lose all access/)
 assert.match(removalWarning({ ...rm, ...me, alsoCompanyWide: true }), /keep the company-wide access/)
+
+// where a person from the Team page stands: no login, waiting, has access, or a login not shared with this artist
+const login = (personId: string | undefined, extra: Partial<WorkspacePerson> = {}): WorkspacePerson => ({ ...person('m' + personId, 'L', 'team'), personId, ...extra })
+assert.equal(personStatus('p1', [], 'a'), 'no-login')
+assert.equal(personStatus('p1', [login('other', { clientIds: ['a'] })], 'a'), 'no-login')              // someone else's login does not count
+assert.equal(personStatus('p1', [login('p1', { invited: true, clientIds: ['a'] })], 'a'), 'waiting')  // never signed in yet
+assert.equal(personStatus('p1', [login('p1', { clientIds: ['a'] })], 'a'), 'has-access')
+assert.equal(personStatus('p1', [login('p1', { allClients: true })], 'a'), 'has-access')               // company-wide access covers every artist
+assert.equal(personStatus('p1', [login('p1', { role: 'manager' })], 'a'), 'has-access')
+assert.equal(personStatus('p1', [login('p1', { clientIds: ['b'] })], 'a'), 'not-shared')               // has a login, but for another artist
+assert.equal(STATUS_LABEL['no-login'], 'No login yet')
+assert.equal(STATUS_LABEL.waiting, 'Invited, waiting to accept')
 
 console.log('sharing: all checks passed')

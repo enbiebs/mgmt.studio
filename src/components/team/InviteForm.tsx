@@ -10,7 +10,6 @@ import { inputClass } from '@/components/ui/Modal'
 import { ADMIN_KEY, cyclePage, levelsForRole, overallLevel, presetByKey, setAllPages, summarize, type PageLevels, type SectionKey } from '@/lib/access-presets'
 import { inviteIsEmpty, loginTypeFor, type InviteArtistAccess } from '@/lib/invite-access'
 import { upsertPerson } from '@/lib/db'
-import { MAX_TITLE_CHARS, TITLE_SUGGESTIONS, cleanTitle } from '@/lib/team-roles'
 import type { Person } from '@/types'
 import { RoleMenu } from './RoleMenu'
 import { PagesPanel } from './PagesPanel'
@@ -18,8 +17,8 @@ import { PagesPanel } from './PagesPanel'
 const LABEL = 'mb-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-500'
 
 export function InviteForm({ person, defaultClientId, onSent }: {
-  /** Someone already in the directory (their card); leave out to invite a brand-new person. */
-  person?: Person
+  /** The team member being invited: add them to the team first, then invite them. */
+  person: Person
   defaultClientId: string
   onSent?: () => void
 }) {
@@ -27,9 +26,7 @@ export function InviteForm({ person, defaultClientId, onSent }: {
   const artists = useMemo(() => clients.filter(c => !c.isDemo), [clients])
   const afterAccessChange = useStore(s => s.afterAccessChange)
 
-  const [name, setName] = useState(person?.name ?? '')
-  const [email, setEmail] = useState(person?.email ?? '')
-  const [title, setTitle] = useState('')
+  const [email, setEmail] = useState(person.email ?? '')
   const [roleKey, setRoleKey] = useState('')
   const [levels, setLevels] = useState<PageLevels>({})
   const [pointPerson, setPointPerson] = useState(false)
@@ -62,7 +59,7 @@ export function InviteForm({ person, defaultClientId, onSent }: {
     levels: Object.fromEntries(Object.entries(levels).filter(([, l]) => l === 'view' || l === 'edit')) as InviteArtistAccess['levels'],
   }))
   const emailOk = /^\S+@\S+\.\S+$/.test(email.trim())
-  const ready = emailOk && (!!person || name.trim().length > 0) && roleKey !== '' && chosen.length > 0 && !inviteIsEmpty(access)
+  const ready = emailOk && roleKey !== '' && chosen.length > 0 && !inviteIsEmpty(access)
   const roleName = presetByKey(roleKey)?.label
 
   async function send() {
@@ -70,23 +67,17 @@ export function InviteForm({ person, defaultClientId, onSent }: {
     setBusy(true); setError(''); setDone('')
     try {
       const store = useStore.getState()
-      let personId = person?.id
-      if (!personId) {
-        // a brand-new person gets a card in the directory first, saved before the server looks for it
-        personId = store.addPerson({ name: name.trim(), email: email.trim(), title: cleanTitle(title) })
-        const created = store.getClient(defaultClientId)?.people.find(p => p.id === personId)
-        if (created) await upsertPerson(created, defaultClientId)
-      } else if (email.trim() !== (person?.email ?? '')) {
-        store.updatePerson(personId, { email: email.trim() })
-      }
+      if (email.trim() !== (person.email ?? '')) store.updatePerson(person.id, { email: email.trim() })
+      // make sure the team member's card is saved before the server looks for it
+      const current = store.getClient(defaultClientId)?.people.find(p => p.id === person.id)
+      if (current) await upsertPerson(current, defaultClientId)
       const res = await fetch('/api/team/invite', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), role: loginTypeFor(roleKey), personId, access }),
+        body: JSON.stringify({ email: email.trim(), role: loginTypeFor(roleKey), personId: person.id, access }),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error ?? 'Could not send that invitation')
       setDone(json.warning ?? `Invitation sent to ${email.trim()}. Their access is already set up and starts when they accept.`)
-      if (!person) { setName(''); setEmail(''); setTitle(''); setRoleKey(''); setLevels({}); setPointPerson(false); setChosen(artists.some(a => a.id === defaultClientId) ? [defaultClientId] : []) }
       await afterAccessChange()
       onSent?.()
     } catch (e) {
@@ -98,32 +89,10 @@ export function InviteForm({ person, defaultClientId, onSent }: {
 
   return (
     <div className="space-y-4">
-      {!person && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label className="block">
-            <span className={LABEL}>Name</span>
-            <input className={inputClass} value={name} onChange={e => setName(e.target.value)} placeholder="Full name" autoComplete="off" />
-          </label>
-          <label className="block">
-            <span className={LABEL}>Email</span>
-            <input className={inputClass} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="name@company.com" autoComplete="off" />
-          </label>
-          <label className="block sm:col-span-2">
-            <span className={LABEL}>Title / role (optional, type anything)</span>
-            <input
-              className={inputClass} list="invite-title-suggestions" value={title} onChange={e => setTitle(e.target.value)}
-              placeholder="e.g. Tour Manager, Stylist" maxLength={MAX_TITLE_CHARS} autoComplete="off"
-            />
-            <datalist id="invite-title-suggestions">{TITLE_SUGGESTIONS.map(t => <option key={t} value={t} />)}</datalist>
-          </label>
-        </div>
-      )}
-      {person && (
-        <label className="block">
-          <span className={LABEL}>Email to invite</span>
-          <input className={inputClass} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="name@company.com" />
-        </label>
-      )}
+      <label className="block">
+        <span className={LABEL}>Email to invite</span>
+        <input className={inputClass} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="name@company.com" />
+      </label>
 
       <div>
         <div className={LABEL}>1. Role</div>

@@ -85,3 +85,20 @@ export function removalWarning(o: { label: string; artist: string; isMe: boolean
     ? 'You will lose all access to this artist, including the ability to manage sharing.'
     : `${o.label} will no longer be able to open ${o.artist}.`
 }
+
+export type PersonStatus = 'no-login' | 'waiting' | 'has-access' | 'not-shared'
+
+/** Where a person from the Team page stands for this artist: no login yet, invited and waiting, has access, or has a login that is not shared with this artist. */
+export function personStatus(personId: string, logins: WorkspacePerson[], clientId: string): PersonStatus {
+  const login = logins.find(l => l.personId === personId)
+  if (!login) return 'no-login'
+  if (login.invited) return 'waiting'
+  return login.role === 'manager' || login.allClients || login.clientIds.includes(clientId) ? 'has-access' : 'not-shared'
+}
+
+export const STATUS_LABEL: Record<PersonStatus, string> = {
+  'no-login': 'No login yet',
+  waiting: 'Invited, waiting to accept',
+  'has-access': 'Has access',
+  'not-shared': 'Has a login, not shared with this artist',
+}
