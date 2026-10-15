@@ -21,7 +21,7 @@ import { useStore } from '@/lib/store'
 import type { ProjectType } from '@/types'
 import { initials, fmt, today as localToday } from '@/lib/utils'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
-import { STATUS_CONFIG, STAKEHOLDER_TOOLTIPS } from '@/components/manager/ProjectsView'
+import { STATUS_CONFIG } from '@/components/manager/ProjectsView'
 import { OfferSheetsCard } from '@/components/artist/OfferSheets'
 import { analyticsHasData } from '@/lib/unfinished'
 import { ARTIST_SIDE_NAME } from '@/lib/brand'
@@ -386,10 +386,8 @@ export function ArtistView() {
                       <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${sc.bg}`}>
                         {sc.label}
                       </span>
-                      {project.assignee && (
-                        <span className="text-[11px] text-gray-400" title={STAKEHOLDER_TOOLTIPS[project.assignee]}>
-                          → {project.assignee}
-                        </span>
+                      {project.assigneeId && (
+                        <span className="text-[11px] text-gray-400">→ With the team</span>
                       )}
                       {project.dueDate && (
                         <span className="text-[11px] text-gray-400 ml-auto">Due {project.dueDate}</span>

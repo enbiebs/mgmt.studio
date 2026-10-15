@@ -13,6 +13,7 @@ import { BillUploadModal } from './BillUpload'
 import { VendorsPanel } from './VendorsPanel'
 import { CostAssignment, type CostAssignmentValue } from './CostAssignment'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
+import { ItemTodos } from '@/components/dashboard/ItemTodos'
 import { CAT_LABELS } from '@/lib/expense-categories'
 import { VENDOR_FIELD_LABEL } from '@/lib/vendors'
 import { today, today as localToday } from '@/lib/utils'
@@ -269,6 +270,7 @@ export function PaymentsView() {
                     {manual && (
                       <span className="inline-flex items-center gap-3">
                         <button onClick={() => setAssigning(e)} className="text-xs text-purple-500 hover:text-purple-600">Assign</button>
+                        <ItemTodos link={{ type: 'expense', id: e.id }} suggest={`Pay ${e.vendor || e.description || 'this bill'}`} />
                         <ItemAccessButton itemType="expense" itemId={e.id} />
                         <button onClick={() => deleteExpense(e.id)} className="text-xs text-red-400 hover:text-red-500">Delete</button>
                       </span>

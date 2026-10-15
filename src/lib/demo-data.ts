@@ -122,10 +122,10 @@ export const DEMO_DATA: AppData = {
       legal:      MASCOLO_LEGAL,
       finance:    MASCOLO_FINANCE,
       projects: [
-        { id: 'mp1', title: 'Mascolo 2026 album rollout', type: 'release',    status: 'in-progress', assignee: 'PH', dueDate: '2026-09-01', createdAt: '2026-07-01', fromArtist: false },
-        { id: 'mp2', title: 'Brooklyn Mirage advancing',  type: 'show',       status: 'in-progress', assignee: 'MS', dueDate: '2026-09-05', createdAt: '2026-07-10', fromArtist: false },
-        { id: 'mp3', title: 'Brand deal — Red Bull',      type: 'brand-deal', status: 'review',      assignee: 'GC', dueDate: '2026-08-15', createdAt: '2026-07-15', fromArtist: false },
-        { id: 'mp4', title: 'Can I get a press release?', type: 'content',    status: 'submitted',   assignee: undefined, dueDate: undefined, createdAt: '2026-07-20', fromArtist: true  },
+        { id: 'mp1', title: 'Mascolo 2026 album rollout', type: 'release',    status: 'in-progress', dueDate: '2026-09-01', createdAt: '2026-07-01', fromArtist: false },
+        { id: 'mp2', title: 'Brooklyn Mirage advancing',  type: 'show',       status: 'in-progress', dueDate: '2026-09-05', createdAt: '2026-07-10', fromArtist: false },
+        { id: 'mp3', title: 'Brand deal — Red Bull',      type: 'brand-deal', status: 'review',      dueDate: '2026-08-15', createdAt: '2026-07-15', fromArtist: false },
+        { id: 'mp4', title: 'Can I get a press release?', type: 'content',    status: 'submitted',   dueDate: undefined, createdAt: '2026-07-20', fromArtist: true  },
       ],
       artistTodos: [
         { id: 'mt1', title: 'Approve mix for "Long Time"',   done: false, dueDate: '2026-08-05', createdAt: '2026-07-25' },
@@ -194,9 +194,9 @@ export const DEMO_DATA: AppData = {
       legal:      NIMINO_LEGAL,
       finance:    NIMINO_FINANCE,
       projects: [
-        { id: 'np1', title: 'Debut EP release plan',     type: 'release', status: 'in-progress', assignee: 'EB', dueDate: '2026-08-10', createdAt: '2026-07-01', fromArtist: false },
-        { id: 'np2', title: 'London show advancing',     type: 'show',    status: 'review',      assignee: 'MS', dueDate: '2026-08-10', createdAt: '2026-07-10', fromArtist: false },
-        { id: 'np3', title: 'Need press photos ASAP',    type: 'content', status: 'submitted',   assignee: undefined, dueDate: undefined, createdAt: '2026-07-22', fromArtist: true  },
+        { id: 'np1', title: 'Debut EP release plan',     type: 'release', status: 'in-progress', dueDate: '2026-08-10', createdAt: '2026-07-01', fromArtist: false },
+        { id: 'np2', title: 'London show advancing',     type: 'show',    status: 'review',      dueDate: '2026-08-10', createdAt: '2026-07-10', fromArtist: false },
+        { id: 'np3', title: 'Need press photos ASAP',    type: 'content', status: 'submitted',   dueDate: undefined, createdAt: '2026-07-22', fromArtist: true  },
       ],
       artistTodos: [
         { id: 'nt1', title: 'Approve Overgrown master',    done: false, dueDate: '2026-08-06', createdAt: '2026-07-25' },
@@ -258,8 +258,8 @@ export const DEMO_DATA: AppData = {
       legal:      SIERRA_LEGAL,
       finance:    SIERRA_FINANCE,
       projects: [
-        { id: 'sp1', title: 'Golden Hour rollout',     type: 'release', status: 'done',      assignee: 'PH', dueDate: '2026-08-04', createdAt: '2026-07-01', fromArtist: false },
-        { id: 'sp2', title: 'Festival booking push',   type: 'show',    status: 'submitted', assignee: undefined, dueDate: undefined, createdAt: '2026-07-28', fromArtist: true  },
+        { id: 'sp1', title: 'Golden Hour rollout',     type: 'release', status: 'done',      dueDate: '2026-08-04', createdAt: '2026-07-01', fromArtist: false },
+        { id: 'sp2', title: 'Festival booking push',   type: 'show',    status: 'submitted', dueDate: undefined, createdAt: '2026-07-28', fromArtist: true  },
       ],
       artistTodos: [
         { id: 'st1', title: 'Approve Wildfire cover art', done: false, dueDate: '2026-08-07', createdAt: '2026-07-25' },

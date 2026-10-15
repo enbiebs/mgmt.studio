@@ -9,7 +9,7 @@
 //  Both are put into the same groups by date: Overdue, Today, This week, Later, No date.
 // ──────────────────────────────────────────────────────────
 
-import type { Client, MainSection, Task, TaskLinkType, WorkspacePerson } from '@/types'
+import type { Client, MainSection, Project, Task, TaskLinkType, WorkspacePerson } from '@/types'
 import type { InboxItem } from '@/lib/inbox'
 import { addDays, fromDateStr, toDateStr } from '@/lib/utils'
 
@@ -49,6 +49,7 @@ export function autoBucket(item: InboxItem, today: string): Bucket {
 
 export type TodoRow =
   | { kind: 'task'; key: string; bucket: Bucket; task: Task; clientId: string; clientName: string }
+  | { kind: 'project'; key: string; bucket: Bucket; project: Project; clientId: string; clientName: string }
   | { kind: 'auto'; key: string; bucket: Bucket; item: InboxItem }
 
 export interface TodayInput {
@@ -73,6 +74,20 @@ export function isMine(task: Task, me: string | null): boolean {
   return task.assigneeId === me || (!task.assigneeId && task.createdBy === me)
 }
 
+/**
+ * Whether an unfinished project belongs on this person's Today, and which group it goes in.
+ * A project given to someone shows for them (and under "Everyone"). A request the artist submitted that
+ * nobody has picked up yet shows for everyone, so it can't be missed; other unassigned projects show
+ * only under "Everyone".
+ */
+export function projectBucket(p: Project, me: string | null, scope: 'mine' | 'everyone', today: string): Bucket | null {
+  if (p.status === 'done') return null
+  const unclaimedRequest = !p.assigneeId && p.fromArtist && p.status === 'submitted'
+  if (unclaimedRequest) return p.dueDate && p.dueDate < today ? 'overdue' : 'today'
+  if (scope === 'mine' && (!me || p.assigneeId !== me)) return null
+  return bucketOf(p.dueDate, today)
+}
+
 export function buildToday({ clients, inbox, me, scope, today }: TodayInput): TodayList {
   const keep = (t: Task) => scope === 'everyone' || isMine(t, me)
   const rows: TodoRow[] = []
@@ -89,13 +104,22 @@ export function buildToday({ clients, inbox, me, scope, today }: TodayInput): To
       rows.push({ kind: 'task', key: `task:${t.id}`, bucket: bucketOf(t.dueDate, today), task: t, clientId: c.id, clientName: c.name })
     }
   }
+  for (const c of clients) {
+    for (const p of c.projects ?? []) {
+      // A demo artist's sample projects never raise real reminders; only one you chose to take shows.
+      if (c.isDemo && (!me || p.assigneeId !== me)) continue
+      const bucket = projectBucket(p, me, scope, today)
+      if (bucket) rows.push({ kind: 'project', key: `project:${p.id}`, bucket, project: p, clientId: c.id, clientName: c.name })
+    }
+  }
   for (const item of inbox) rows.push({ kind: 'auto', key: `auto:${item.key}`, bucket: autoBucket(item, today), item })
 
-  const dateOf = (r: TodoRow) => (r.kind === 'task' ? r.task.dueDate : r.item.date) ?? '9999-12-31'
-  const titleOf = (r: TodoRow) => (r.kind === 'task' ? r.task.title : r.item.title)
+  const dateOf = (r: TodoRow) => (r.kind === 'task' ? r.task.dueDate : r.kind === 'project' ? r.project.dueDate : r.item.date) ?? '9999-12-31'
+  const titleOf = (r: TodoRow) => (r.kind === 'task' ? r.task.title : r.kind === 'project' ? r.project.title : r.item.title)
+  const order = { auto: 0, project: 1, task: 2 }
   rows.sort((a, b) =>
     dateOf(a).localeCompare(dateOf(b)) ||
-    (a.kind === b.kind ? 0 : a.kind === 'auto' ? -1 : 1) ||
+    order[a.kind] - order[b.kind] ||
     titleOf(a).localeCompare(titleOf(b)))
   done.sort((a, b) => (b.task.doneAt ?? '').localeCompare(a.task.doneAt ?? ''))
 
@@ -117,6 +141,20 @@ export function peopleFor(people: WorkspacePerson[], clientId: string, me: strin
 export function taskSection(link: Task['link']): MainSection {
   if (!link) return 'projects'
   return taskDestination(link).section
+}
+
+/** What a to-do points at, in words ("Tresor · Berlin", "INV-007", "Press photos"), or nothing if it no longer exists. */
+export function describeLink(client: Client, link: NonNullable<Task['link']>): string | undefined {
+  const place = (venue?: string, city?: string) => [venue, city].filter(Boolean).join(' · ') || undefined
+  switch (link.type) {
+    case 'show': { const x = client.tour?.shows.find(s => s.id === link.id); return x && place(x.venue, x.city) }
+    case 'offer': { const x = client.agentData?.offers.find(o => o.id === link.id); return x && place(x.venue, x.city) }
+    case 'invoice': { const x = client.finance?.invoices.find(i => i.id === link.id); return x && `${x.number} · ${x.to}` }
+    case 'expense': { const x = client.finance?.expenses.find(e => e.id === link.id); return x && (x.vendor || x.description) }
+    case 'contract': return client.legal?.contracts.find(c => c.id === link.id)?.title
+    case 'project': return client.projects?.find(p => p.id === link.id)?.title
+    case 'song': return client.songs?.albums.flatMap(a => a.tracks).find(t => t.id === link.id)?.title
+  }
 }
 
 /** Where "Open" takes you for a to-do that points at something. */

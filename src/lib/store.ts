@@ -16,7 +16,7 @@ import { create } from 'zustand'
 import type {
   AppData, Client, Track, Show, ShowStatus, Post, Album,
   MainSection, SongsSub, ContentSub, BizSub, TourSub, Stage, AnalyticsSub, LegalSub,
-  UserRole, ProjectStatus, ProjectType, Stakeholder, Project, ArtistTodo,
+  UserRole, ProjectStatus, ProjectType, Project, ArtistTodo,
   TrackLabelCopy, ReleaseLabelCopy, ChecklistItemKey, ChecklistItem, TrackPriority,
   GuestListEntry, GuestListCategory, ReleaseStakeholder, StakeholderRole,
   ArtistAccount, ArtistProfile, CrewMember, ShowAdvance, TravelItem, Person, PersonActivity, Currency,
@@ -471,9 +471,9 @@ interface StudioState {
   dismissDeposit: (depositId: string) => void
 
   // ── Projects (manager-side) ──
-  addProject: (title: string, type: ProjectType, assignee?: Stakeholder, dueDate?: string, fromArtist?: boolean) => void
+  addProject: (title: string, type: ProjectType, assigneeId?: string, dueDate?: string, fromArtist?: boolean) => void
   updateProjectStatus: (projectId: string, status: ProjectStatus) => void
-  assignProject: (projectId: string, assignee: Stakeholder) => void
+  assignProject: (projectId: string, assigneeId: string | null) => void
   deleteProject: (projectId: string) => void
 
   // ── Artist todos ──
@@ -2975,13 +2975,13 @@ export const useStore = create<StudioState>((set, get) => ({
   },
 
   // ── Projects ──
-  addProject: (title, type, assignee, dueDate, fromArtist = false) => {
+  addProject: (title, type, assigneeId, dueDate, fromArtist = false) => {
     const { data, clientId } = get()
     const newProject: Project = {
       id: 'proj-' + uid(),
       title, type,
       status: fromArtist ? 'submitted' : 'in-progress',
-      assignee, dueDate,
+      assigneeId, dueDate,
       createdAt: localToday(),
       fromArtist,
     }
@@ -2994,7 +2994,11 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     if (clientId) {
-      upsertProject(newProject, clientId).catch(console.error)
+      upsertProject(newProject, clientId).catch(e => {
+        console.error(e)
+        set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, projects: (c.projects ?? []).filter(p => p.id !== newProject.id) } : c) } })
+        notify("Couldn't save that project. You may not have access to add one for this artist.")
+      })
       pushToGoogleCalendar(clientId, 'project', newProject)
     }
   },
@@ -3018,21 +3022,21 @@ export const useStore = create<StudioState>((set, get) => ({
     }
   },
 
-  assignProject: (projectId, assignee) => {
-    const { data, clientId } = get()
-    const updated = {
-      clients: data.clients.map(c => {
-        if (c.id !== clientId) return c
-        return { ...c, projects: (c.projects ?? []).map(p => p.id === projectId ? { ...p, assignee } : p) }
-      }),
-    }
-    set({ data: updated })
-    saveData(updated)
-    if (clientId) {
-      const client = updated.clients.find(c => c.id === clientId)
-      const proj = client?.projects?.find(p => p.id === projectId)
-      if (proj) upsertProject(proj, clientId).catch(console.error)
-    }
+  assignProject: (projectId, assigneeId) => {
+    // Works from anywhere (Today lists projects of every artist), so find whose project it is.
+    const owner = get().data.clients.find(c => c.projects?.some(p => p.id === projectId))
+    const before = owner?.projects?.find(p => p.id === projectId)
+    if (!owner || !before) return
+    const clientId = owner.id
+    const put = (p: Project) => set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, projects: (c.projects ?? []).map(x => x.id === p.id ? p : x) } : c) } })
+    const after: Project = { ...before, assigneeId: assigneeId || undefined }
+    put(after)
+    saveData(get().data)
+    upsertProject(after, clientId).catch(e => {
+      console.error(e)
+      put(before)
+      notify("Couldn't give that project to them. They may not have access to this artist.")
+    })
   },
 
   deleteProject: (projectId) => {

@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
+import { ItemTodos } from '@/components/dashboard/ItemTodos'
 import { Modal, FormField, inputClass } from '@/components/ui/Modal'
 import { uid } from '@/lib/utils'
 import { extractPlaceholders, fillClauses, guessDefault, downloadRtf } from '@/lib/legal-doc-gen'
@@ -189,7 +190,10 @@ function ContractCard({ contract: c }: { contract: Contract }) {
         </div>
       )}
       {c.notes && <div className="mt-2 text-[10px] text-gray-400 italic line-clamp-2">{c.notes}</div>}
-      <div className="mt-2"><ItemAccessButton itemType="contract" itemId={c.id} /></div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <ItemTodos link={{ type: 'contract', id: c.id }} suggest={`Follow up on ${c.title}`} />
+        <ItemAccessButton itemType="contract" itemId={c.id} />
+      </div>
     </div>
   )
 }

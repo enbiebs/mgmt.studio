@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
+import { ItemTodos } from '@/components/dashboard/ItemTodos'
 import { CalendarImportModal } from '@/components/tour/CalendarImportModal'
 import { ShowProgressPanel } from '@/components/tour/ShowProgressPanel'
 import { ShowFolderLink } from '@/components/tour/ShowFolderLink'
@@ -308,6 +309,7 @@ export function TourView() {
                 </button>
               ))}
               <ShowFolderLink show={selected} canEdit={editable} />
+              <ItemTodos link={{ type: 'show', id: selected.id }} suggest={`Follow up: ${selected.venue || 'the show'}`} />
               <ItemAccessButton itemType="show" itemId={selected.id} />
             </div>
             {editable && (
