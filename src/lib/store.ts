@@ -22,7 +22,7 @@ import type {
   ArtistAccount, ArtistProfile, CrewMember, ShowAdvance, TravelItem, Person, PersonActivity, Currency,
   CatalogWork, RegStatus, Invoice, InvoiceLineItem, InvoiceStatus, RevenueStream,
   LegalTemplate, LegalTemplateClause, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
-  ReleaseType, Venue, TourOffer, Expense, Vendor, Run, Budget, BudgetBucket, CrewRate, FinanceSettings,
+  ReleaseType, Venue, TourOffer, Expense, Vendor, Run, Budget, BudgetBucket, BudgetLine, CrewRate, FinanceSettings,
   OfferSheet, OfferSheetDetail, OfferTerms, Settlement, SettlementDraft, SettlementPayment,
   Task, TaskLinkType, TaskSource, WorkspacePerson,
 } from '@/types'
@@ -35,7 +35,7 @@ import { EMPTY_FINANCE } from '@/lib/finance-demo'
 import { EMPTY_TOUR } from '@/lib/advance-demo'
 import { notify } from '@/lib/notify'
 import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE, today as localToday } from '@/lib/utils'
-import { buildNewBudget, snapshotOf, newLine, frozenRates, makeConverter, settlementEarned, BUCKET_LABEL, type FxRates } from '@/lib/budget'
+import { buildNewBudget, snapshotOf, newLine, frozenRates, makeConverter, settlementEarned, addMissingCrewFees, BUCKET_LABEL, type FxRates } from '@/lib/budget'
 import { balanceOf } from '@/lib/settlement-math'
 import type { InboxChoice } from '@/lib/inbox'
 import { SHOW_UNFINISHED_KEY } from '@/lib/unfinished'
@@ -419,6 +419,8 @@ interface StudioState {
   addBudget: (target: { showId?: string; offerId?: string }) => string | null
   updateBudget: (budgetId: string, patch: Partial<Pick<Budget, 'name' | 'currency' | 'lines' | 'commissions' | 'notes'>>) => void
   deleteBudget: (budgetId: string) => void
+  /** Adds a touring crew member's saved fee to the artist's draft budgets for shows that haven't happened (with an Undo). */
+  addCrewFeesToDrafts: (crewMemberId: string) => void
   setSelectedBudget: (id: string | null) => void
   loadFxRates: () => Promise<void>
 
@@ -1480,6 +1482,7 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
+    if (rate?.toursWithArtist) get().addCrewFeesToDrafts(member.id)
     // The pay row points at the crew row (foreign key), so the crew member goes first.
     if (workspaceId && clientId) {
       upsertCrewMember(member, clientId)
@@ -2441,6 +2444,7 @@ export const useStore = create<StudioState>((set, get) => ({
       }),
     }
     set({ data: updated }); saveData(updated)
+    if (rate.toursWithArtist) get().addCrewFeesToDrafts(rate.crewMemberId)
     if (workspaceId && clientId) upsertCrewRate(rate, clientId).catch(console.error)
   },
 
@@ -2486,6 +2490,27 @@ export const useStore = create<StudioState>((set, get) => ({
     const updated = { clients: data.clients.map(c => c.id !== clientId ? c : { ...c, finance: { ...c.finance, budgets: (c.finance.budgets ?? []).filter(b => b.id !== budgetId) } }) }
     set({ data: updated, selectedBudgetId: selectedBudgetId === budgetId ? null : selectedBudgetId }); saveData(updated)
     dbDeleteBudget(budgetId).catch(console.error)
+  },
+
+  addCrewFeesToDrafts: (crewMemberId) => {
+    const { data, clientId } = get()
+    const client = data.clients.find(c => c.id === clientId)
+    if (!client) return
+    const day = localToday()
+    const changed: { id: string; before: BudgetLine[] }[] = []
+    for (const b of client.finance.budgets ?? []) {
+      const r = addMissingCrewFees(client, b, day, crewMemberId)
+      if (!r) continue
+      changed.push({ id: b.id, before: b.lines })
+      get().updateBudget(b.id, { lines: r.lines })
+    }
+    if (changed.length === 0) return
+    const member = client.tour.crew.find(m => m.id === crewMemberId)
+    const name = client.people.find(p => p.id === member?.personId)?.name ?? 'Their'
+    notify(
+      `Added ${name}'s fee to ${changed.length} draft budget${changed.length === 1 ? '' : 's'}`,
+      { label: 'Undo', run: () => changed.forEach(c => get().updateBudget(c.id, { lines: c.before })) },
+    )
   },
 
   setSelectedBudget: (id) => set({ selectedBudgetId: id }),

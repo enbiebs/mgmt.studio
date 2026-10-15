@@ -208,7 +208,7 @@ function CrewMemberModal({ member, onClose }: { member?: CrewMember; onClose: ()
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" className="rounded" checked={pay.toursWithArtist} disabled={!editable}
               onChange={e => setPay(p => ({ ...p, toursWithArtist: e.target.checked }))} />
-            Tours with the artist — add to every new budget automatically
+            Tours with the artist — add their fee to every new budget, and to draft budgets for upcoming shows
           </label>
           <FormField label="Paid">
             <select className={selectClass} value={pay.rateUnit} disabled={!editable} onChange={e => setPay(p => ({ ...p, rateUnit: e.target.value as 'day' | 'show' }))}>
