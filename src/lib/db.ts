@@ -34,7 +34,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
   // Fetch clients
   const { data: clientRows, error } = await supabase
     .from('clients')
-    .select('id, name, genre, color, calendar_token, demo_owner, setup_skipped, analytics')
+    .select('id, name, genre, color, calendar_token, demo_owner, setup_skipped, analytics, photo_path, logo_path')
     .eq('workspace_id', workspaceId)
 
   if (error) throw error
@@ -656,6 +656,8 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       genre: c.genre,
       color: c.color,
       calendarToken: c.calendar_token ?? undefined,
+      photoPath: c.photo_path ?? undefined,
+      logoPath: c.logo_path ?? undefined,
       isDemo: c.demo_owner ? true : undefined,
       setupSkipped: Array.isArray(c.setup_skipped) && c.setup_skipped.length > 0 ? c.setup_skipped : undefined,
       people: cPeople,

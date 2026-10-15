@@ -2,12 +2,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import { Badge } from '@/components/ui/Badge'
-import { fmt, initials, today } from '@/lib/utils'
+import { fmt, today } from '@/lib/utils'
 import { getCalendarEvents, canSeeCalendarDomain } from '@/lib/calendar'
 import { useInbox } from '@/lib/useInbox'
 import { useSetup } from '@/lib/useSetup'
 import type { CalendarEventDomain } from '@/lib/calendar'
 import type { Client } from '@/types'
+import { ArtistAvatar } from '@/components/ui/ArtistAvatar'
 
 export function ClientCard({ client: c }: { client: Client }) {
   // Client create/edit/delete is manager-only structurally (clients RLS
@@ -88,12 +89,7 @@ export function ClientCard({ client: c }: { client: Client }) {
 
       {/* ── Header ── */}
       <div className="flex items-center gap-3 mb-5">
-        <div
-          className="w-11 h-11 rounded-full flex items-center justify-center text-white text-base font-bold flex-shrink-0"
-          style={{ background: c.color }}
-        >
-          {initials(c.name)}
-        </div>
+        <ArtistAvatar client={c} className="w-11 h-11" textClass="text-base" />
         <div>
           <div className="text-[17px] font-semibold leading-tight">{c.name}</div>
           <div className="text-xs text-gray-400 mt-0.5">

@@ -1,11 +1,11 @@
 'use client'
 import { useStore } from '@/lib/store'
 import { useInbox } from '@/lib/useInbox'
-import { initials } from '@/lib/utils'
 import { PRODUCT_NAME } from '@/lib/brand'
 import { BrandMark, Icon } from '@/components/ui/Icon'
 import { ClientSwitcher } from './ClientSwitcher'
 import { useVisibleNav } from './nav'
+import { ArtistAvatar } from '@/components/ui/ArtistAvatar'
 
 const ITEM = 'flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded-lg text-sm font-medium text-left transition-colors'
 const ITEM_ON = 'bg-canvas text-gray-900 shadow-[0_0_0_1px_var(--color-gray-100)]'
@@ -68,9 +68,7 @@ export function Rail() {
             <div className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Artists</div>
             {roster.map(c => (
               <button key={c.id} onClick={() => openClient(c.id)} className={`${ITEM} ${ITEM_OFF}`}>
-                <span className="w-[18px] h-[18px] rounded-full flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0" style={{ background: c.color }}>
-                  {initials(c.name)}
-                </span>
+                <ArtistAvatar client={c} className="w-[18px] h-[18px]" textClass="text-[8px]" />
                 <span className="truncate">{c.name}</span>
                 {c.isDemo && <span className="ml-auto text-[9px] font-semibold uppercase text-amber-700">Demo</span>}
               </button>

@@ -1,9 +1,10 @@
 'use client'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useStore } from '@/lib/store'
-import { initials, today } from '@/lib/utils'
+import { today } from '@/lib/utils'
 import { Icon } from '@/components/ui/Icon'
 import { useDismiss } from './useDismiss'
+import { ArtistAvatar } from '@/components/ui/ArtistAvatar'
 
 /** Which artist you're working on, and a quick way to move to another. `rail` is the roomy card in the side rail; `compact` is the phone pill. */
 export function ClientSwitcher({ variant }: { variant: 'rail' | 'compact' }) {
@@ -43,12 +44,7 @@ export function ClientSwitcher({ variant }: { variant: 'rail' | 'compact' }) {
           ? 'flex items-center gap-2.5 w-full text-left p-2 rounded-xl border border-gray-100 bg-canvas hover:border-gray-200 transition-colors'
           : 'flex items-center gap-2 px-2.5 py-1 rounded-full bg-gray-50 border border-gray-200 text-sm font-medium hover:bg-gray-100 transition-colors'}
       >
-        <span
-          className={`rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 ${rail ? 'w-8 h-8 text-[11px]' : 'w-5 h-5 text-[9px]'}`}
-          style={{ background: client.color }}
-        >
-          {initials(client.name)}
-        </span>
+        <ArtistAvatar client={client} className={rail ? 'w-8 h-8' : 'w-5 h-5'} textClass={rail ? 'text-[11px]' : 'text-[9px]'} />
         {rail ? (
           <>
             <span className="min-w-0 flex-1">

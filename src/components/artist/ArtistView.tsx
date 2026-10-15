@@ -19,12 +19,14 @@
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import type { ProjectType } from '@/types'
-import { initials, fmt, today as localToday } from '@/lib/utils'
+import { fmt, today as localToday } from '@/lib/utils'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { STATUS_CONFIG } from '@/components/manager/ProjectsView'
 import { OfferSheetsCard } from '@/components/artist/OfferSheets'
 import { analyticsHasData } from '@/lib/unfinished'
 import { ARTIST_SIDE_NAME } from '@/lib/brand'
+import { ArtistAvatar } from '@/components/ui/ArtistAvatar'
+import { BrandingCard } from '@/components/profile/BrandingCard'
 
 /** Compact number formatter for big at-a-glance stats: 1.8M, 220K, 940 */
 function fmtCompact(n: number): string {
@@ -115,18 +117,17 @@ export function ArtistView() {
       {/* Artist hero */}
       <div className="bg-canvas border-b border-gray-100 px-4 md:px-6 py-4 md:py-5">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-          <div
-            className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-lg font-bold flex-shrink-0"
-            style={{ background: client.color }}
-          >
-            {initials(client.name)}
-          </div>
+          <ArtistAvatar client={client} className="w-14 h-14" textClass="text-lg" rounded="rounded-2xl" />
           <div>
             <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">{ARTIST_SIDE_NAME}</div>
             <h1 className="font-serif text-2xl font-medium">{client.name}</h1>
             <p className="text-sm text-gray-400 mt-0.5">{client.genre}</p>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-4">
+            {client.logoPath && (
+              // eslint-disable-next-line @next/next/no-img-element -- a private, access-checked file behind a redirect
+              <img src={`/api/branding/file?clientId=${encodeURIComponent(client.id)}&kind=logo&v=${encodeURIComponent(client.logoPath)}`} alt={`${client.name} logo`} className="hidden sm:block h-10 max-w-[160px] object-contain" />
+            )}
             <button
               onClick={() => openModal('submit-request')}
               className="px-4 py-2 bg-accent text-white text-sm font-semibold rounded-xl hover:bg-accent-hover transition-colors"
@@ -138,6 +139,9 @@ export function ArtistView() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-3 md:p-6">
+
+        {/* ── Their photo and logo: what makes this page theirs ── */}
+        <div className="lg:col-span-2"><BrandingCard client={client} canEdit /></div>
 
         {/* ── Offers (only the ones the manager has sent an offer sheet for) ── */}
         <OfferSheetsCard />

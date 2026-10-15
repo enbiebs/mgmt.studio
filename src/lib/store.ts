@@ -422,6 +422,9 @@ interface StudioState {
   setSelectedBudget: (id: string | null) => void
   loadFxRates: () => Promise<void>
 
+  /** Remembers a changed photo or logo on screen (the files themselves are saved through /api/branding). */
+  setBranding: (clientId: string, kind: 'photo' | 'logo', path: string | null) => void
+
   // ── Inbox (Stage 5) ──
   markInboxDone: (key: string) => void
   snoozeInboxItem: (key: string, untilIso: string) => void
@@ -2499,6 +2502,9 @@ export const useStore = create<StudioState>((set, get) => ({
     } catch (e) { console.error(e) }
   },
 
+  setBranding: (clientId, kind, path) => {
+    set({ data: { clients: get().data.clients.map(c => c.id !== clientId ? c : { ...c, [kind === 'photo' ? 'photoPath' : 'logoPath']: path ?? undefined }) } })
+  },
   markInboxDone: (key) => {
     const before = get().inboxState
     set({ inboxState: { ...before, [key]: { state: 'done' } } })
