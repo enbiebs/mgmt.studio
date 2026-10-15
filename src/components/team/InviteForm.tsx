@@ -35,6 +35,8 @@ export function InviteForm({ person, defaultClientId, onSent }: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState('')
+  // set when the email already has a login in this company: a password link can go to them instead of an invitation
+  const [existingMember, setExistingMember] = useState('')
 
   function chooseRole(key: string) {
     setRoleKey(key); setError(''); setDone('')
@@ -64,7 +66,7 @@ export function InviteForm({ person, defaultClientId, onSent }: {
 
   async function send() {
     if (!ready || busy) return
-    setBusy(true); setError(''); setDone('')
+    setBusy(true); setError(''); setDone(''); setExistingMember('')
     try {
       const store = useStore.getState()
       if (email.trim() !== (person.email ?? '')) store.updatePerson(person.id, { email: email.trim() })
@@ -76,12 +78,34 @@ export function InviteForm({ person, defaultClientId, onSent }: {
         body: JSON.stringify({ email: email.trim(), role: loginTypeFor(roleKey), personId: person.id, access }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error ?? 'Could not send that invitation')
+      if (!res.ok) {
+        if (typeof json.existingMemberId === 'string') setExistingMember(json.existingMemberId)
+        throw new Error(json.error ?? 'Could not send that invitation')
+      }
       setDone(json.warning ?? `Invitation sent to ${email.trim()}. Their access is already set up and starts when they accept.`)
       await afterAccessChange()
       onSent?.()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not send that invitation')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function sendPasswordLink() {
+    if (!existingMember || busy) return
+    setBusy(true); setError('')
+    try {
+      const res = await fetch('/api/team/invite/resend', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memberId: existingMember }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error ?? 'Could not send that')
+      setExistingMember('')
+      setDone(`A link to set a password was sent to ${email.trim()}. If they cannot find it, ask them to check spam.`)
+      onSent?.()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not send that')
     } finally {
       setBusy(false)
     }
@@ -144,6 +168,14 @@ export function InviteForm({ person, defaultClientId, onSent }: {
         </button>
       </div>
       {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
+      {existingMember && (
+        <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <p>They are already on your team, so they do not need an invitation. If they could not get in, send them a link to set their password.</p>
+          <button onClick={() => void sendPasswordLink()} disabled={busy} className="mt-2 rounded-lg bg-accent px-2.5 py-1 font-medium text-white hover:bg-accent-hover disabled:opacity-50">
+            Send a password link
+          </button>
+        </div>
+      )}
       {done && <p role="status" className="rounded-lg bg-green-50 px-3 py-2 text-xs text-green-800">{done}</p>}
     </div>
   )
