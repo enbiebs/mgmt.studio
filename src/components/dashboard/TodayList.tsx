@@ -172,7 +172,7 @@ function ProjectRow({ project, clientId, clientName, me }: { project: Project; c
 function KeyDateRow({ keyDate: kd, me }: { keyDate: KeyDate; me: string | null }) {
   const hasAccess = useStore(s => s.hasAccess)
   const people = useStore(s => s.workspacePeople)
-  const mayTake = hasAccess('projects', kd.clientId, true) || hasAccess('tour', kd.clientId, true)
+  const mayTake = hasAccess('tour', kd.clientId, true)      // the to-do points at a show, so the database needs Tour edit access
   const late = kd.due < today()
 
   // Taking it makes a real to-do, given to that person, pointing at the show. The key stops it coming back.

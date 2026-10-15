@@ -48,7 +48,7 @@ import {
   loadWorkspaceData, getMyMembership, getGrantsForMember, getPreviewableMembers,
   loadItemAccess, upsertItemAccess, deleteItemAccess,
   loadInboxState, saveInboxChoice, clearInboxChoice,
-  upsertTask, deleteTaskRow, loadWorkspacePeople,
+  insertTask, saveTask, deleteTaskRow, loadWorkspacePeople,
   type AccessGrant, type PreviewMember,
   upsertClient, deleteClient as dbDeleteClient, setCalendarToken, saveSetupSkipped,
   upsertTrack, deleteTrack as dbDeleteTrack,
@@ -2531,10 +2531,13 @@ export const useStore = create<StudioState>((set, get) => ({
     const withTask = (list: Task[] | undefined) => [...(list ?? []), task]
     set({ data: { clients: data.clients.map(c => c.id === clientId ? { ...c, tasks: withTask(c.tasks) } : c) } })
     if (workspaceId) {
-      upsertTask(task, clientId).catch(e => {
+      insertTask(task, clientId).catch(e => {
         console.error(e)
         set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, tasks: (c.tasks ?? []).filter(t => t.id !== task.id) } : c) } })
-        notify("Couldn't save that to-do. You may not have access to add one for this artist.")
+        // 23505 = the same key date was just taken by someone else (the key is unique per artist)
+        notify(task.autoKey && (e as { code?: string })?.code === '23505'
+          ? 'Someone else just took that one.'
+          : "Couldn't save that to-do. You may not have access to add one for this artist.")
       })
     }
     return task.id
@@ -2562,7 +2565,7 @@ export const useStore = create<StudioState>((set, get) => ({
     const put = (t: Task) => set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, tasks: (c.tasks ?? []).map(x => x.id === t.id ? t : x) } : c) } })
     put(after)
     if (!get().workspaceId) return
-    upsertTask(after, clientId).catch(e => {
+    saveTask(after).catch(e => {
       console.error(e)
       put(before)
       notify("Couldn't save that change. You may not have access to change this to-do.")

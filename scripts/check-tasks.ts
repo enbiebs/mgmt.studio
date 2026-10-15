@@ -65,6 +65,11 @@ assert.ok(everyone.groups.find(g => g.bucket === 'today')!.rows.some(r => r.kind
 const sorted = buildToday({ clients: [client('c1', 'Alpha', [task('x', { assigneeId: ME, dueDate: '2026-10-12', title: 'x' })])], inbox: [auto('urgent', '2026-10-12'), auto('urgent', '2026-10-09')], me: ME, scope: 'mine', today: TODAY })
 assert.deepEqual(sorted.groups[0].rows.map(r => r.kind + ':' + (r.kind === 'task' ? r.task.id : r.kind === 'project' ? r.project.id : r.kind === 'keydate' ? r.keyDate.key : r.item.date)), ['auto:2026-10-09', 'auto:2026-10-12', 'task:x'])
 
+// "finished recently" counts days where the viewer is, not in UTC
+const lateNight = buildToday({ clients: [client('c1', 'Alpha', [task('late', { assigneeId: ME, doneAt: new Date(2026, 9, 1, 23, 30).toISOString() })])], inbox: [], me: ME, scope: 'mine', today: TODAY })
+assert.equal(lateNight.done.length, 1)                                           // done at 11:30pm local on Oct 1: inside the 14-day window that starts Sep 30
+assert.equal(buildToday({ clients: [client('c1', 'Alpha', [task('early', { assigneeId: ME, doneAt: new Date(2026, 8, 29, 23, 30).toISOString() })])], inbox: [], me: ME, scope: 'mine', today: TODAY }).done.length, 0)   // Sep 29 local: outside
+
 // a client with no tasks field at all is fine
 assert.equal(buildToday({ clients: [{ id: 'z', name: 'Z' } as unknown as Client], inbox: [], me: ME, scope: 'mine', today: TODAY }).groups.length, 0)
 
@@ -83,6 +88,8 @@ assert.equal(projectBucket(request, ME, 'mine', TODAY), 'today')
 assert.equal(projectBucket(request, null, 'mine', TODAY), 'today')
 assert.equal(projectBucket({ ...request, dueDate: '2026-10-01' }, ME, 'mine', TODAY), 'overdue')
 assert.equal(projectBucket({ ...request, assigneeId: SAM }, ME, 'mine', TODAY), null)                            // once someone has it, it is theirs
+assert.equal(projectBucket({ ...request, status: 'in-progress' }, ME, 'mine', TODAY), 'today')                    // moved along but still nobody's: it must not vanish
+assert.equal(projectBucket({ ...request, status: 'done' }, ME, 'mine', TODAY), null)
 assert.equal(projectBucket({ ...request, assigneeId: SAM }, ME, 'everyone', TODAY), 'nodate')
 const withProjects = buildToday({ clients: [{ id: 'c1', name: 'Alpha', tasks: [], projects: [proj('mine-p', { assigneeId: ME, dueDate: TODAY }), proj('sams-p', { assigneeId: SAM }), request] } as unknown as Client], inbox: [], me: ME, scope: 'mine', today: TODAY })
 assert.deepEqual(withProjects.groups.flatMap(g => g.rows).map(r => (r.kind === 'project' ? r.project.id : '?')).sort(), ['mine-p', 'req'])
@@ -165,6 +172,10 @@ assert.deepEqual(q('  spaced   out   tomorrow '), { title: 'spaced out', dueDate
 assert.equal(todoPrefix('to-do: call the promoter friday'), 'call the promoter friday')
 assert.equal(todoPrefix('todo call the promoter'), 'call the promoter')
 assert.equal(todoPrefix('Task - send W9'), 'send W9')
+assert.equal(todoPrefix('task: send W9'), 'send W9')
+assert.equal(todoPrefix('task force'), null)               // searching for "task force" is not a to-do
+assert.equal(todoPrefix('task'), null)
+assert.equal(todoPrefix('todo:call the label'), 'call the label')
 assert.equal(todoPrefix('remind me to pay Sam'), 'pay Sam')
 assert.equal(todoPrefix('todos for tomorrow'), null)       // "todos" is not the word
 assert.equal(todoPrefix('to-do'), null)                    // nothing after it yet

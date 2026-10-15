@@ -55,12 +55,13 @@ export function AddTodo({ forClient }: { forClient?: string } = {}) {
   }, [people, clientId, me])
   const given = assignee ?? me ?? ''
   const shows = useMemo(() => {
+    if (!clientId || !hasAccess('tour', clientId, true)) return []     // a to-do about a show is saved under Tour, so it needs Tour edit access
     const cutoff = today()
     return (client?.tour.shows ?? [])
       .filter(s => s.status !== 'cancelled' && !s.historyOnly && s.date >= cutoff)
       .sort((a, b) => a.date.localeCompare(b.date))
       .slice(0, 25)
-  }, [client])
+  }, [client, clientId, hasAccess])
 
   if (roster.length === 0) return null
 

@@ -745,14 +745,27 @@ export function rowToTask(r: TaskRow): Task {
 
 // Only what a person can set is sent; who wrote it, when it was checked off, and which section it belongs to
 // are filled in by the database itself (see migration 040), so a changed browser cannot fake them.
-export async function upsertTask(task: Task, clientId: string) {
+export async function insertTask(task: Task, clientId: string) {
   const supabase = createClient()
-  const { error } = await supabase.from('tasks').upsert({
+  const { error } = await supabase.from('tasks').insert({
     id: task.id, client_id: clientId, title: task.title, notes: task.notes ?? null, due_date: task.dueDate ?? null,
     assignee: task.assigneeId ?? null, link_type: task.link?.type ?? null, link_id: task.link?.id ?? null,
     source: task.source, auto_key: task.autoKey ?? null, done_at: task.doneAt ?? null,
   })
   if (error) throw error
+}
+
+// Changing a to-do that already exists is a plain UPDATE, not an "upsert": an upsert is also an insert, which needs
+// edit access, so the person a to-do was merely GIVEN to could not tick it off. An update that changed nothing (no
+// permission, or the row is gone) comes back with no rows, which is reported as a failure rather than swallowed.
+export async function saveTask(task: Task) {
+  const supabase = createClient()
+  const { data, error } = await supabase.from('tasks').update({
+    title: task.title, notes: task.notes ?? null, due_date: task.dueDate ?? null,
+    assignee: task.assigneeId ?? null, done_at: task.doneAt ?? null,
+  }).eq('id', task.id).select('id')
+  if (error) throw error
+  if (!data || data.length === 0) throw new Error('That to-do could not be saved')
 }
 
 export async function deleteTaskRow(taskId: string) {

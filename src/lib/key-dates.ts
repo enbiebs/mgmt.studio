@@ -8,7 +8,6 @@
 // ──────────────────────────────────────────────────────────
 
 import type { Client, Task, TourSub } from '@/types'
-import { progressForShow } from '@/lib/show-progress'
 import { addDays } from '@/lib/utils'
 
 export type KeyDateRule = 'advance' | 'travel' | 'daysheet'
@@ -34,6 +33,11 @@ const RULES: Record<KeyDateRule, { before: number; lead: number }> = {
 
 export const keyDateKey = (rule: KeyDateRule, showId: string) => `${rule}:${showId}`
 
+/**
+ * What a confirmed show still needs, each judged on its own records so one unfinished thing never hides
+ * another: the advance until it is marked complete, the travel while trips are still to book, and the day
+ * sheet from a few days out. Each is worked out from the show's date and goes away once someone takes it.
+ */
 export function buildKeyDates(client: Client, today: string, existing: Task[] = client.tasks ?? []): KeyDate[] {
   // A demo artist's sample shows never raise real reminders.
   if (client.isDemo) return []
@@ -41,18 +45,31 @@ export function buildKeyDates(client: Client, today: string, existing: Task[] = 
   const out: KeyDate[] = []
   for (const show of client.tour?.shows ?? []) {
     if (show.status !== 'confirmed' || show.historyOnly || show.date < today) continue
-    const next = progressForShow(client, show, today).next
-    const rule = next && next.go.section === 'tour' ? (['advance', 'travel', 'daysheet'] as const).find(r => r === next.go.sub) : undefined
-    if (!next || !rule) continue
-    const due = addDays(show.date, -RULES[rule].before)
-    if (today < addDays(due, -RULES[rule].lead)) continue          // not time to think about it yet
-    const key = keyDateKey(rule, show.id)
-    if (taken.has(key)) continue                                    // someone already took it
     const place = [show.venue, show.city].filter(Boolean).join(' · ') || 'the show'
-    out.push({
-      key, rule, clientId: client.id, clientName: client.name, showId: show.id,
-      title: `${next.label} · ${place}`, detail: next.detail, due, go: { section: 'tour', sub: rule },
-    })
+    const advance = (client.tour.advances ?? []).find(a => a.showId === show.id)
+    const pendingTrips = (client.tour.travel ?? []).filter(t => t.showIds?.includes(show.id) && (t.status === 'needed' || t.status === 'pending')).length
+
+    const wanted: { rule: KeyDateRule; label: string; detail?: string }[] = []
+    if (advance?.status !== 'complete') {
+      wanted.push(!advance
+        ? { rule: 'advance', label: 'Start the advance', detail: 'Schedule, production and hospitality for the venue' }
+        : advance.status === 'draft'
+          ? { rule: 'advance', label: 'Finish and send the advance' }
+          : { rule: 'advance', label: 'Finish the advance', detail: 'It has been sent; fill in what comes back' })
+    }
+    if (pendingTrips > 0) wanted.push({ rule: 'travel', label: `Book ${pendingTrips} pending trip${pendingTrips === 1 ? '' : 's'}` })
+    wanted.push({ rule: 'daysheet', label: 'Share the day sheet' })
+
+    for (const w of wanted) {
+      const due = addDays(show.date, -RULES[w.rule].before)
+      if (today < addDays(due, -RULES[w.rule].lead)) continue          // not time to think about it yet
+      const key = keyDateKey(w.rule, show.id)
+      if (taken.has(key)) continue                                      // someone already took it
+      out.push({
+        key, rule: w.rule, clientId: client.id, clientName: client.name, showId: show.id,
+        title: `${w.label} · ${place}`, detail: w.detail, due, go: { section: 'tour', sub: w.rule },
+      })
+    }
   }
   return out.sort((a, b) => a.due.localeCompare(b.due))
 }

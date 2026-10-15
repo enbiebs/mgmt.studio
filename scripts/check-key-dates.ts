@@ -42,6 +42,19 @@ const allDone = { tour: { advances: [{ showId: 's1', status: 'complete' }], trav
 assert.deepEqual(buildKeyDates(client([show('s1', '2026-10-21')], allDone), TODAY).map(k => [k.rule, k.due]), [['daysheet', '2026-10-19']])
 assert.deepEqual(buildKeyDates(client([show('s1', '2026-10-22')], allDone), TODAY), [])
 
+// each is judged on its own records: an unfinished advance does not hide travel or the day sheet
+const trips = { tour: { travel: [{ id: 't1', showIds: ['s1'], status: 'needed' }, { id: 't2', showIds: ['s1'], status: 'pending' }, { id: 't3', showIds: ['s1'], status: 'booked' }, { id: 't4', showIds: ['other'], status: 'needed' }] } }
+const both = buildKeyDates(client([show('s1', '2026-11-03')], trips), TODAY)
+assert.deepEqual(both.map(k => k.rule).sort(), ['advance', 'travel'])                 // advance never ticked, trips still to book: both show
+assert.equal(both.find(k => k.rule === 'travel')!.title, 'Book 2 pending trips · Tresor · Berlin')   // only this show's open trips are counted
+assert.equal(buildKeyDates(client([show('s1', '2026-11-03')], { tour: { travel: [{ id: 't', showIds: ['s1'], status: 'booked' }] } }), TODAY).some(k => k.rule === 'travel'), false)
+const soon = buildKeyDates(client([show('s1', '2026-10-17')]), TODAY)               // 3 days out, the advance was never marked complete
+assert.deepEqual(soon.map(k => k.rule).sort(), ['advance', 'daysheet'])              // the day sheet still shows
+assert.equal(buildKeyDates(client([show('s1', '2026-11-03')], { tour: { travel: [{ id: 't1', showIds: ['s1'], status: 'pending' }] } }), TODAY).find(k => k.rule === 'travel')!.title.startsWith('Book 1 pending trip ·'), true)
+// the wording follows how far the advance has got
+assert.equal(buildKeyDates(client([show('s1', '2026-11-04')], { tour: { advances: [{ showId: 's1', status: 'draft' }] } }), TODAY)[0].title, 'Finish and send the advance · Tresor · Berlin')
+assert.equal(buildKeyDates(client([show('s1', '2026-11-04')], { tour: { advances: [{ showId: 's1', status: 'sent' }] } }), TODAY)[0].title, 'Finish the advance · Tresor · Berlin')
+
 // holds, cancelled shows, history, and shows already played raise nothing
 assert.deepEqual(keys(client([show('a', '2026-11-01', { status: 'hold' }), show('b', '2026-11-01', { status: 'cancelled' }), show('c', '2026-11-01', { historyOnly: true }), show('d', '2026-10-01')])), [])
 

@@ -11,7 +11,7 @@
 
 import type { Client, MainSection, Project, Task, TaskLinkType, WorkspacePerson } from '@/types'
 import type { InboxItem } from '@/lib/inbox'
-import { addDays, fromDateStr, toDateStr } from '@/lib/utils'
+import { addDays, fromDateStr, localDateOf, toDateStr } from '@/lib/utils'
 import { buildKeyDates, type KeyDate } from '@/lib/key-dates'
 
 export type Bucket = 'overdue' | 'today' | 'week' | 'later' | 'nodate' | 'info'
@@ -80,12 +80,14 @@ export function isMine(task: Task, me: string | null): boolean {
 /**
  * Whether an unfinished project belongs on this person's Today, and which group it goes in.
  * A project given to someone shows for them (and under "Everyone"). A request the artist submitted that
- * nobody has picked up yet shows for everyone, so it can't be missed; other unassigned projects show
+ * nobody owns yet shows for everyone, so it can't be missed; other unassigned projects show
  * only under "Everyone".
  */
 export function projectBucket(p: Project, me: string | null, scope: 'mine' | 'everyone', today: string): Bucket | null {
   if (p.status === 'done') return null
-  const unclaimedRequest = !p.assigneeId && p.fromArtist && p.status === 'submitted'
+  // An artist's request nobody owns needs an owner whatever its status: moving it along without giving it to
+  // someone must not make it vanish from everyone's list.
+  const unclaimedRequest = !p.assigneeId && p.fromArtist
   if (unclaimedRequest) return p.dueDate && p.dueDate < today ? 'overdue' : 'today'
   if (scope === 'mine' && (!me || p.assigneeId !== me)) return null
   return bucketOf(p.dueDate, today)
@@ -101,7 +103,7 @@ export function buildToday({ clients, inbox, me, scope, today, canTour = () => t
     for (const t of c.tasks ?? []) {
       if (!keep(t)) continue
       if (t.doneAt) {
-        if (t.doneAt.slice(0, 10) >= doneAfter) done.push({ task: t, clientId: c.id, clientName: c.name })
+        if (localDateOf(t.doneAt) >= doneAfter) done.push({ task: t, clientId: c.id, clientName: c.name })
         continue
       }
       rows.push({ kind: 'task', key: `task:${t.id}`, bucket: bucketOf(t.dueDate, today), task: t, clientId: c.id, clientName: c.name })
@@ -236,8 +238,12 @@ export function parseQuickTodo(raw: string, today: string): { title: string; due
   return { title: text }
 }
 
-/** Words that mean "make this a to-do" when typed at the start of the ⌘K bar. */
+/**
+ * Words that mean "make this a to-do" when typed at the start of the ⌘K bar: "to-do" / "todo" (with or without a
+ * colon), "task:" or "task -" (a colon or dash is needed so searching for "task force" still searches), and
+ * "remind me to ...".
+ */
 export function todoPrefix(query: string): string | null {
-  const m = query.match(/^\s*(?:to-?do|task|remind me to|add a to-?do)\s*[:\-–]?\s+(\S.*)$/i)
+  const m = query.match(/^\s*(?:(?:to-?do|add a to-?do)(?:\s*[:\-–]\s*|\s+)|task\s*[:\-–]\s*|remind me to\s+)(\S.*)$/i)
   return m ? m[1].trim() : null
 }
