@@ -21,6 +21,10 @@ export const secureSaveBody = z.object({
 
 export const clientOnly = z.object({ clientId: clientIdSchema })
 export const clientAndPath = z.object({ clientId: clientIdSchema, path: storagePath })
+const brandingKind = z.enum(['photo', 'logo'])
+export const brandingUploadBody = z.object({ clientId: clientIdSchema, kind: brandingKind, ext: z.string().max(8) })
+export const brandingSaveBody = z.object({ clientId: clientIdSchema, kind: brandingKind, path: storagePath })
+export const brandingRemoveBody = z.object({ clientId: clientIdSchema, kind: brandingKind })
 export const settlementUploadBody = z.object({ clientId: clientIdSchema, ext: z.string().max(8).optional() })
 
 export const plaidExchangeBody = z.object({

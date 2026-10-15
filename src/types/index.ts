@@ -320,6 +320,8 @@ export interface Client {
   color: string          // hex color for avatar
   calendarToken?: string  // private, unguessable — enables /api/calendar/[token] ICS subscription
   setupSkipped?: string[] // first-day checklist steps that don't apply to this artist (shared by the whole team)
+  photoPath?: string      // the artist's photo and logo files in the private image store (also used to refresh a changed picture); see components/ui/ArtistAvatar
+  logoPath?: string
   isDemo?: boolean        // a made-up client: only its owner can see it (DB-enforced), and it's left out of alerts, forecasts and emails
   people: Person[]        // shared directory — everyone linked from Crew, Stakeholders, etc.
   songs: {
