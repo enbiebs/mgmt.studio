@@ -72,6 +72,21 @@ export function CommandBar() {
         out.push({ id: `go-${i.key}`, group: 'Go to', icon: i.icon, label: i.label, hint: current.name, run: () => useStore.getState().setSection(i.key) })
       }
     }
+    // Actions come right after the pages, so they are easy to find.
+    const pasteFor = view === 'studio' && current ? [current] : roster
+    for (const c of pasteFor) {
+      if (!hasAccess('tour', c.id, true)) continue
+      out.push({
+        id: `paste-offer-${c.id}`, group: 'Actions', icon: 'tour', label: `Paste a booking offer for ${c.name}`,
+        hint: 'Read an email or PDF into a new booking offer', keywords: 'new offer add email paste',
+        run: () => jump(c.id, 'tour', st => { st.setTourSub('offers'); st.requestOfferPaste() }),
+      })
+    }
+    if (role === 'manager') {
+      out.push({ id: 'add-client', group: 'Actions', icon: 'plus', label: 'Add a client', hint: 'New artist', run: () => { const s = useStore.getState(); s.goToDashboard(); s.openModal('add-client') } })
+    }
+    out.push({ id: 'sign-out', group: 'Actions', icon: 'arrow', label: 'Sign out', run: () => { void useStore.getState().signOut() } })
+
     for (const c of roster) {
       out.push({ id: `artist-${c.id}`, group: 'Artists', icon: 'home', label: c.name, hint: c.isDemo ? 'Demo artist' : 'Open artist', run: () => useStore.getState().openClient(c.id) })
     }
@@ -105,10 +120,6 @@ export function CommandBar() {
         })
       }
     }
-    if (role === 'manager') {
-      out.push({ id: 'add-client', group: 'Actions', icon: 'plus', label: 'Add a client', hint: 'New artist', run: () => { const s = useStore.getState(); s.goToDashboard(); s.openModal('add-client') } })
-    }
-    out.push({ id: 'sign-out', group: 'Actions', icon: 'arrow', label: 'Sign out', run: () => { void useStore.getState().signOut() } })
     return out
   }, [open, data, clientId, view, role, nav, hasAccess, accessibleClientIds])
 

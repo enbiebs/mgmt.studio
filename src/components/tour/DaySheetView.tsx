@@ -53,6 +53,7 @@ export function DaySheetView() {
 
   function selectShow(id: string) {
     pane.openDetail()
+    useStore.getState().setSelectedShow(id)
     setSelectedShowId(id)
   }
 

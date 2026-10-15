@@ -642,6 +642,7 @@ export function TravelView() {
 
   function selectShow(showId: string) {
     pane.openDetail()
+    useStore.getState().setSelectedShow(showId)
     setSelectedShowId(showId)
     setViewingGeneral(false)
   }
@@ -741,7 +742,7 @@ export function TravelView() {
         </div>
         <div className="flex-1 overflow-y-auto">
           <button
-            onClick={() => { setViewingGeneral(true); setSelectedShowId(null); setAddMode(null); pane.openDetail() }}
+            onClick={() => { setViewingGeneral(true); setSelectedShowId(null); useStore.getState().setSelectedShow(null); setAddMode(null); pane.openDetail() }}
             className={`w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors ${effectiveGeneral ? 'bg-accent-soft' : ''}`}
           >
             <div className="flex items-start gap-2">
