@@ -8,12 +8,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { fromDateStr, today } from '@/lib/utils'
 import { notify } from '@/lib/notify'
-import { dueLabel, parseQuickTodo, todoPrefix } from '@/lib/tasks'
+import { dueLabel, parseQuickTodo, taskDestination, todoPrefix } from '@/lib/tasks'
 import { recallLastArtist, rememberLastArtist, useMe } from '@/lib/useToday'
 import { searchCommands, type Searchable } from '@/lib/command-search'
 import { DRIVE_FOLDERS, folderLink } from '@/lib/drive-links'
 import { Icon, type IconName } from '@/components/ui/Icon'
-import type { MainSection } from '@/types'
+import type { BizSub, MainSection, TourSub } from '@/types'
 import { useVisibleNav } from './nav'
 
 export const OPEN_COMMAND_BAR = 'mgmt:open-command-bar'
@@ -141,6 +141,31 @@ export function CommandBar() {
           id: `invoice-${inv.id}`, group: 'Invoices', icon: 'finance', label: `${inv.number} · ${inv.to}`,
           hint: `${c.name} · ${cap(inv.status)}`,
           run: () => jump(c.id, 'finance', st => st.setBizSub('invoices')),
+        })
+      }
+    }
+    // Open to-dos and unfinished projects: type a word from one and jump straight to it.
+    for (const c of roster) {
+      for (const t of c.tasks ?? []) {
+        if (t.doneAt) continue
+        out.push({
+          id: `task-${t.id}`, group: 'To-dos', icon: 'check', label: t.title,
+          hint: `${c.name}${t.dueDate ? ` · due ${dueLabel(t.dueDate, today())}` : ''}`, keywords: 'todo task reminder',
+          run: () => {
+            const to = t.link ? taskDestination(t.link) : { section: 'projects' as MainSection }
+            jump(c.id, to.section, st => {
+              if ('sub' in to && to.sub) { if (to.section === 'tour') st.setTourSub(to.sub as TourSub); if (to.section === 'finance') st.setBizSub(to.sub as BizSub) }
+              if ('showId' in to && to.showId) st.setSelectedShow(to.showId)
+            })
+          },
+        })
+      }
+      for (const p of c.projects ?? []) {
+        if (p.status === 'done' || !hasAccess('projects', c.id)) continue
+        out.push({
+          id: `project-${p.id}`, group: 'Projects', icon: 'projects', label: p.title,
+          hint: `${c.name} · ${p.fromArtist ? 'Artist request' : 'Project'}`, keywords: 'project request',
+          run: () => jump(c.id, 'projects'),
         })
       }
     }
