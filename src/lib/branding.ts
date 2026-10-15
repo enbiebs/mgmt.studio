@@ -19,7 +19,10 @@ export async function requireBrandingEdit(clientId: unknown, limit: LimitName) {
     supabase.rpc('has_section_access', { target_client_id: clientId, target_section: 'profile', require_edit: true }),
     supabase.rpc('has_section_access', { target_client_id: clientId, target_section: 'projects', require_edit: true }),
   ])
-  const allowed = management.data === true ? profile.data === true : projects.data === true
+  // If the database could not answer, nobody gets in (never the artist route by default).
+  if (management.error || profile.error || projects.error) return { error: fail(403, 'Not allowed') }
+  // The management side needs Profile edit access; the only other kind of login that can edit Projects is the artist's own.
+  const allowed = management.data === true ? profile.data === true : management.data === false && projects.data === true
   if (!allowed) return { error: fail(403, 'Not allowed') }
   return { user, supabase, clientId }
 }
@@ -27,7 +30,7 @@ export async function requireBrandingEdit(clientId: unknown, limit: LimitName) {
 /** May this person see the artist's photo and logo? Anyone who may open the artist at all. */
 export async function requireBrandingView(clientId: unknown) {
   if (!isClientId(clientId)) return { error: fail(400, 'Missing or invalid clientId') }
-  const who = await requireUser('file')
+  const who = await requireUser('branding')   // its own, roomier limit: every avatar on a page asks for its picture
   if (who.error) return { error: who.error }
   const { data } = await who.supabase.rpc('can_open_client', { target_client_id: clientId })
   if (data !== true) return { error: fail(403, 'Not allowed') }
