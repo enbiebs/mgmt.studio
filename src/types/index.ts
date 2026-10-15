@@ -416,6 +416,8 @@ export interface WorkspacePerson {
   role: UserRole
   allClients: boolean
   clientIds: string[]
+  /** True until this login has signed in for the first time (an invitation nobody has accepted yet). */
+  invited?: boolean
 }
 
 // ── Agenda (talking points / steps around one to-do or project) ──

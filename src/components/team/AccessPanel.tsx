@@ -2,14 +2,19 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { uid } from '@/lib/utils'
-import { inputClass, selectClass } from '@/components/ui/Modal'
 import type { Person } from '@/types'
-import { ARTIST_SIDE_NAME } from '@/lib/brand'
 import { ADMIN_KEY, LEVELS, SECTIONS, matchPreset, otherAccess, planChanges, presetByKey, summarize, levelsOf, type GrantRow } from '@/lib/access-presets'
 import { levelChangeWarning } from '@/lib/sharing'
 import { applyGrantPlan } from '@/lib/db'
+import type { AccessPreset } from '@/lib/access-presets'
+import { RoleMenu } from './RoleMenu'
+import { InviteForm } from './InviteForm'
 
 type Level = 'none' | 'view' | 'edit'
+
+/** The "take everything away" choice, shown first in this panel's role menu. */
+const NO_ACCESS: AccessPreset = { key: 'none', label: 'No access', blurb: 'Takes away everything they have for this artist.', hidden: 'Everything', levels: {} }
+const PANEL_OPTIONS: AccessPreset[] = [NO_ACCESS, ...LEVELS]
 type Member = { id: string; role: string } | null
 
 function levelOf(grants: GrantRow[], section: string, clientId: string): Level {
@@ -30,10 +35,8 @@ export function AccessPanel({ person }: { person: Person }) {
   const [loading, setLoading] = useState(true)
   const [member, setMember] = useState<Member>(null)
   const [grants, setGrants] = useState<GrantRow[]>([])
-  const [inviteEmail, setInviteEmail] = useState(person.email ?? '')
-  const [inviteRole, setInviteRole] = useState<'team' | 'agent' | 'lawyer'>('team')
-  const [inviting, setInviting] = useState(false)
-  const [inviteMessage, setInviteMessage] = useState<string | null>(null)
+  const clientId = useStore(s => s.clientId)
+  const waiting = useStore(s => !!s.workspacePeople.find(p => p.memberId === member?.id)?.invited)
 
   async function fetchAccess(personId: string): Promise<{ member: Member; grants: GrantRow[] }> {
     if (!isManager) return { member: null, grants: [] }
@@ -54,26 +57,6 @@ export function AccessPanel({ person }: { person: Person }) {
       setLoading(false)
     })
   }, [person.id, isManager])
-
-  async function sendInvite() {
-    if (!inviteEmail.trim()) return
-    setInviting(true)
-    setInviteMessage(null)
-    try {
-      const res = await fetch('/api/team/invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole, personId: person.id }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Could not send invite')
-      setInviteMessage(`Invite sent to ${inviteEmail.trim()}. They'll show up here once they accept.`)
-    } catch (e) {
-      setInviteMessage(e instanceof Error ? e.message : 'Could not send invite')
-    } finally {
-      setInviting(false)
-    }
-  }
 
   // Choose a ready-made level for one artist: fills in the same per-section choices the chips below show.
   const [levelMessage, setLevelMessage] = useState<Record<string, string>>({})
@@ -125,27 +108,9 @@ export function AccessPanel({ person }: { person: Person }) {
   if (!member) {
     return (
       <div className="pt-1 border-t border-gray-100 mt-3">
-        <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 mt-3">Access</div>
-        <div className="text-xs text-gray-400 mb-2">No login yet — invite them to their own {ARTIST_SIDE_NAME} page.</div>
-        <div className="flex gap-2 mb-2">
-          <div className="flex-1 min-w-0">
-            <input className={inputClass} type="email" placeholder="Email to invite" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} />
-          </div>
-          <div className="w-28 flex-shrink-0">
-            <select className={selectClass} value={inviteRole} onChange={e => setInviteRole(e.target.value as typeof inviteRole)}>
-              <option value="team">Team</option>
-              <option value="agent">Agent</option>
-              <option value="lawyer">Lawyer</option>
-            </select>
-          </div>
-          <button
-            type="button" onClick={sendInvite} disabled={inviting}
-            className="px-3 py-1.5 bg-accent text-white text-xs font-medium rounded-lg hover:bg-accent-hover disabled:opacity-50 flex-shrink-0"
-          >
-            {inviting ? 'Sending…' : 'Invite'}
-          </button>
-        </div>
-        {inviteMessage && <div className="text-xs text-gray-500">{inviteMessage}</div>}
+        <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5 mt-3">Access</div>
+        <div className="text-xs text-gray-500 mb-3">No login yet. Invite {person.name} to log in, and choose what they can see before you send it.</div>
+        {clientId && <InviteForm person={person} defaultClientId={clientId} />}
       </div>
     )
   }
@@ -153,8 +118,13 @@ export function AccessPanel({ person }: { person: Person }) {
   return (
     <div className="pt-1 border-t border-gray-100 mt-3">
       <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5 mt-3">
-        Access — has a real login
+        Access — {waiting ? 'invited, waiting to accept' : 'has a real login'}
       </div>
+      {waiting && (
+        <div className="text-xs text-amber-700 bg-amber-50 rounded-lg px-2.5 py-2 mb-2">
+          They haven&apos;t accepted the invitation yet. The access below is already set up and starts when they do.
+        </div>
+      )}
       {grants.length === 0 && (
         <div className="text-xs text-amber-700 bg-amber-50 rounded-lg px-2.5 py-2 mb-2">
           They can log in, but they can&apos;t see anything yet. Pick a level for each artist below.
@@ -169,18 +139,15 @@ export function AccessPanel({ person }: { person: Person }) {
           const preset = presetByKey(current)
           return (
           <div key={c.id}>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="text-xs font-semibold flex-1 min-w-0 truncate">{c.name}</div>
-              <select
-                aria-label={`Access level for ${c.name}`}
-                value={current}
-                onChange={e => { if (e.target.value !== 'custom') applyLevel(c.id, e.target.value) }}
-                className="px-2 py-1 text-xs bg-gray-50 border border-gray-100 rounded-lg text-gray-600 hover:border-gray-200 max-w-[190px]"
-              >
-                <option value="none">No access</option>
-                {LEVELS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
-                {current === 'custom' && <option value="custom" disabled>Custom (fine-tuned)</option>}
-              </select>
+            <div className="flex flex-wrap items-center gap-2 mb-1.5">
+              <div className="text-xs font-semibold flex-1 min-w-0 basis-32 truncate">{c.name}</div>
+              <div className="w-full sm:w-64 sm:flex-none">
+                <RoleMenu
+                  ariaLabel={`Access level for ${c.name}`} options={PANEL_OPTIONS}
+                  value={current} shownAs={current === 'custom' ? 'Custom (fine-tuned)' : undefined}
+                  onChange={key => applyLevel(c.id, key)}
+                />
+              </div>
             </div>
             <div className="text-[11px] text-gray-400 mb-1.5">
               {preset ? `${preset.blurb} Can't see: ${preset.hidden}.` : current === 'custom' ? summarize(levelsOf(grants, c.id)) : 'Cannot see anything for this artist.'}
