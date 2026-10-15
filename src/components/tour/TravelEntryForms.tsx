@@ -10,7 +10,7 @@ import { useState } from 'react'
 import { uid } from '@/lib/utils'
 import type { Currency, TravelFlight, TravelGround, TravelHotel, TravelStatus } from '@/types'
 
-const input = 'w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-blue-400 bg-canvas'
+const input = 'w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-accent bg-canvas'
 
 function Field({ label, children, span }: { label: string; children: React.ReactNode; span?: boolean }) {
   return (
@@ -103,7 +103,7 @@ export function AddFlightForm({ initialShowId, onSave, onCancel }: {
         <CommonFields s={f} set={set} />
       </div>
       <div className="text-[11px] text-gray-400 mt-2">A connection? Save this flight, then use &ldquo;+ Add connecting flight&rdquo; on its card. The cost is for the whole booking.</div>
-      <Buttons canSave={canSave} onSave={save} onCancel={onCancel} color="bg-blue-600 hover:bg-blue-700" />
+      <Buttons canSave={canSave} onSave={save} onCancel={onCancel} color="bg-accent hover:bg-accent-hover" />
     </div>
   )
 }

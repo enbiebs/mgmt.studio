@@ -197,7 +197,7 @@ function AddInvoiceModal({ onClose }: { onClose: () => void }) {
     <Modal title="New invoice" onClose={onClose} footer={
       <>
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Create draft</button>
+        <button onClick={handleSave} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">Create draft</button>
       </>
     }>
       <FormField label="Bill to">
@@ -348,7 +348,7 @@ function InvoiceDetail({ invoice: inv, onClose }: { invoice: Invoice; onClose: (
               <>
                 <button
                   onClick={() => updateInvoiceStatus(inv.id, 'sent')}
-                  className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
+                  className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover transition-colors"
                 >
                   Mark as sent
                 </button>
@@ -396,7 +396,7 @@ function InvoicePaymentLinker({ invoice: inv }: { invoice: Invoice }) {
         <div className="relative">
           <button
             onClick={() => setPickerOpen(v => !v)}
-            className="w-full text-left text-xs border border-dashed border-gray-200 rounded-lg px-3 py-2 text-gray-400 hover:border-blue-300 hover:text-blue-500 transition-colors"
+            className="w-full text-left text-xs border border-dashed border-gray-200 rounded-lg px-3 py-2 text-gray-400 hover:border-accent hover:text-accent transition-colors"
           >
             + Link a payment from your connected bank
           </button>

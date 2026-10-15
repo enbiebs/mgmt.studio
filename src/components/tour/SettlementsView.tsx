@@ -66,7 +66,7 @@ export function SettlementsView() {
                     <div className="text-sm font-medium">{s.venue}</div>
                     <div className="text-xs text-gray-400">{s.city} · {dateText(s.date)}</div>
                   </div>
-                  {editable && <button onClick={() => setAdding({ showId: s.id })} className="text-xs text-blue-500 hover:underline">Add its settlement →</button>}
+                  {editable && <button onClick={() => setAdding({ showId: s.id })} className="text-xs text-accent hover:underline">Add its settlement →</button>}
                 </div>
               ))}
             </div>

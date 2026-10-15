@@ -34,7 +34,7 @@ export function VendorsPanel({ editable }: { editable: boolean }) {
               </td>
               {editable && (
                 <td className="px-4 py-3 text-right whitespace-nowrap">
-                  <button onClick={() => setEditing(v)} className="text-xs text-blue-500 hover:text-blue-600 mr-3">Edit</button>
+                  <button onClick={() => setEditing(v)} className="text-xs text-accent hover:text-accent-hover mr-3">Edit</button>
                   <button
                     onClick={() => { if (confirm(`Remove ${v.name} from your vendor list? Their bills stay.`)) deleteVendor(v.id) }}
                     className="text-xs text-red-400 hover:text-red-500"
@@ -74,7 +74,7 @@ function VendorEditModal({ vendor, onClose }: { vendor: Vendor; onClose: () => v
     <Modal title="Edit vendor" onClose={onClose} footer={
       <>
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Save</button>
+        <button onClick={handleSave} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">Save</button>
       </>
     }>
       <FormField label="Name"><input type="text" className={inputClass} value={f.name} onChange={set('name')} /></FormField>

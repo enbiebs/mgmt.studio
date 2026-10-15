@@ -48,7 +48,7 @@ function TransactionLinker({ workId, currency }: { workId: string; currency: Cur
         {linked.length === 0 && <span className="text-[11px] text-gray-300">No bank income linked yet</span>}
         {editable && (
         <div className="relative">
-          <button onClick={() => setPickerOpen(v => !v)} className="text-[10px] text-gray-400 hover:text-blue-500 font-medium px-1">+ Link</button>
+          <button onClick={() => setPickerOpen(v => !v)} className="text-[10px] text-gray-400 hover:text-accent font-medium px-1">+ Link</button>
           {pickerOpen && (
             <div className="absolute left-0 top-full mt-1 bg-canvas border border-gray-100 rounded-lg shadow-lg min-w-[220px] max-h-48 overflow-auto z-50">
               {available.length === 0 ? (
@@ -89,7 +89,7 @@ function AddWorkModal({ onClose }: { onClose: () => void }) {
     <Modal title="Add a work" onClose={onClose} footer={
       <>
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Add work</button>
+        <button onClick={handleSave} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">Add work</button>
       </>
     }>
       <FormField label="Title">
@@ -137,7 +137,7 @@ function EditWorkModal({ work, onClose }: { work: CatalogWork; onClose: () => vo
       editable ? (
         <>
           <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-          <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Save</button>
+          <button onClick={handleSave} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">Save</button>
         </>
       ) : (
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Close</button>

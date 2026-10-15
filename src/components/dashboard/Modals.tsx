@@ -40,7 +40,7 @@ function ClientModal({ mode, clientId, onClose, addClient, updateClient }: {
       footer={
         <>
           <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition-colors">Cancel</button>
-          <button onClick={save}    className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors">
+          <button onClick={save}    className="px-3 py-1.5 bg-accent hover:bg-accent-hover text-white text-sm font-medium rounded-lg transition-colors">
             {mode === 'edit' ? 'Save' : 'Add client'}
           </button>
         </>

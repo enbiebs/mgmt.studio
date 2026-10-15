@@ -166,7 +166,7 @@ function CrewMemberModal({ member, onClose }: { member?: CrewMember; onClose: ()
       editable ? (
         <>
           <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-          <button onClick={handleSave} disabled={!personId} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:opacity-40">
+          <button onClick={handleSave} disabled={!personId} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover disabled:opacity-40">
             {member ? 'Save' : 'Add'}
           </button>
         </>

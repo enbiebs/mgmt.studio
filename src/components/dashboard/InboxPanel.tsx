@@ -49,7 +49,7 @@ export function InboxPanel() {
       <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto md:ml-0">
         <button onClick={() => open(item)} className="px-2 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50">Open</button>
         {isHiddenRow ? (
-          <button onClick={() => restoreInboxItem(item.key)} className="px-2 py-1 text-xs text-blue-500 hover:underline">Bring back</button>
+          <button onClick={() => restoreInboxItem(item.key)} className="px-2 py-1 text-xs text-accent hover:underline">Bring back</button>
         ) : (
           <>
             <button onClick={() => markInboxDone(item.key)} className="px-2 py-1 text-xs text-gray-400 hover:text-green-600" title="Hide until it gets worse">Done</button>
@@ -94,7 +94,7 @@ export function InboxPanel() {
         // Heads-ups are the least pressing, so they start folded away.
         if (g.sev === 'info' && !expanded.info_open) {
           return (
-            <button key={g.sev} onClick={() => setExpanded({ ...expanded, info_open: true })} className="block mt-3 text-xs text-blue-500 hover:underline">
+            <button key={g.sev} onClick={() => setExpanded({ ...expanded, info_open: true })} className="block mt-3 text-xs text-accent hover:underline">
               Show {g.items.length} heads-up{g.items.length === 1 ? '' : 's'}
             </button>
           )
@@ -104,7 +104,7 @@ export function InboxPanel() {
             <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">{SEVERITY_LABEL[g.sev]}</div>
             {shown.map(i => row(i))}
             {g.items.length > SHOW_FIRST && (
-              <button onClick={() => setExpanded({ ...expanded, [g.sev]: !all })} className="text-xs text-blue-500 hover:underline mt-1">
+              <button onClick={() => setExpanded({ ...expanded, [g.sev]: !all })} className="text-xs text-accent hover:underline mt-1">
                 {all ? 'Show fewer' : `Show all ${g.items.length}`}
               </button>
             )}

@@ -86,7 +86,7 @@ function Field({ label, value, onChange, placeholder, mono }: {
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={!editable}
-        className={`w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed ${mono ? 'font-mono' : ''}`}
+        className={`w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed ${mono ? 'font-mono' : ''}`}
       />
     </div>
   )
@@ -105,7 +105,7 @@ function TextArea({ label, value, onChange, placeholder, rows = 3 }: {
         placeholder={placeholder}
         rows={rows}
         disabled={!editable}
-        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed resize-none"
+        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed resize-none"
       />
     </div>
   )
@@ -329,7 +329,7 @@ export function AdvanceView() {
                 <button
                   key={show.id}
                   onClick={() => selectShow(show)}
-                  className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${isSelected ? 'bg-blue-50' : ''}`}
+                  className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${isSelected ? 'bg-accent-soft' : ''}`}
                 >
                   <div className="flex items-start gap-2">
                     <div className={`w-1.5 h-1.5 rounded-full mt-[5px] flex-shrink-0 ${cfg.dot}`} />
@@ -395,7 +395,7 @@ export function AdvanceView() {
               )}
               <button
                 onClick={() => setTourSub('daysheet')}
-                className="px-3 py-1.5 text-xs font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                className="px-3 py-1.5 text-xs font-semibold bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors"
               >
                 Day Sheet →
               </button>

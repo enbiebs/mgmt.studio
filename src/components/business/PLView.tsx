@@ -207,7 +207,7 @@ export function PLView() {
                 <tr
                   key={m.month}
                   onClick={() => setSelectedMonth(m.month)}
-                  className={`cursor-pointer hover:bg-gray-50 ${isActive ? 'bg-blue-50/50' : ''}`}
+                  className={`cursor-pointer hover:bg-gray-50 ${isActive ? 'bg-accent-soft/50' : ''}`}
                 >
                   <td className="px-4 py-2.5 font-medium text-sm">{fmtMonth(m.month)}</td>
                   <td className="px-4 py-2.5 text-right text-green-700">{fmt(rev)}</td>

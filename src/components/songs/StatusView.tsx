@@ -131,7 +131,7 @@ export function StatusView() {
           <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Status Update</div>
           <button
             onClick={handleCopy}
-            className="px-2.5 py-1 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition-colors"
+            className="px-2.5 py-1 bg-accent text-white text-xs font-medium rounded-lg hover:bg-accent-hover transition-colors"
           >
             {copied ? 'Copied!' : 'Copy status update'}
           </button>
@@ -215,7 +215,7 @@ function AddStakeholderModal({ albumId, onClose }: { albumId: string; onClose: (
     <Modal title="Add a stakeholder" onClose={onClose} footer={
       <>
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={handleAdd} disabled={!personId} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:opacity-40">Add</button>
+        <button onClick={handleAdd} disabled={!personId} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover disabled:opacity-40">Add</button>
       </>
     }>
       <PersonPicker value={personId} onChange={setPersonId} />

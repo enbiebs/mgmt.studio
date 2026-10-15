@@ -12,7 +12,7 @@ export function ReleasePicker({ albums, activeId }: { albums: Album[]; activeId:
 
   return (
     <select
-      className="text-sm font-medium border border-gray-200 rounded-lg pl-2.5 pr-7 py-1.5 bg-canvas outline-none focus:border-blue-400 transition-colors"
+      className="text-sm font-medium border border-gray-200 rounded-lg pl-2.5 pr-7 py-1.5 bg-canvas outline-none focus:border-accent transition-colors"
       value={activeId}
       onChange={e => setSelectedAlbum(e.target.value)}
     >

@@ -91,7 +91,7 @@ export function DaySheetView() {
                 key={s.id}
                 onClick={() => selectShow(s.id)}
                 className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${
-                  show?.id === s.id ? 'bg-blue-50' : ''
+                  show?.id === s.id ? 'bg-accent-soft' : ''
                 }`}
               >
                 <div className="text-xs font-semibold text-gray-800 truncate">{s.venue}</div>
@@ -145,7 +145,7 @@ export function DaySheetView() {
             {/* Schedule */}
             {advance?.schedule && Object.values(advance.schedule).some(Boolean) && (
               <div className="bg-canvas rounded-2xl px-6 py-5 mb-4 shadow-sm">
-                <Block title="Schedule" accent="border-blue-400 text-blue-500">
+                <Block title="Schedule" accent="border-accent text-accent">
                   <Row label="Bus Call"         value={advance.schedule.busCall} />
                   <Row label="Lobby Call"       value={advance.schedule.lobbyCall} />
                   <Row label="Load In"          value={advance.schedule.loadIn} />
@@ -268,7 +268,7 @@ export function DaySheetView() {
             {!advance && (
               <div className="bg-canvas rounded-2xl px-6 py-10 text-center text-gray-400 shadow-sm">
                 <div className="text-sm mb-2">No advance data for this show yet.</div>
-                <button onClick={() => setTourSub('advance')} className="text-sm text-blue-500 hover:underline">
+                <button onClick={() => setTourSub('advance')} className="text-sm text-accent hover:underline">
                   Create advance →
                 </button>
               </div>

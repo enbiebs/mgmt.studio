@@ -57,7 +57,7 @@ export default function UpdatePasswordPage() {
               required
               minLength={6}
               autoFocus
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
             />
           </div>
 
@@ -70,7 +70,7 @@ export default function UpdatePasswordPage() {
               placeholder="••••••••"
               required
               minLength={6}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
             />
           </div>
 

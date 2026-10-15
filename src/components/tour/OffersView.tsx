@@ -23,7 +23,7 @@ const STATUS_CONFIG: Record<OfferStatus, { label: string; color: string; bg: str
   inquiry:   { label: 'Inquiry',   color: 'text-gray-500',  bg: 'bg-gray-50',   dot: 'bg-gray-400'  },
   hold:      { label: 'Hold',      color: 'text-amber-700', bg: 'bg-amber-50',  dot: 'bg-amber-400' },
   confirmed: { label: 'Confirmed', color: 'text-green-700', bg: 'bg-green-50',  dot: 'bg-green-500' },
-  settled:   { label: 'Settled',   color: 'text-blue-700',  bg: 'bg-blue-50',   dot: 'bg-blue-500'  },
+  settled:   { label: 'Settled',   color: 'text-blue-700',  bg: 'bg-blue-50',   dot: 'bg-accent'  },
   cancelled: { label: 'Cancelled', color: 'text-red-500',   bg: 'bg-red-50',    dot: 'bg-red-400'   },
 }
 
@@ -213,7 +213,7 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
         )}
         {initial && !canSeeBudgets && <span className="mr-auto" />}
         <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-        <button onClick={handleSave} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">
+        <button onClick={handleSave} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">
           {initial ? 'Save' : 'Add offer'}
         </button>
       </>
@@ -264,7 +264,7 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
                 <span className="font-semibold w-7">V{sh.version}</span>
                 <span className="text-gray-400">{longDate(localDateOf(sh.sentAt))}</span>
                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${SHEET_STATUS_STYLE[sh.status]}`}>{SHEET_STATUS_LABEL[sh.status]}</span>
-                <a href={`/api/offer-sheets/${sh.id}/pdf`} target="_blank" rel="noreferrer" className="ml-auto text-blue-500 hover:underline">PDF</a>
+                <a href={`/api/offer-sheets/${sh.id}/pdf`} target="_blank" rel="noreferrer" className="ml-auto text-accent hover:underline">PDF</a>
               </div>
             ))}
             {sheets.some(sh => sh.responseNote) && (

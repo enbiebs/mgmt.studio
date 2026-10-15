@@ -59,7 +59,7 @@ export function SendOfferSheetModal({ offerId, onClose }: { offerId: string; onC
             href={`/api/offer-sheets/${sent.sheetId}/pdf`} target="_blank" rel="noreferrer"
             className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 mr-auto"
           >Download PDF</a>
-          <button onClick={onClose} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Done</button>
+          <button onClick={onClose} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">Done</button>
         </>
       }>
         <p className="text-sm">
@@ -77,7 +77,7 @@ export function SendOfferSheetModal({ offerId, onClose }: { offerId: string; onC
       <Modal title="Send offer sheet" onClose={onClose} footer={
         <>
           <button onClick={onClose} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
-          <button onClick={() => addBudget({ offerId })} className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600">Create the budget</button>
+          <button onClick={() => addBudget({ offerId })} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">Create the budget</button>
         </>
       }>
         <p className="text-sm">An offer sheet includes the budget, and this offer doesn&apos;t have one yet. Create it first, then you can send the sheet.</p>
@@ -91,7 +91,7 @@ export function SendOfferSheetModal({ offerId, onClose }: { offerId: string; onC
         <button onClick={onClose} disabled={busy} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
         <button
           onClick={handleSend} disabled={busy || !snapshot}
-          className="px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 disabled:opacity-50"
+          className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover disabled:opacity-50"
         >{busy ? 'Sending…' : `Send V${version} to ${client.name}`}</button>
       </>
     }>
@@ -107,10 +107,10 @@ export function SendOfferSheetModal({ offerId, onClose }: { offerId: string; onC
           {DETAIL_OPTIONS.map(o => (
             <button
               key={o.value} type="button" onClick={() => setDetail(o.value)}
-              className={`text-left rounded-lg border px-3 py-2 transition-colors ${detail === o.value ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'}`}
+              className={`text-left rounded-lg border px-3 py-2 transition-colors ${detail === o.value ? 'border-accent bg-accent-soft' : 'border-gray-200 hover:bg-gray-50'}`}
             >
-              <div className={`text-sm font-semibold ${detail === o.value ? 'text-blue-900' : ''}`}>{o.label}</div>
-              <div className={`text-[11px] ${detail === o.value ? 'text-blue-800' : 'text-gray-500'}`}>{o.hint}</div>
+              <div className={`text-sm font-semibold ${detail === o.value ? 'text-gray-900' : ''}`}>{o.label}</div>
+              <div className={`text-[11px] ${detail === o.value ? 'text-gray-700' : 'text-gray-500'}`}>{o.hint}</div>
             </button>
           ))}
         </div>
