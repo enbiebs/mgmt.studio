@@ -11,7 +11,7 @@ import { useStore } from '@/lib/store'
 import { inputClass } from '@/components/ui/Modal'
 import {
   BUCKET_LABEL, BUCKET_SECTION, COMMISSION_BASE_LABEL, INCOME_BUCKETS, PRODUCTION_BUCKETS, actualCostsForShow, computeBudget,
-  crewLineAmount, crewPerDiem, crewRoleShort, newCommission, newLine, pctOfGross, type CrewDays,
+  crewLineAmount, crewLineFor, crewPerDiem, newCommission, newLine, pctOfGross, type CrewDays,
 } from '@/lib/budget'
 import type { Budget, BudgetBucket, BudgetCommission, BudgetLine, BudgetSection, Client, CommissionBase, Currency } from '@/types'
 
@@ -296,8 +296,8 @@ export function BudgetEditor({ budget, client }: { budget: Budget; client: Clien
                 onChange={e => {
                   const rate = rateOf(e.target.value); const m = crewById.get(e.target.value)
                   if (!rate || !m) return
-                  const days: CrewDays = { advance: 1, travel: 0, show: 1 }
-                  addLine('labor', `Labor — ${crewRoleShort(m.role)} (${people.get(m.personId) ?? 'Crew'})`, { crewMemberId: m.id, days, amount: crewLineAmount(rate, days) })
+                  const line = crewLineFor(client, m, rate)
+                  addLine('labor', line.label, { crewMemberId: m.id, days: line.days, amount: line.amount })
                 }}
               >
                 <option value="">+ Add crew from saved rates…</option>

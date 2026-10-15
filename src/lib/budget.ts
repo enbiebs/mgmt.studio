@@ -13,7 +13,7 @@
 
 import type {
   Budget, BudgetBucket, BudgetCommission, BudgetLine, BudgetSection, BudgetSnapshot, Client,
-  CommissionBase, CrewMember, CrewRate, Currency, ExpenseCategory, FinanceSettings, PayoutKind, Person, Settlement, Show, TourOffer,
+  CommissionBase, CrewMember, CrewRate, Currency, ExpenseCategory, FinanceSettings, PayoutKind, Settlement, Show, TourOffer,
 } from '@/types'
 import { uid } from '@/lib/utils'
 
@@ -142,6 +142,56 @@ export function snapshotOf(b: Pick<Budget, 'lines' | 'commissions' | 'currency' 
   return JSON.parse(JSON.stringify({ lines: b.lines, commissions: b.commissions, currency: b.currency, version: b.version }))
 }
 
+// ── Crew fees that follow the person ─────────────────────────
+/** What a new crew line assumes: one advance day and one show day (edit per budget). */
+export const DEFAULT_CREW_DAYS: CrewDays = { advance: 1, travel: 0, show: 1 }
+
+/** A budget line for one crew member, worked out from their saved pay. */
+export function crewLineFor(client: Client, member: CrewMember, rate: CrewRate): BudgetLine {
+  const name = client.people.find(p => p.id === member.personId)?.name ?? 'Crew'
+  const days: CrewDays = { ...DEFAULT_CREW_DAYS }
+  return newLine('labor', `Labor — ${crewRoleShort(member.role)} (${name})`, crewLineAmount(rate, days), { crewMemberId: member.id, days })
+}
+
+/**
+ * Adds the fee of a crew member who "tours with the artist" to a budget that doesn't have them yet, and
+ * adds their per diems to the per-diem line. Only a draft budget for a show or offer that hasn't happened
+ * is touched (a locked budget is a record of what was agreed). Returns the new lines, or null when there
+ * is nothing to add.
+ */
+export function addMissingCrewFees(client: Client, budget: Budget, today: string, onlyMemberId?: string): AddedCrewFees | null {
+  if (budget.status !== 'draft') return null
+  const date = (budget.showId ? client.tour.shows.find(s => s.id === budget.showId)?.date : undefined)
+    ?? (budget.offerId ? client.agentData?.offers.find(o => o.id === budget.offerId)?.date : undefined)
+  if (date && date < today) return null
+  const crewById = new Map<string, CrewMember>(client.tour.crew.map(m => [m.id, m]))
+  const missing = client.finance.crewRates.filter(r =>
+    r.toursWithArtist && crewById.has(r.crewMemberId) && (!onlyMemberId || r.crewMemberId === onlyMemberId) &&
+    !budget.lines.some(l => l.crewMemberId === r.crewMemberId))
+  if (missing.length === 0) return null
+  const added = missing.map(r => crewLineFor(client, crewById.get(r.crewMemberId)!, r))
+  const perDiemAdded = round2(missing.reduce((a, r) => a + crewPerDiem(r, DEFAULT_CREW_DAYS), 0))
+  // Per diems go onto the FIRST per-diem line only (a budget with two such lines must not count them twice).
+  const perDiemLineId = perDiemAdded > 0 ? budget.lines.find(l => l.bucket === 'per_diems')?.id : undefined
+  const lines = [...budget.lines, ...added].map(l => (l.id === perDiemLineId ? { ...l, amount: round2(l.amount + perDiemAdded) } : l))
+  return { lines, added: added.map(l => l.label), addedIds: added.map(l => l.id), perDiemLineId, perDiemAdded: perDiemLineId ? perDiemAdded : 0 }
+}
+
+/** The result of adding crew fees to a budget: the new lines, what was added, and how to take exactly that back out. */
+export interface AddedCrewFees {
+  lines: BudgetLine[]
+  added: string[]                 // labels, for the message
+  addedIds: string[]              // the lines that were added
+  perDiemLineId?: string          // the per-diem line that grew
+  perDiemAdded: number            // by how much
+}
+
+/** The same budget with exactly those additions taken back out, leaving every later edit alone. */
+export function withoutAddedCrewFees(lines: BudgetLine[], undo: Pick<AddedCrewFees, 'addedIds' | 'perDiemLineId' | 'perDiemAdded'>): BudgetLine[] {
+  const gone = new Set(undo.addedIds)
+  return lines.filter(l => !gone.has(l.id)).map(l => (l.id === undo.perDiemLineId ? { ...l, amount: round2(l.amount - undo.perDiemAdded) } : l))
+}
+
 // ── A new budget, from the defaults ──────────────────────────
 export const newLine = (bucket: BudgetBucket, label: string, amount = 0, extra: Partial<BudgetLine> = {}): BudgetLine =>
   ({ id: 'bl-' + uid(), section: BUCKET_SECTION[bucket], bucket, label, amount, ...extra })
@@ -158,17 +208,12 @@ export function buildNewBudget(args: {
   const guarantee = offer?.guarantee ?? show?.guarantee ?? 0
   const currency: Currency = show?.currency ?? settings.homeCurrency
 
-  const peopleById = new Map<string, Person>(client.people.map(p => [p.id, p]))
   const crewById = new Map<string, CrewMember>(client.tour.crew.map(m => [m.id, m]))
   const touring = client.finance.crewRates.filter(r => r.toursWithArtist && crewById.has(r.crewMemberId))
 
   // Default assumption: one advance day and one show day each (edit per budget).
-  const days: CrewDays = { advance: 1, travel: 0, show: 1 }
-  const labor = touring.map(r => {
-    const m = crewById.get(r.crewMemberId)!
-    const name = peopleById.get(m.personId)?.name ?? 'Crew'
-    return newLine('labor', `Labor — ${crewRoleShort(m.role)} (${name})`, crewLineAmount(r, days), { crewMemberId: r.crewMemberId, days })
-  })
+  const days: CrewDays = { ...DEFAULT_CREW_DAYS }
+  const labor = touring.map(r => crewLineFor(client, crewById.get(r.crewMemberId)!, r))
   const perDiemTotal = touring.reduce((a, r) => a + crewPerDiem(r, days), 0)
 
   const lines: BudgetLine[] = [
