@@ -46,7 +46,7 @@ import {
   type ItemException, type ItemType, type ItemEffect, type Viewer,
 } from '@/lib/item-access'
 import {
-  loadWorkspaceData, getMyMembership, getGrantsForMember, getPreviewableMembers,
+  loadWorkspaceData, getMyMembership, getGrantsForMember, fetchGrantsForMember, getPreviewableMembers,
   loadItemAccess, upsertItemAccess, deleteItemAccess,
   loadInboxState, saveInboxChoice, clearInboxChoice,
   insertTask, saveTask, deleteTaskRow, loadWorkspacePeople, insertAgendaPoints, saveAgendaPoint, deleteAgendaPointRow,
@@ -184,6 +184,8 @@ interface StudioState {
   // null in demo mode. Only a real 'manager' may use the role switcher to
   // preview other roles' views; everyone else is locked to authRole.
   authRole: UserRole | null
+  // The signed-in person's own login record, so a change to their own access (a Point Person removing themselves) can be re-read.
+  myMemberId: string | null
   // Fixed client for an artist membership (real or previewed) — artists
   // never see a roster, only their own client.
   authClientId: string | null
@@ -269,6 +271,10 @@ interface StudioState {
   // Manager-only: preview the app as another real workspace member, using
   // their actual role + access_grants. Pass null to return to Manager.
   previewAs: (memberId: string | null) => Promise<void>
+  // Re-reads what the signed-in person may open and the team list, after access was changed from the Sharing screen.
+  refreshMyAccess: () => Promise<void>
+  // After someone's access to an artist changed: forget what was cached about them and re-read the team list.
+  afterAccessChange: (memberId?: string) => Promise<void>
 
   // ── Navigation actions ──
   goToDashboard: () => void
@@ -514,6 +520,7 @@ export const useStore = create<StudioState>((set, get) => ({
 
   role:          'manager',
   authRole:      null,
+  myMemberId:    null,
   authClientId:  null,
   grants:        [],
   previewMembers: [],
@@ -575,7 +582,8 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     const key = SECTION_TO_GRANT_KEY[section]
     if (s.grants.some(g =>
-      g.section === key && (g.clientId === null || g.clientId === cid) && (!requireEdit || g.canEdit)
+      (g.section === key && (g.clientId === null || g.clientId === cid) && (!requireEdit || g.canEdit))
+      || (g.section === 'admin' && g.clientId === cid)   // a Point Person for this artist: everything for them
     )) return true
     // A shared item opens its section for viewing only - never for editing.
     return !requireEdit && s.isShareOnly(section, cid)
@@ -586,7 +594,7 @@ export const useStore = create<StudioState>((set, get) => ({
     const cid = clientId ?? s.clientId
     if (!cid || s.role === 'manager' || s.role === 'artist' || section === 'calendar') return false
     const key = SECTION_TO_GRANT_KEY[section]
-    const granted = s.grants.some(g => g.section === key && (g.clientId === null || g.clientId === cid))
+    const granted = s.grants.some(g => (g.section === key && (g.clientId === null || g.clientId === cid)) || (g.section === 'admin' && g.clientId === cid))
     return !granted && !!s.data.clients.find(c => c.id === cid)?.itemSections?.includes(section)
   },
 
@@ -653,6 +661,7 @@ export const useStore = create<StudioState>((set, get) => ({
         isLoading: false,
         role,
         authRole: role,
+        myMemberId: memberId,
         authClientId: memberClientId,
         grants,
         previewMembers,
@@ -717,6 +726,24 @@ export const useStore = create<StudioState>((set, get) => ({
       clientId: member.role === 'artist' ? member.clientId : null,
       section: 'songs',
     })
+  },
+
+  refreshMyAccess: async () => {
+    const s = get()
+    if (s.previewMemberId || !s.myMemberId || !s.authRole || s.authRole === 'artist') return
+    const [workspacePeople, grants] = await Promise.all([
+      loadWorkspacePeople().catch(() => s.workspacePeople),
+      // A failed read must keep what we had: an empty list would look like "no access to anything".
+      s.authRole === 'manager' ? Promise.resolve(s.grants) : fetchGrantsForMember(s.myMemberId).catch(e => { console.error(e); return s.grants }),
+    ])
+    set({ workspacePeople, grants })
+  },
+
+  afterAccessChange: async (memberId) => {
+    const { memberGrants } = get()
+    if (memberId && memberGrants[memberId]) set({ memberGrants: Object.fromEntries(Object.entries(memberGrants).filter(([id]) => id !== memberId)) })
+    const workspacePeople = await loadWorkspacePeople().catch(() => null)
+    if (workspacePeople) set({ workspacePeople })
   },
 
   loadMemberGrants: async () => {

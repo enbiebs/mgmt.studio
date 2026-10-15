@@ -94,7 +94,8 @@ export function hasSectionGrant(v: Viewer, section: MainSection, clientId: strin
   if (v.role === 'manager') return true
   if (v.role === 'artist') return v.clientId === clientId
   const key = SECTION_TO_GRANT_KEY[section]
-  return v.grants.some(g => g.section === key && (g.clientId === null || g.clientId === clientId))
+  // A Point Person for this artist covers every section (the database says the same).
+  return v.grants.some(g => (g.section === key && (g.clientId === null || g.clientId === clientId)) || (g.section === 'admin' && g.clientId === clientId))
 }
 
 // What the person sees with no exceptions: their normal area access, except

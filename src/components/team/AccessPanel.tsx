@@ -5,7 +5,9 @@ import { uid } from '@/lib/utils'
 import { inputClass, selectClass } from '@/components/ui/Modal'
 import type { Person } from '@/types'
 import { ARTIST_SIDE_NAME } from '@/lib/brand'
-import { PRESETS, SECTIONS, matchPreset, otherAccess, planChanges, presetByKey, summarize, levelsOf, type GrantRow } from '@/lib/access-presets'
+import { ADMIN_KEY, LEVELS, SECTIONS, matchPreset, otherAccess, planChanges, presetByKey, summarize, levelsOf, type GrantRow } from '@/lib/access-presets'
+import { levelChangeWarning } from '@/lib/sharing'
+import { applyGrantPlan } from '@/lib/db'
 
 type Level = 'none' | 'view' | 'edit'
 type Member = { id: string; role: string } | null
@@ -24,6 +26,7 @@ export function AccessPanel({ person }: { person: Person }) {
   // results back — hide the panel entirely instead of showing a
   // misleading "no login yet" state.
   const isManager = useStore(s => s.role === 'manager')
+  const afterAccessChange = useStore(s => s.afterAccessChange)
   const [loading, setLoading] = useState(true)
   const [member, setMember] = useState<Member>(null)
   const [grants, setGrants] = useState<GrantRow[]>([])
@@ -78,29 +81,18 @@ export function AccessPanel({ person }: { person: Person }) {
     if (!member) return
     const levels = key === 'none' ? {} : presetByKey(key)?.levels
     if (!levels) return
-    if (matchPreset(grants, clientId) === 'custom' && !confirm('This replaces the choices you made for this artist. Continue?')) return
-    const plan = planChanges(grants, clientId, levels)
-    const { createClient } = await import('@/lib/supabase/client')
-    const supabase = createClient()
-    const added = plan.add.map(a => ({ id: 'grant-' + uid(), workspace_member_id: member.id, section: a.section, client_id: clientId, can_edit: a.canEdit }))
-    const results = await Promise.all([
-      plan.remove.length ? supabase.from('access_grants').delete().in('id', plan.remove) : null,
-      ...plan.update.map(u => supabase.from('access_grants').update({ can_edit: u.canEdit }).eq('id', u.id)),
-      added.length ? supabase.from('access_grants').insert(added) : null,
-    ])
-    if (results.some(r => r?.error)) {
+    const warning = levelChangeWarning(matchPreset(grants, clientId), key, { isMe: false, isManager: true })
+    if (warning && !confirm(`${warning} Continue?`)) return
+    const plan = planChanges(grants, clientId, levels, key === ADMIN_KEY)
+    try {
+      await applyGrantPlan(member.id, clientId, plan, grants.filter(g => g.section === ADMIN_KEY && g.client_id === clientId).map(g => g.id))
+      setLevelMessage(m => ({ ...m, [clientId]: '' }))
+    } catch (e) {
+      console.error(e)
       setLevelMessage(m => ({ ...m, [clientId]: "Couldn't change their access. Please try again." }))
-      fetchAccess(person.id).then(r => setGrants(r.grants))   // show what is really saved
-      return
     }
-    setLevelMessage(m => ({ ...m, [clientId]: '' }))
-    setGrants(g => [
-      ...g.filter(row => !plan.remove.includes(row.id)).map(row => {
-        const u = plan.update.find(x => x.id === row.id)
-        return u ? { ...row, can_edit: u.canEdit } : row
-      }),
-      ...added.map(({ id, section, client_id, can_edit }) => ({ id, section, client_id, can_edit })),
-    ])
+    fetchAccess(person.id).then(r => setGrants(r.grants))   // always show what is really saved
+    void afterAccessChange(member.id)
   }
 
   async function cycleGrant(clientId: string, section: string) {
@@ -121,6 +113,7 @@ export function AccessPanel({ person }: { person: Person }) {
       await supabase.from('access_grants').delete().eq('id', existing.id)
       setGrants(g => g.filter(row => row.id !== existing.id))
     }
+    void afterAccessChange(member.id)
   }
 
   if (!isManager) return null
@@ -185,7 +178,7 @@ export function AccessPanel({ person }: { person: Person }) {
                 className="px-2 py-1 text-xs bg-gray-50 border border-gray-100 rounded-lg text-gray-600 hover:border-gray-200 max-w-[190px]"
               >
                 <option value="none">No access</option>
-                {PRESETS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+                {LEVELS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
                 {current === 'custom' && <option value="custom" disabled>Custom (fine-tuned)</option>}
               </select>
             </div>
@@ -196,6 +189,9 @@ export function AccessPanel({ person }: { person: Person }) {
               <div className="text-[11px] text-amber-700 mb-1">Also has: {otherAccess(grants, c.id).join(', ')}. Choosing a level here doesn&apos;t change these.</div>
             )}
             {levelMessage[c.id] && <div className="text-[11px] text-red-500 mb-1">{levelMessage[c.id]}</div>}
+            {current === ADMIN_KEY ? (
+              <div className="text-[11px] text-gray-400">Every page is included, so there is nothing to pick one by one. To limit them, choose another level above.</div>
+            ) : (
             <div className="flex flex-wrap gap-1">
               {SECTIONS.map(s => {
                 const level = levelOf(grants, s.key, c.id)
@@ -217,6 +213,7 @@ export function AccessPanel({ person }: { person: Person }) {
                 )
               })}
             </div>
+            )}
           </div>
           )
         })}
