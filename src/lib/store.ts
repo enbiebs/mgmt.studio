@@ -19,7 +19,7 @@ import type {
   UserRole, ProjectStatus, ProjectType, Stakeholder, Project, ArtistTodo,
   TrackLabelCopy, ReleaseLabelCopy, ChecklistItemKey, ChecklistItem, TrackPriority,
   GuestListEntry, GuestListCategory, ReleaseStakeholder, StakeholderRole,
-  ArtistProfile, CrewMember, ShowAdvance, TravelItem, Person, PersonActivity, Currency,
+  ArtistAccount, ArtistProfile, CrewMember, ShowAdvance, TravelItem, Person, PersonActivity, Currency,
   CatalogWork, RegStatus, Invoice, InvoiceLineItem, InvoiceStatus, RevenueStream,
   LegalTemplate, LegalTemplateClause, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
   ReleaseType, Venue, TourOffer, Expense, Vendor, Run, Budget, BudgetBucket, CrewRate, FinanceSettings,
@@ -60,7 +60,7 @@ import {
   upsertExpense, deleteExpense as dbDeleteExpense,
   upsertVendor, deleteVendor as dbDeleteVendor,
   upsertRun, deleteRun as dbDeleteRun, upsertBudget, deleteBudget as dbDeleteBudget, upsertCrewRate, upsertFinanceSettings,
-  upsertVenue, deleteVenue as dbDeleteVenue, upsertArtistProfile,
+  upsertVenue, deleteVenue as dbDeleteVenue, upsertArtistProfile, upsertAccounts, deleteAccountRow,
   upsertPost, deletePost as dbDeletePost, replaceAutoPosts,
   upsertDeposit, deleteDeposit as dbDeleteDeposit,
   upsertRoyaltyStream, deleteRoyaltyStream as dbDeleteRoyaltyStream,
@@ -432,6 +432,11 @@ interface StudioState {
   // ── Artist profile (the open details; private ones never come through here) ──
   /** Merges the given details into the artist's profile and saves them. Resolves once the database has them. */
   saveProfile: (patch: Partial<ArtistProfile>) => Promise<{ ok: true } | { ok: false; error: string }>
+
+  // ── Accounts list (where each login lives; never a password) ──
+  /** Adds new accounts or updates existing ones (matched by id). Resolves once the database has them. */
+  saveAccounts: (accounts: ArtistAccount[]) => Promise<{ ok: true } | { ok: false; error: string }>
+  removeAccount: (accountId: string) => Promise<{ ok: true } | { ok: false; error: string }>
 
   // ── Venue library (reusable across shows at the same room) ──
   addVenue: (patch: Omit<Venue, 'id' | 'createdAt'>) => string
@@ -2624,6 +2629,47 @@ export const useStore = create<StudioState>((set, get) => ({
       // Put the screen back to what the database still has, so it never shows something that was not saved.
       set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, profile: before } : c) } })
       return { ok: false, error: "Couldn't save. Please try again." }
+    }
+  },
+
+  saveAccounts: async (accounts) => {
+    const { data, clientId, workspaceId } = get()
+    const client = data.clients.find(c => c.id === clientId)
+    if (!client || !clientId) return { ok: false, error: 'No artist is open' }
+    const before = client.accounts
+    const incoming = new Map(accounts.map(a => [a.id, a]))
+    const next = [...(before ?? []).map(a => incoming.get(a.id) ?? a), ...accounts.filter(a => !(before ?? []).some(b => b.id === a.id))]
+      .sort((a, b) => a.platform.localeCompare(b.platform))
+    const updated = { clients: data.clients.map(c => c.id === clientId ? { ...c, accounts: next } : c) }
+    set({ data: updated })
+    saveData(updated)
+    if (!workspaceId) return { ok: true }
+    try {
+      await upsertAccounts(clientId, accounts)
+      return { ok: true }
+    } catch (e) {
+      console.error(e)
+      set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, accounts: before } : c) } })
+      return { ok: false, error: "Couldn't save. Please try again." }
+    }
+  },
+
+  removeAccount: async (accountId) => {
+    const { data, clientId, workspaceId } = get()
+    const client = data.clients.find(c => c.id === clientId)
+    if (!client || !clientId) return { ok: false, error: 'No artist is open' }
+    const before = client.accounts
+    const updated = { clients: data.clients.map(c => c.id === clientId ? { ...c, accounts: (before ?? []).filter(a => a.id !== accountId) } : c) }
+    set({ data: updated })
+    saveData(updated)
+    if (!workspaceId) return { ok: true }
+    try {
+      await deleteAccountRow(accountId)
+      return { ok: true }
+    } catch (e) {
+      console.error(e)
+      set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, accounts: before } : c) } })
+      return { ok: false, error: "Couldn't remove it. Please try again." }
     }
   },
 

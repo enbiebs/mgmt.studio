@@ -12,11 +12,12 @@ import { uid } from '@/lib/utils'
 import { SEAT_OPTIONS, SIZE_FIELDS, SOCIAL_FIELDS } from '@/lib/profile-fields'
 import type { ArtistProfile, Client, ProfileContact, TravelPrefs } from '@/types'
 import { AccessLog } from './AccessLog'
+import { AccountsTab } from './AccountsTab'
 import { Card, FieldsCard, type FieldDef } from './FieldsCard'
 import { PrivateBlock } from './PrivateBlock'
 import { useProfileSecure } from './useProfileSecure'
 
-const TABS = [['overview', 'Overview'], ['travel', 'Travel'], ['team', 'Team'], ['log', 'Who looked']] as const
+const TABS = [['overview', 'Overview'], ['travel', 'Travel'], ['team', 'Team'], ['accounts', 'Accounts'], ['log', 'Who looked']] as const
 type Tab = (typeof TABS)[number][0]
 
 const CONTACT_ROLES = ['Agent', 'Business manager', 'Lawyer', 'Label', 'Publisher', 'Publicist', 'Tour manager', 'Artwork / design', 'Website developer', 'Booking assistant', 'Other']
@@ -101,6 +102,7 @@ export function ProfileView() {
 
           {tab === 'travel' && <TravelTab client={client} p={p} canEdit={canEdit} save={save} secure={secure} />}
           {tab === 'team' && <TeamTab client={client} p={p} canEdit={canEdit} save={save} />}
+          {tab === 'accounts' && <AccountsTab client={client} canEdit={canEdit} />}
           {tab === 'log' && <AccessLog client={client} />}
         </div>
       </div>

@@ -20,8 +20,8 @@ export function renderValue(v: string): ReactNode {
 export function Card({ title, hint, action, children }: { title: string; hint?: string; action?: ReactNode; children: ReactNode }) {
   return (
     <section className="rounded-2xl border border-gray-100 bg-canvas p-5">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-64">
           <h3 className="font-serif text-base font-medium">{title}</h3>
           {hint && <p className="mt-0.5 text-xs text-gray-500">{hint}</p>}
         </div>
