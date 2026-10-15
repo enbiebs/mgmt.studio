@@ -5,7 +5,7 @@ import { uid } from '@/lib/utils'
 import { inputClass, selectClass } from '@/components/ui/Modal'
 import type { Person } from '@/types'
 import { ARTIST_SIDE_NAME } from '@/lib/brand'
-import { PRESETS, SECTIONS, matchPreset, planChanges, presetByKey, summarize, levelsOf, type GrantRow } from '@/lib/access-presets'
+import { PRESETS, SECTIONS, matchPreset, otherAccess, planChanges, presetByKey, summarize, levelsOf, type GrantRow } from '@/lib/access-presets'
 
 type Level = 'none' | 'view' | 'edit'
 type Member = { id: string; role: string } | null
@@ -192,6 +192,9 @@ export function AccessPanel({ person }: { person: Person }) {
             <div className="text-[11px] text-gray-400 mb-1.5">
               {preset ? `${preset.blurb} Can't see: ${preset.hidden}.` : current === 'custom' ? summarize(levelsOf(grants, c.id)) : 'Cannot see anything for this artist.'}
             </div>
+            {otherAccess(grants, c.id).length > 0 && (
+              <div className="text-[11px] text-amber-700 mb-1">Also has: {otherAccess(grants, c.id).join(', ')}. Choosing a level here doesn&apos;t change these.</div>
+            )}
             {levelMessage[c.id] && <div className="text-[11px] text-red-500 mb-1">{levelMessage[c.id]}</div>}
             <div className="flex flex-wrap gap-1">
               {SECTIONS.map(s => {

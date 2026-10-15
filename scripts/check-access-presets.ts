@@ -1,6 +1,6 @@
 // Checks the access-level bundles.  Run with:  npx tsx scripts/check-access-presets.ts
 import assert from 'node:assert/strict'
-import { PRESETS, SECTIONS, levelsOf, matchPreset, planChanges, presetByKey, summarize, type GrantRow } from '../src/lib/access-presets'
+import { PRESETS, SECTIONS, levelsOf, matchPreset, otherAccess, planChanges, presetByKey, summarize, type GrantRow } from '../src/lib/access-presets'
 
 const row = (id: string, section: string, clientId: string | null, canEdit: boolean): GrantRow => ({ id, section, client_id: clientId, can_edit: canEdit })
 
@@ -51,6 +51,24 @@ assert.deepEqual(planChanges(current, 'a', {}), { remove: ['g1', 'g2', 'g3'], up
 assert.deepEqual(planChanges(bookkeeper, 'a', presetByKey('bookkeeper')!.levels), { remove: [], update: [], add: [] })   // already that level: nothing to do
 // a level written down as 'none' is the same as leaving it out
 assert.deepEqual(planChanges([row('g1', 'tour', 'a', false)], 'a', { tour: 'none', music: 'view' }), { remove: ['g1'], update: [], add: [{ section: 'music', canEdit: false }] })
+
+// the private profile (ID numbers, home address, tax ID) is only in the levels that are meant to include it
+for (const p of PRESETS) {
+  const profile = p.levels.profile
+  assert.equal(!!profile, p.key === 'full', `${p.key}: only Full access includes the profile (found ${profile})`)
+}
+// every "can't see" line is honest about booking offers living inside Tour wherever Tour is included
+for (const p of PRESETS) if (p.levels.tour) assert.ok(/offers/i.test(p.hidden) || p.key === 'full' || p.key === 'bookkeeper', `${p.key}: say that offers (with fees) are part of Tour`)
+
+// choosing a level never touches access the panel can't show (the vault), and says it is there
+const withVault = [row('v', 'vault', 'a', true), row('t', 'tour', 'a', true), row('all', 'finance', null, true)]
+const toNone = planChanges(withVault, 'a', {})
+assert.deepEqual(toNone, { remove: ['t'], update: [], add: [] })                          // only the tour grant goes; the vault and the all-artists grant stay
+assert.deepEqual(planChanges(withVault, 'a', presetByKey('full')!.levels).remove, [])
+assert.equal(matchPreset(withVault, 'a'), 'custom')                                        // tour edit alone is not one of the levels
+assert.deepEqual(otherAccess(withVault, 'a'), ['vault (not shown here)', 'Finance for all artists'])
+assert.deepEqual(otherAccess([row('1', 'tour', 'a', false)], 'a'), [])
+assert.deepEqual(otherAccess([row('1', 'vault', 'b', false)], 'a'), [])                  // another artist's vault grant is not this artist's business
 
 // plain-language summary
 assert.equal(summarize(presetByKey('crew')!.levels), 'Can look at: Tour')

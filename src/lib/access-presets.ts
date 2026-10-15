@@ -47,14 +47,14 @@ export const PRESETS: AccessPreset[] = [
   },
   {
     key: 'assistant', label: 'Day-to-day team',
-    blurb: 'Works on shows, projects, content and music, and can look at the profile, the artist’s people and analytics.',
-    hidden: 'Money (finance) and contracts',
-    levels: { profile: 'view', music: 'edit', tour: 'edit', content: 'edit', team: 'view', projects: 'edit', analytics: 'view' },
+    blurb: 'Works on shows, projects, content and music, and can look at the artist’s people and analytics.',
+    hidden: 'Money (finance), contracts and the profile (private details such as ID numbers and home address live there). Booking offers, with their fees, are part of Tour, so they show',
+    levels: { music: 'edit', tour: 'edit', content: 'edit', team: 'view', projects: 'edit', analytics: 'view' },
   },
   {
     key: 'crew', label: 'Tour crew',
     blurb: 'Sees the schedule, advance, day sheets, travel, guest list and crew for this artist, and can’t change anything.',
-    hidden: 'Money, contracts, music, content and the profile. Note: booking offers (with their fees) are part of Tour, so they are visible too.',
+    hidden: 'Money, contracts, music, content and the profile. Booking offers, with their fees, are part of Tour, so they show',
     levels: { tour: 'view' },
   },
   {
@@ -72,7 +72,7 @@ export const PRESETS: AccessPreset[] = [
   {
     key: 'readonly', label: 'Look only',
     blurb: 'Can look at shows, music, content, projects and analytics, but can’t change anything.',
-    hidden: 'Money, contracts, the profile and the artist’s people',
+    hidden: 'Money, contracts, the profile and the artist’s people. Booking offers, with their fees, are part of Tour, so they show',
     levels: { music: 'view', tour: 'view', content: 'view', projects: 'view', analytics: 'view' },
   },
 ]
@@ -115,6 +115,7 @@ export function planChanges(grants: GrantRow[], clientId: string, levels: Partia
   const mine = grants.filter(g => g.client_id === clientId)
   const out: GrantChanges = { remove: [], update: [], add: [] }
   for (const g of mine) {
+    if (!SECTIONS.some(sec => sec.key === g.section)) continue      // access the panel can't show (e.g. the vault) is never changed by choosing a level
     const want = levels[g.section as SectionKey]
     if (!want || want === 'none') out.remove.push(g.id)
     else if ((want === 'edit') !== g.can_edit) out.update.push({ id: g.id, canEdit: want === 'edit' })
@@ -134,4 +135,19 @@ export function summarize(levels: Partial<Record<SectionKey, Level>>): string {
   if (edit.length) parts.push(`Can change: ${edit.join(', ')}`)
   if (view.length) parts.push(`Can look at: ${view.join(', ')}`)
   return parts.join(' · ') || 'Cannot see anything for this artist'
+}
+
+/**
+ * Access this person has that the level picker neither shows nor changes: sections it doesn't list (such as the vault)
+ * and access to ALL artists (set elsewhere, not per artist). Shown as a note so a level never looks like the whole story.
+ */
+export function otherAccess(grants: GrantRow[], clientId: string): string[] {
+  const label = (section: string) => SECTIONS.find(s => s.key === section)?.label ?? section
+  const known = new Set<string>(SECTIONS.map(s => s.key))
+  const out: string[] = []
+  for (const g of grants) {
+    if (g.client_id === clientId && !known.has(g.section)) out.push(`${label(g.section)} (not shown here)`)
+    else if (g.client_id === null) out.push(`${label(g.section)} for all artists`)
+  }
+  return [...new Set(out)]
 }
