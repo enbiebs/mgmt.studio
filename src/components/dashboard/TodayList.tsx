@@ -7,15 +7,17 @@
 //  "Mine" shows what is given to you; "Everyone" shows the whole team's.
 // ──────────────────────────────────────────────────────────
 
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { useToday, recallScope, rememberScope } from '@/lib/useToday'
-import { BUCKET_LABEL, dueLabel, peopleFor, taskDestination, taskSection, type Bucket, type TodoRow } from '@/lib/tasks'
+import { BUCKET_LABEL, dueLabel, type Bucket, type TodoRow } from '@/lib/tasks'
+import { STATUS_CONFIG } from '@/components/manager/ProjectsView'
 import type { InboxItem, InboxSeverity } from '@/lib/inbox'
 import { money2 } from '@/lib/settlement-math'
 import { addDays, fromDateStr, today } from '@/lib/utils'
-import type { BizSub, Task, TourSub } from '@/types'
+import type { BizSub, Project, Task, TourSub } from '@/types'
 import { AddTodo } from './AddTodo'
+import { AssigneeSelect, ChipName, ROW, TaskRow } from './todo-parts'
 
 const DOT: Record<InboxSeverity, string> = { urgent: 'bg-red-500', soon: 'bg-amber-400', info: 'bg-gray-300' }
 const SHOW_FIRST = 8
@@ -114,99 +116,51 @@ export function TodayList() {
 }
 
 function Row({ row, me }: { row: TodoRow; me: string | null }) {
-  return row.kind === 'task'
-    ? <TaskRow task={row.task} clientId={row.clientId} clientName={row.clientName} me={me} />
-    : <AutoRow item={row.item} />
+  if (row.kind === 'task') return <TaskRow task={row.task} clientId={row.clientId} clientName={row.clientName} me={me} />
+  if (row.kind === 'project') return <ProjectRow project={row.project} clientId={row.clientId} clientName={row.clientName} me={me} />
+  return <AutoRow item={row.item} />
 }
 
-const ROW = 'flex flex-wrap md:flex-nowrap items-start gap-x-3 gap-y-1.5 py-2.5 border-t border-gray-50 first:border-t-0'
-const ChipName = ({ name }: { name: string }) => <span className="text-[11px] font-semibold text-gray-400 mr-1.5">{name}</span>
+// ── A project (an artist's request, or one the team opened) given to someone ──
 
-// ── A to-do somebody wrote down ───────────────────────────────────────────────
-
-function TaskRow({ task, clientId, clientName, me }: { task: Task; clientId: string; clientName: string; me: string | null }) {
-  const { toggleTask, updateTask, deleteTask } = useStore()
-  const people = useStore(s => s.workspacePeople)
+function ProjectRow({ project, clientId, clientName, me }: { project: Project; clientId: string; clientName: string; me: string | null }) {
+  const assignProject = useStore(s => s.assignProject)
   const hasAccess = useStore(s => s.hasAccess)
-  const day = today()
-  const late = !!task.dueDate && task.dueDate < day
-  const mayChange = task.assigneeId === me || hasAccess(taskSection(task.link), clientId, true)
-  const options = peopleFor(people, clientId, me)
-  // If the person it is given to can no longer be listed (they lost access), keep showing them.
-  const given = task.assigneeId && !options.some(p => p.userId === task.assigneeId)
-    ? [...options, { userId: task.assigneeId, label: people.find(p => p.userId === task.assigneeId)?.label ?? 'Someone' }]
-    : options
+  const mayChange = hasAccess('projects', clientId, true)
+  const cfg = STATUS_CONFIG[project.status]
+  const late = !!project.dueDate && project.dueDate < today()
+  const unclaimed = !project.assigneeId
 
   function open() {
-    if (!task.link) return
-    const to = taskDestination(task.link)
     const s = useStore.getState()
     s.openClient(clientId)
-    s.setSection(to.section)
-    if (to.section === 'tour' && to.sub) s.setTourSub(to.sub as TourSub)
-    if (to.section === 'finance' && to.sub) s.setBizSub(to.sub as BizSub)
-    if (to.showId) s.setSelectedShow(to.showId)
+    s.setSection('projects')
   }
+  const assign = (id: string | null) => assignProject(project.id, id)
 
   return (
     <div className={ROW}>
-      <button
-        role="checkbox" aria-checked={false} aria-label={`Mark “${task.title}” done`}
-        disabled={!mayChange} onClick={() => toggleTask(clientId, task.id)}
-        className="mt-0.5 w-[18px] h-[18px] rounded-full border-[1.5px] border-gray-300 hover:border-accent hover:bg-accent-soft disabled:opacity-40 disabled:hover:border-gray-300 disabled:hover:bg-transparent flex-shrink-0 transition-colors"
-      />
+      <span className="mt-0.5 w-[18px] h-[18px] rounded-md border-[1.5px] border-gray-200 bg-gray-50 flex items-center justify-center text-[9px] font-bold text-gray-400 flex-shrink-0" title="A project">P</span>
       <div className="flex-1 min-w-0 basis-[calc(100%-2rem)] md:basis-auto">
-        <div className="text-sm"><ChipName name={clientName} /><span className="font-medium break-words">{task.title}</span></div>
-        {task.notes && <div className="text-xs text-gray-400 mt-0.5 break-words">{task.notes}</div>}
+        <div className="text-sm"><ChipName name={clientName} /><span className="font-medium break-words">{project.title}</span></div>
+        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${cfg.bg}`}>{cfg.label}</span>
+          {project.fromArtist && <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700">From the artist</span>}
+        </div>
       </div>
       <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto md:ml-0">
-        <DueButton value={task.dueDate} late={late} disabled={!mayChange} onChange={v => updateTask(clientId, task.id, { dueDate: v })} />
-        <select
-          aria-label="Given to" disabled={!mayChange} value={task.assigneeId ?? ''}
-          onChange={e => updateTask(clientId, task.id, { assigneeId: e.target.value || null })}
-          className="px-1 py-1 text-xs text-gray-400 bg-transparent border-0 cursor-pointer hover:text-gray-700 max-w-[110px] truncate disabled:cursor-default"
-        >
-          <option value="">Nobody yet</option>
-          {given.map(p => <option key={p.userId} value={p.userId}>{p.userId === me ? 'Me' : p.label}</option>)}
-        </select>
-        {task.link && <button onClick={open} className="px-2 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50">Open</button>}
-        {mayChange && (
-          <button
-            aria-label={`Remove “${task.title}”`} title="Remove"
-            onClick={() => { if (confirm(`Remove this to-do?\n\n${task.title}`)) deleteTask(clientId, task.id) }}
-            className="px-1.5 py-1 text-sm leading-none text-gray-300 hover:text-red-500"
-          >
-            ×
-          </button>
+        {project.dueDate && <span className={`px-2 py-1 text-xs ${late ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>{dueLabel(project.dueDate, today())}</span>}
+        {unclaimed && mayChange && me && (
+          <button onClick={() => assign(me)} className="px-2 py-1 border border-accent/40 text-accent bg-accent-soft rounded-lg text-xs font-medium hover:bg-accent-soft/70">Take it</button>
         )}
+        <AssigneeSelect
+          clientId={clientId} value={project.assigneeId} noneLabel="Nobody yet" disabled={!mayChange}
+          onChange={assign}
+          className="px-1 py-1 text-xs text-gray-400 bg-transparent border-0 cursor-pointer hover:text-gray-700 max-w-[110px] truncate disabled:cursor-default"
+        />
+        <button onClick={open} className="px-2 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50">Open</button>
       </div>
     </div>
-  )
-}
-
-function DueButton({ value, late, disabled, onChange }: { value?: string; late: boolean; disabled: boolean; onChange: (v: string | null) => void }) {
-  const ref = useRef<HTMLInputElement>(null)
-  function pick() {
-    const el = ref.current
-    if (!el) return
-    try { if (el.showPicker) { el.showPicker(); return } } catch { /* some browsers only allow it from a click on the field itself */ }
-    el.focus(); el.click()
-  }
-  return (
-    <span className="relative inline-flex">
-      <button
-        type="button" disabled={disabled} onClick={pick}
-        className={`px-2 py-1 text-xs rounded-lg disabled:cursor-default ${value ? (late ? 'text-red-600 font-semibold' : 'text-gray-500') : 'text-gray-300'} ${disabled ? '' : 'hover:bg-gray-50'}`}
-        title={value ? 'Change the date' : 'Add a date'}
-      >
-        {value ? dueLabel(value, today()) : 'Add date'}
-      </button>
-      <input
-        ref={ref} type="date" tabIndex={-1} aria-label="Due date" value={value ?? ''}
-        onChange={e => onChange(e.target.value || null)}
-        className="absolute inset-0 opacity-0 pointer-events-none"
-      />
-    </span>
   )
 }
 

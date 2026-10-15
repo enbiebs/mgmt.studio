@@ -502,10 +502,10 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
 
     const cProjects = (projects.data ?? [])
       .filter((p: { client_id: string }) => p.client_id === c.id)
-      .map((p: { id: string; title: string; type: string; status: string; assignee?: string; due_date?: string; notes?: string; created_at: string; from_artist: boolean }) => ({
+      .map((p: { id: string; title: string; type: string; status: string; assignee_user?: string | null; due_date?: string; notes?: string; created_at: string; from_artist: boolean }) => ({
         id: p.id, title: p.title, type: p.type as Project['type'],
         status: p.status as Project['status'],
-        assignee: p.assignee as Project['assignee'],
+        assigneeId: p.assignee_user ?? undefined,
         dueDate: p.due_date ?? undefined, notes: p.notes,
         createdAt: p.created_at, fromArtist: p.from_artist,
       }))
@@ -1490,14 +1490,16 @@ export async function linkBankTransaction(transactionId: string, patch: { catalo
 // ── Project ────────────────────────────────────────────────
 export async function upsertProject(project: Project, clientId: string) {
   const supabase = createClient()
-  await supabase.from('projects').upsert({
+  // The old text column `assignee` (placeholder initials) is no longer written; `assignee_user` is the real person.
+  const { error } = await supabase.from('projects').upsert({
     id: project.id, client_id: clientId,
     title: project.title, type: project.type,
-    status: project.status, assignee: project.assignee ?? null,
+    status: project.status, assignee_user: project.assigneeId ?? null,
     due_date: project.dueDate ?? null, notes: project.notes ?? null,
     created_at: project.createdAt, from_artist: project.fromArtist,
     updated_at: new Date().toISOString(),
   })
+  if (error) throw error
 }
 
 export async function deleteProject(projectId: string) {

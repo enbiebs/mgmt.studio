@@ -7,6 +7,7 @@
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
+import { ItemTodos } from '@/components/dashboard/ItemTodos'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { addDays, today as localToday } from '@/lib/utils'
 import type { Invoice, InvoiceStatus, Currency, RevenueStream, BankTransaction } from '@/types'
@@ -338,7 +339,10 @@ function InvoiceDetail({ invoice: inv, onClose }: { invoice: Invoice; onClose: (
 
           {inv.status !== 'void' && inv.status !== 'draft' && <InvoicePaymentLinker invoice={inv} />}
 
-          <div className="pt-1"><ItemAccessButton itemType="invoice" itemId={inv.id} /></div>
+          <div className="pt-1 flex flex-wrap gap-2">
+            <ItemTodos link={{ type: 'invoice', id: inv.id }} suggest={`Chase invoice ${inv.number}`} />
+            <ItemAccessButton itemType="invoice" itemId={inv.id} />
+          </div>
         </div>
 
         {/* Status actions — one clear primary action for where this invoice is right now */}

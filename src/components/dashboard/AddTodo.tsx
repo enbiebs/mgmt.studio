@@ -15,7 +15,8 @@ import { Icon } from '@/components/ui/Icon'
 
 const SELECT = 'px-2 py-1.5 text-xs bg-gray-50 border border-gray-100 rounded-lg text-gray-600 hover:border-gray-200 max-w-[170px] truncate'
 
-export function AddTodo() {
+/** `forClient` fixes the artist (used on an artist's own Projects page, where there is nothing to pick). */
+export function AddTodo({ forClient }: { forClient?: string } = {}) {
   const data = useStore(s => s.data)
   const people = useStore(s => s.workspacePeople)
   const hasAccess = useStore(s => s.hasAccess)
@@ -36,8 +37,8 @@ export function AddTodo() {
     void grants
     const ids = accessibleClientIds()
     const all = ids === 'all' ? data.clients : data.clients.filter(c => ids.includes(c.id))
-    return all.filter(c => hasAccess('projects', c.id, true))
-  }, [data, grants, accessibleClientIds, hasAccess])
+    return all.filter(c => (!forClient || c.id === forClient) && hasAccess('projects', c.id, true))
+  }, [data, grants, accessibleClientIds, hasAccess, forClient])
 
   // The artist picked here, else the one used last, else the first real (non-demo) artist.
   const clientId = useMemo(() => {
@@ -84,7 +85,7 @@ export function AddTodo() {
   }
 
   return (
-    <section className="mb-6 bg-canvas border border-gray-100 rounded-2xl p-3 md:p-4">
+    <section className={`${forClient ? 'mb-3' : 'mb-6'} bg-canvas border border-gray-100 rounded-2xl p-3 md:p-4`}>
       <div className="flex items-center gap-2">
         <Icon name="plus" className="w-4 h-4 text-gray-400 ml-1" />
         <input
@@ -104,9 +105,11 @@ export function AddTodo() {
         </button>
       </div>
       <div className="flex flex-wrap items-center gap-2 mt-2 pl-7">
-        <select aria-label="Artist" value={clientId} onChange={e => { setPicked(e.target.value); setAssignee(null); setAbout('') }} className={SELECT}>
-          {roster.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        {!forClient && (
+          <select aria-label="Artist" value={clientId} onChange={e => { setPicked(e.target.value); setAssignee(null); setAbout('') }} className={SELECT}>
+            {roster.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        )}
         <select aria-label="Given to" value={given} onChange={e => setAssignee(e.target.value)} className={SELECT}>
           <option value="">Nobody yet</option>
           {options.map(p => <option key={p.userId} value={p.userId}>{p.userId === me ? 'Me' : p.label}</option>)}

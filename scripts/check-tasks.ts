@@ -1,8 +1,8 @@
 // Checks the to-do logic (grouping, whose list, quick-add words).  Run with:  npx tsx scripts/check-tasks.ts
 import assert from 'node:assert/strict'
-import { BUCKET_ORDER, autoBucket, bucketOf, buildToday, dueLabel, isMine, parseQuickTodo, peopleFor, taskDestination, taskSection, todoPrefix } from '../src/lib/tasks'
+import { BUCKET_ORDER, autoBucket, bucketOf, buildToday, describeLink, dueLabel, isMine, parseQuickTodo, peopleFor, projectBucket, taskDestination, taskSection, todoPrefix } from '../src/lib/tasks'
 import type { InboxItem } from '../src/lib/inbox'
-import type { Client, Task, WorkspacePerson } from '../src/types'
+import type { Client, Project, Task, WorkspacePerson } from '../src/types'
 
 const TODAY = '2026-10-14'   // a Wednesday
 
@@ -47,7 +47,7 @@ const clients = [
   client('c3', 'Gamma', [] as Task[]),
 ]
 const mine = buildToday({ clients, inbox: [auto('urgent', '2026-10-12'), auto('info')], me: ME, scope: 'mine', today: TODAY })
-const idsIn = (b: string) => mine.groups.find(g => g.bucket === b)?.rows.map(r => (r.kind === 'task' ? r.task.id : r.item.title)) ?? []
+const idsIn = (b: string) => mine.groups.find(g => g.bucket === b)?.rows.map(r => (r.kind === 'task' ? r.task.id : r.kind === 'project' ? r.project.id : r.item.title)) ?? []
 assert.deepEqual(idsIn('overdue').sort(), ['over', 't-urgent-2026-10-12'])
 assert.deepEqual(idsIn('today'), ['now'])
 assert.deepEqual(idsIn('later'), ['later'])
@@ -63,10 +63,47 @@ assert.ok(everyone.groups.find(g => g.bucket === 'today')!.rows.some(r => r.kind
 
 // the automatic item sorts ahead of a to-do on the same date, and dates run oldest first
 const sorted = buildToday({ clients: [client('c1', 'Alpha', [task('x', { assigneeId: ME, dueDate: '2026-10-12', title: 'x' })])], inbox: [auto('urgent', '2026-10-12'), auto('urgent', '2026-10-09')], me: ME, scope: 'mine', today: TODAY })
-assert.deepEqual(sorted.groups[0].rows.map(r => r.kind + ':' + (r.kind === 'task' ? r.task.id : r.item.date)), ['auto:2026-10-09', 'auto:2026-10-12', 'task:x'])
+assert.deepEqual(sorted.groups[0].rows.map(r => r.kind + ':' + (r.kind === 'task' ? r.task.id : r.kind === 'project' ? r.project.id : r.item.date)), ['auto:2026-10-09', 'auto:2026-10-12', 'task:x'])
 
 // a client with no tasks field at all is fine
 assert.equal(buildToday({ clients: [{ id: 'z', name: 'Z' } as unknown as Client], inbox: [], me: ME, scope: 'mine', today: TODAY }).groups.length, 0)
+
+// ── projects on Today ──
+const proj = (id: string, extra: Partial<Project> = {}): Project => ({ id, title: id, type: 'content', status: 'in-progress', createdAt: '2026-10-01', fromArtist: false, ...extra })
+assert.equal(projectBucket(proj('a', { assigneeId: ME, dueDate: '2026-10-10' }), ME, 'mine', TODAY), 'overdue')   // given to me: mine
+assert.equal(projectBucket(proj('a', { assigneeId: ME }), ME, 'mine', TODAY), 'nodate')
+assert.equal(projectBucket(proj('a', { assigneeId: SAM, dueDate: TODAY }), ME, 'mine', TODAY), null)             // Sam's is not on my list...
+assert.equal(projectBucket(proj('a', { assigneeId: SAM, dueDate: TODAY }), ME, 'everyone', TODAY), 'today')      // ...but is under Everyone
+assert.equal(projectBucket(proj('a', { dueDate: '2026-12-01' }), ME, 'mine', TODAY), null)                       // nobody has it: only under Everyone
+assert.equal(projectBucket(proj('a', { dueDate: '2026-12-01' }), ME, 'everyone', TODAY), 'later')
+assert.equal(projectBucket(proj('a', { assigneeId: ME, status: 'done' }), ME, 'everyone', TODAY), null)          // finished: gone
+// an artist's request that nobody has picked up shows for everyone, in both views, so it cannot be missed
+const request = proj('req', { fromArtist: true, status: 'submitted' })
+assert.equal(projectBucket(request, ME, 'mine', TODAY), 'today')
+assert.equal(projectBucket(request, null, 'mine', TODAY), 'today')
+assert.equal(projectBucket({ ...request, dueDate: '2026-10-01' }, ME, 'mine', TODAY), 'overdue')
+assert.equal(projectBucket({ ...request, assigneeId: SAM }, ME, 'mine', TODAY), null)                            // once someone has it, it is theirs
+assert.equal(projectBucket({ ...request, assigneeId: SAM }, ME, 'everyone', TODAY), 'nodate')
+const withProjects = buildToday({ clients: [{ id: 'c1', name: 'Alpha', tasks: [], projects: [proj('mine-p', { assigneeId: ME, dueDate: TODAY }), proj('sams-p', { assigneeId: SAM }), request] } as unknown as Client], inbox: [], me: ME, scope: 'mine', today: TODAY })
+assert.deepEqual(withProjects.groups.flatMap(g => g.rows).map(r => (r.kind === 'project' ? r.project.id : '?')).sort(), ['mine-p', 'req'])
+assert.equal(withProjects.needCount, 2)
+
+// a demo artist's sample projects stay off Today unless given to me
+const demoOnly = (p: Project[]) => buildToday({ clients: [{ id: 'd', name: 'Demo', isDemo: true, tasks: [], projects: p } as unknown as Client], inbox: [], me: ME, scope: 'everyone', today: TODAY }).groups.length
+assert.equal(demoOnly([request, proj('x', { dueDate: TODAY })]), 0)
+assert.equal(demoOnly([proj('x', { assigneeId: ME, dueDate: TODAY })]), 1)
+
+// ── what a to-do is about ──
+const rich = { tour: { shows: [{ id: 's1', venue: 'Tresor', city: 'Berlin' }] }, agentData: { offers: [{ id: 'o1', venue: 'Fabric', city: 'London' }] }, finance: { invoices: [{ id: 'i1', number: 'INV-7', to: 'Sound LA' }], expenses: [{ id: 'e1', vendor: 'Hertz', description: 'Van' }, { id: 'e2', vendor: '', description: 'Strings' }] }, legal: { contracts: [{ id: 'c1', title: 'Label deal' }] }, projects: [{ id: 'p1', title: 'Press photos' }], songs: { albums: [{ tracks: [{ id: 't1', title: 'Golden Hour' }] }] } } as unknown as Client
+assert.equal(describeLink(rich, { type: 'show', id: 's1' }), 'Tresor · Berlin')
+assert.equal(describeLink(rich, { type: 'offer', id: 'o1' }), 'Fabric · London')
+assert.equal(describeLink(rich, { type: 'invoice', id: 'i1' }), 'INV-7 · Sound LA')
+assert.equal(describeLink(rich, { type: 'expense', id: 'e1' }), 'Hertz')
+assert.equal(describeLink(rich, { type: 'expense', id: 'e2' }), 'Strings')
+assert.equal(describeLink(rich, { type: 'contract', id: 'c1' }), 'Label deal')
+assert.equal(describeLink(rich, { type: 'project', id: 'p1' }), 'Press photos')
+assert.equal(describeLink(rich, { type: 'song', id: 't1' }), 'Golden Hour')
+assert.equal(describeLink(rich, { type: 'show', id: 'gone' }), undefined)           // the thing was removed: say nothing
 
 // ── who a to-do can be given to ──
 const person = (userId: string, label: string, extra: Partial<WorkspacePerson> = {}): WorkspacePerson =>

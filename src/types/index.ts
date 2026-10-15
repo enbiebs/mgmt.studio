@@ -363,14 +363,12 @@ export type UserRole = 'manager' | 'artist' | 'agent' | 'lawyer' | 'team'
 // ── Projects (management-side tracking) ─────────────────────
 export type ProjectStatus = 'submitted' | 'in-progress' | 'review' | 'done'
 export type ProjectType   = 'release' | 'show' | 'content' | 'brand-deal' | 'merch' | 'other'
-export type Stakeholder   = 'GC' | 'EB' | 'PH' | 'MS'
-
 export interface Project {
   id: string
   title: string
   type: ProjectType
   status: ProjectStatus
-  assignee?: Stakeholder
+  assigneeId?: string    // the teammate it is given to (a WorkspacePerson.userId); none = nobody yet
   dueDate?: string
   notes?: string
   createdAt: string

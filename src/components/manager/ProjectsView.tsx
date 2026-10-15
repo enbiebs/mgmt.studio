@@ -7,9 +7,13 @@
 // ──────────────────────────────────────────────────────────
 
 import { useState } from 'react'
+import { AddTodo } from '@/components/dashboard/AddTodo'
 import { useStore } from '@/lib/store'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
-import type { ProjectType, ProjectStatus, Stakeholder } from '@/types'
+import { ItemTodos } from '@/components/dashboard/ItemTodos'
+import type { ProjectType, ProjectStatus } from '@/types'
+import { AssigneeSelect, TaskRow } from '@/components/dashboard/todo-parts'
+import { useMe } from '@/lib/useToday'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 
 // ── Display helpers ────────────────────────────────────────
@@ -29,15 +33,6 @@ export const STATUS_CONFIG: Record<ProjectStatus, { label: string; bg: string; d
   'in-progress': { label: 'In Progress', bg: 'bg-blue-50 text-blue-600',     dot: 'bg-accent'  },
   review:      { label: 'In Review',   bg: 'bg-purple-50 text-purple-700', dot: 'bg-purple-500' },
   done:        { label: 'Done',        bg: 'bg-green-50 text-green-700',   dot: 'bg-green-500'  },
-}
-
-const STAKEHOLDERS: Stakeholder[] = ['GC', 'EB', 'PH', 'MS']
-
-export const STAKEHOLDER_TOOLTIPS: Record<Stakeholder, string> = {
-  GC: 'GC — CEO',
-  EB: 'EB — Partner',
-  PH: 'PH — Day-to-Day',
-  MS: 'MS — Coordinator',
 }
 
 const STATUS_NEXT: Record<ProjectStatus, ProjectStatus | null> = {
@@ -90,6 +85,9 @@ export function ProjectsView() {
           </button>
         )}
       </div>
+
+      {/* Every to-do for this artist, whatever it is about (the same list Today draws from) */}
+      <ArtistTodos clientId={client.id} clientName={client.name} />
 
       {/* Filter tabs */}
       <div className="flex gap-1 mb-5 flex-wrap">
@@ -154,19 +152,15 @@ export function ProjectsView() {
                       {sc.label}
                     </span>
 
-                    {/* Assignee */}
-                    <select
-                      value={project.assignee ?? ''}
-                      onChange={e => assignProject(project.id, e.target.value as Stakeholder)}
+                    {/* Assignee: a real person on the team who can open this artist */}
+                    <AssigneeSelect
+                      clientId={client.id}
+                      value={project.assigneeId}
+                      onChange={id => assignProject(project.id, id)}
                       disabled={!editable}
+                      noneLabel="Unassigned"
                       className="text-xs text-gray-500 border border-gray-200 rounded-md px-2 py-0.5 bg-canvas hover:border-gray-300 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
-                      title={project.assignee ? STAKEHOLDER_TOOLTIPS[project.assignee] : 'Unassigned'}
-                    >
-                      <option value="">Unassigned</option>
-                      {STAKEHOLDERS.map(s => (
-                        <option key={s} value={s} title={STAKEHOLDER_TOOLTIPS[s]}>{s} — {STAKEHOLDER_TOOLTIPS[s].split('—')[1].trim()}</option>
-                      ))}
-                    </select>
+                    />
 
                     {/* Due date */}
                     {project.dueDate && (
@@ -178,6 +172,7 @@ export function ProjectsView() {
                 {/* Actions */}
                 {editable && (
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    <ItemTodos link={{ type: 'project', id: project.id }} suggest={`Follow up: ${project.title}`} />
                     <ItemAccessButton itemType="project" itemId={project.id} />
                     {next && (
                       <button
@@ -236,15 +231,17 @@ export function ProjectsView() {
 // ── Add Project Modal ──────────────────────────────────────
 export function AddProjectModal({ onClose, defaultDueDate }: { onClose: () => void; defaultDueDate?: string }) {
   const { addProject } = useStore()
+  const clientId = useStore(s => s.clientId)
+  const me = useMe()
   const [title, setTitle]       = useState('')
   const [type, setType]         = useState<ProjectType>('release')
-  const [assignee, setAssignee] = useState<Stakeholder | ''>('')
+  const [assignee, setAssignee] = useState<string | undefined>(undefined)   // undefined = still the default (you); '' = chosen "Unassigned"
   const [dueDate, setDueDate]   = useState(defaultDueDate ?? '')
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!title.trim()) return
-    addProject(title.trim(), type, assignee || undefined, dueDate || undefined, false)
+    addProject(title.trim(), type, (assignee === undefined ? me : assignee) || undefined, dueDate || undefined, false)
     onClose()
   }
 
@@ -270,12 +267,9 @@ export function AddProjectModal({ onClose, defaultDueDate }: { onClose: () => vo
         </FormField>
 
         <FormField label="Assign to">
-          <select className={selectClass} value={assignee} onChange={e => setAssignee(e.target.value as Stakeholder)}>
-            <option value="">Unassigned</option>
-            {STAKEHOLDERS.map(s => (
-              <option key={s} value={s}>{s} — {STAKEHOLDER_TOOLTIPS[s].split('—')[1].trim()}</option>
-            ))}
-          </select>
+          {clientId && (
+            <AssigneeSelect clientId={clientId} value={(assignee === undefined ? me : assignee) || undefined} onChange={id => setAssignee(id ?? '')} noneLabel="Unassigned" className={selectClass} />
+          )}
         </FormField>
 
         <FormField label="Due date (optional)">
@@ -304,5 +298,32 @@ export function AddProjectModal({ onClose, defaultDueDate }: { onClose: () => vo
         </div>
       </form>
     </Modal>
+  )
+}
+
+// ── All of this artist's open to-dos ───────────────────────
+function ArtistTodos({ clientId, clientName }: { clientId: string; clientName: string }) {
+  const tasks = useStore(s => s.data.clients.find(c => c.id === clientId)?.tasks)
+  const me = useMe()
+  const [all, setAll] = useState(false)
+  const open = (tasks ?? []).filter(t => !t.doneAt).sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999') || a.createdAt.localeCompare(b.createdAt))
+  const shown = all ? open : open.slice(0, 6)
+  return (
+    <section className="mb-6">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
+        To-dos <span className="font-medium tracking-normal normal-case text-gray-300">· {open.length} open</span>
+      </div>
+      <AddTodo forClient={clientId} />
+      {open.length > 0 && (
+        <div className="bg-canvas border border-gray-100 rounded-2xl px-4 py-1">
+          {shown.map(t => <TaskRow key={t.id} task={t} clientId={clientId} clientName={clientName} me={me} />)}
+          {open.length > 6 && (
+            <button onClick={() => setAll(v => !v)} className="text-xs text-accent hover:underline my-2">
+              {all ? 'Show fewer' : `Show all ${open.length}`}
+            </button>
+          )}
+        </div>
+      )}
+    </section>
   )
 }

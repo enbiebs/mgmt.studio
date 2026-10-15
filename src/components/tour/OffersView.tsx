@@ -6,6 +6,7 @@
 
 import { useMemo, useState } from 'react'
 import { useStore } from '@/lib/store'
+import { ItemTodos } from '@/components/dashboard/ItemTodos'
 import { Modal, FormField, inputClass } from '@/components/ui/Modal'
 import { SendOfferSheetModal } from '@/components/tour/SendOfferSheetModal'
 import { PasteOfferModal } from '@/components/tour/PasteOfferModal'
@@ -395,6 +396,7 @@ function OfferCard({ offer: o, editable, onEdit }: { offer: TourOffer; editable:
       {o.notes && (
         <div className="mt-2 text-xs text-amber-600 bg-amber-50 rounded-lg px-2 py-1">{o.notes}</div>
       )}
+      <div className="mt-2"><ItemTodos link={{ type: 'offer', id: o.id }} suggest={`Reply to ${o.venue || 'the promoter'}`} /></div>
       {sheet && sheet.status !== 'superseded' && (
         <div className="mt-2 flex items-center gap-1.5 text-[11px]">
           <span className="text-gray-400">Sheet V{sheet.version}</span>
