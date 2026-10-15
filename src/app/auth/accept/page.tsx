@@ -30,7 +30,7 @@ export default function AcceptInvitePage() {
       if (cancelled) return
       if (error) { setProblem(EXPIRED); return }
       window.history.replaceState(null, '', window.location.pathname)   // the sign-in details don't belong in the address bar
-      window.location.replace('/auth/update-password?welcome=1')
+      window.location.replace(found.type === 'invite' ? '/auth/update-password?welcome=1' : '/auth/update-password')
     }
     finish()
     return () => { cancelled = true }

@@ -69,8 +69,8 @@ export async function POST(req: NextRequest) {
     return serverError('Invite failed', error, "Couldn't send that invitation. Check the email address and try again.")
   }
 
-  // If the chosen pages could not be set up, the person still exists: say so, so it can be fixed on the Sharing tab.
+  // If the chosen pages could not be set up, the person still exists: say so, so it can be fixed on the Team page.
   const { data: sent } = await admin.from('pending_invites').select('apply_error').eq('email', address).eq('workspace_id', wm.workspace_id).order('created_at', { ascending: false }).limit(1).maybeSingle()
-  const warning = sent?.apply_error ? "They were invited, but their pages could not be set up. Set them on the Sharing tab." : undefined
+  const warning = sent?.apply_error ? "They were invited, but their pages could not be set up. Set them on the Team page." : undefined
   return NextResponse.json({ ok: true, userId: invited.user?.id, warning })
 }

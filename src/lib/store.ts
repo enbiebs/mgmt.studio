@@ -271,7 +271,7 @@ interface StudioState {
   // Manager-only: preview the app as another real workspace member, using
   // their actual role + access_grants. Pass null to return to Manager.
   previewAs: (memberId: string | null) => Promise<void>
-  // Re-reads what the signed-in person may open and the team list, after access was changed from the Sharing screen.
+  // Re-reads what the signed-in person may open and the team list, after access was changed from the Team page.
   refreshMyAccess: () => Promise<void>
   // After someone's access to an artist changed: forget what was cached about them and re-read the team list.
   afterAccessChange: (memberId?: string) => Promise<void>

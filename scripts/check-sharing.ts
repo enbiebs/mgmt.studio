@@ -1,7 +1,7 @@
 // Checks the Sharing list for one artist.  Run with:  npx tsx scripts/check-sharing.ts
 import assert from 'node:assert/strict'
-import { POINT_PERSON_WARNING, STATUS_LABEL, addablePeople, personStatus, buildSharingRows, describeRow, levelChangeWarning, levelLabel, pointPeopleCount, removalWarning, type SharingGrant } from '../src/lib/sharing'
-import type { WorkspacePerson } from '../src/types'
+import { POINT_PERSON_WARNING, STATUS_LABEL, addablePeople, buildTeamList, personStatus, buildSharingRows, describeRow, levelChangeWarning, levelLabel, pointPeopleCount, removalWarning, resendWording, unsharedRow, type SharingGrant } from '../src/lib/sharing'
+import type { Person, WorkspacePerson } from '../src/types'
 
 const person = (id: string, label: string, role: WorkspacePerson['role'], allClients = false): WorkspacePerson =>
   ({ memberId: id, userId: 'u-' + id, label, role, allClients, clientIds: [] })
@@ -94,5 +94,60 @@ assert.equal(personStatus('p1', [login('p1', { role: 'manager' })], 'a'), 'has-a
 assert.equal(personStatus('p1', [login('p1', { clientIds: ['b'] })], 'a'), 'not-shared')               // has a login, but for another artist
 assert.equal(STATUS_LABEL['no-login'], 'No login yet')
 assert.equal(STATUS_LABEL.waiting, 'Invited, waiting to accept')
+
+// ── the one Team list: team cards joined with their logins ──
+const card = (id: string, name: string): Person => ({ id, name })
+const lg = (memberId: string, personId: string | undefined, label: string, role: WorkspacePerson['role'], extra: Partial<WorkspacePerson> = {}): WorkspacePerson =>
+  ({ ...person(memberId, label, role), personId, ...extra })
+const team = [card('c-none', 'Nora'), card('c-dana', 'Dana'), card('c-sam', 'Sam'), card('c-new', 'Newt'), card('c-away', 'Ava'), card('c-co', 'Cole')]
+const accounts = [
+  lg('dana', 'c-dana', 'Dana', 'team'), lg('sam', 'c-sam', 'Sam', 'team'),
+  lg('new', 'c-new', 'Newt', 'team', { invited: true }),        // invited, never signed in, pages already set up
+  lg('away', 'c-away', 'Ava', 'team', { clientIds: ['b'] }),     // a login that only has ANOTHER artist
+  lg('co', 'c-co', 'Cole', 'agent', { allClients: true }),       // company-wide
+  lg('m1', undefined, 'Eli', 'manager', { allClients: true }),   // a manager has no team card
+  lg('lone', undefined, 'Lone', 'team'),                         // a login with no card and no pages here
+  lg('stray', undefined, 'Stray', 'team', { clientIds: ['a'] }), // a login with no card that has pages here
+]
+const teamGrants = [
+  grant('1', 'sam', 'admin', 'a', true), grant('2', 'dana', 'tour', 'a', false), grant('3', 'new', 'tour', 'a', false), grant('4', 'stray', 'tour', 'a', false),
+]
+const teamRows = buildSharingRows(accounts, teamGrants, 'a')
+const list = buildTeamList(team, accounts, teamRows, 'a')
+
+// cards: Point People, then people with pages, then company-wide, then logins not shared yet, then people with no login
+assert.deepEqual(list.cards.map(c => c.contact.name), ['Sam', 'Dana', 'Newt', 'Cole', 'Ava', 'Nora'])
+const cardOf = (name: string) => list.cards.find(c => c.contact.name === name)!
+assert.equal(cardOf('Sam').row?.kind, 'person'); assert.equal((cardOf('Sam').row as { levelKey: string }).levelKey, 'admin')
+assert.equal(cardOf('Cole').row?.kind, 'company')
+assert.equal(cardOf('Nora').login, null); assert.equal(cardOf('Nora').row, null); assert.equal(cardOf('Nora').status, 'no-login')
+assert.equal(cardOf('Newt').status, 'waiting')
+// a login that cannot open this artist yet still gets a row, so a role can be chosen for it right on its card
+const ava = cardOf('Ava')
+assert.equal(ava.status, 'not-shared')
+assert.equal(ava.row?.kind, 'person')
+assert.equal(ava.row?.kind === 'person' && ava.row.grants.length, 0)
+assert.equal(ava.row?.kind === 'person' && ava.row.levelKey, 'none')
+
+// logins without a card: managers, people with pages here; people with nothing here wait in "others"
+assert.deepEqual(list.logins.map(r => r.person.label).sort(), ['Eli', 'Stray'])
+assert.deepEqual(list.others.map(p => p.label), ['Lone'])
+// nobody is listed twice and nobody is lost
+const everyone = [...list.cards.map(c => c.login?.label).filter(Boolean), ...list.logins.map(r => r.person.label), ...list.others.map(p => p.label)] as string[]
+assert.equal(new Set(everyone).size, everyone.length)
+assert.deepEqual(everyone.sort(), accounts.map(a => a.label).sort())
+
+// an artist's own login never takes a card's place
+const withArtist = buildTeamList([card('c-art', 'The Artist')], [lg('art', 'c-art', 'The Artist', 'artist')], [], 'a')
+assert.equal(withArtist.cards[0].row, null)
+// cards of the same kind keep the order they were added in
+const same = buildTeamList([card('x', 'Zed'), card('y', 'Amy')], [], [], 'a')
+assert.deepEqual(same.cards.map(c => c.contact.name), ['Zed', 'Amy'])
+assert.equal(unsharedRow(accounts[0]).kind, 'person')
+
+// the send-again button: a fresh invite until they have signed in, then a password link
+assert.equal(resendWording(true).button, 'Resend invite')
+assert.equal(resendWording(false).button, 'Send password link')
+assert.match(resendWording(true).sent, /Invite sent again/)
 
 console.log('sharing: all checks passed')

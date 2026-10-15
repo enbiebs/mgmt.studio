@@ -51,6 +51,7 @@ export const inviteBody = z.object({
 }).refine(b => b.role !== 'artist' || !!b.clientId, { message: 'An artist invite needs an artist' })
   .refine(b => b.role !== 'artist' || !(b.access && b.access.length), { message: 'An artist login does not take page access' })
 export const inviteCancelBody = z.object({ memberId: z.string().uuid() })
+export const inviteResendBody = z.object({ memberId: z.string().uuid() })
 
 export const gcalConnectBody = z.object({ clientId: clientIdSchema, timeZone: z.string().max(64).regex(/^[A-Za-z0-9_+\-/]+$/).optional() })
 const recordType = z.enum(['show', 'post', 'project'])
