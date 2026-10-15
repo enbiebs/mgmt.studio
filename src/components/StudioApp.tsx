@@ -52,6 +52,7 @@ import { OffersView }    from '@/components/tour/OffersView'
 import { BudgetView }    from '@/components/tour/BudgetView'
 import { SettlementsView } from '@/components/tour/SettlementsView'
 import { InboxPanel } from '@/components/dashboard/InboxPanel'
+import { ActivityView } from '@/components/activity/ActivityView'
 import { ARTIST_SIDE_NAME, PRODUCT_NAME } from '@/lib/brand'
 
 export function StudioApp() {
@@ -161,6 +162,7 @@ export function StudioApp() {
               {section === 'analytics'  && <AnalyticsView />}
               {section === 'team'       && <TeamView />}
               {section === 'legal'      && <LegalView />}
+              {section === 'activity'   && <ActivityView />}
             </div>
           </>
         ) : (
