@@ -35,7 +35,7 @@ import { EMPTY_FINANCE } from '@/lib/finance-demo'
 import { EMPTY_TOUR } from '@/lib/advance-demo'
 import { notify } from '@/lib/notify'
 import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE, today as localToday } from '@/lib/utils'
-import { buildNewBudget, snapshotOf, newLine, frozenRates, makeConverter, settlementEarned, addMissingCrewFees, BUCKET_LABEL, type FxRates } from '@/lib/budget'
+import { buildNewBudget, snapshotOf, newLine, frozenRates, makeConverter, settlementEarned, addMissingCrewFees, withoutAddedCrewFees, BUCKET_LABEL, type FxRates } from '@/lib/budget'
 import { balanceOf } from '@/lib/settlement-math'
 import type { InboxChoice } from '@/lib/inbox'
 import { SHOW_UNFINISHED_KEY } from '@/lib/unfinished'
@@ -1462,6 +1462,10 @@ export const useStore = create<StudioState>((set, get) => ({
   // ── Crew ──
   saveCrewMember: (member, rate) => {
     const { data, clientId, workspaceId } = get()
+    // Their fee is added to existing draft budgets only when "tours with the artist" is being switched ON (or they are new
+    // with it on), never just because someone fixed a phone number: leaving someone out of a budget on purpose must stick.
+    const before = data.clients.find(c => c.id === clientId)
+    const wasTouring = !!before?.finance.crewRates?.find(r => r.crewMemberId === member.id)?.toursWithArtist
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId) return c
@@ -1482,7 +1486,7 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
-    if (rate?.toursWithArtist) get().addCrewFeesToDrafts(member.id)
+    if (rate?.toursWithArtist && !wasTouring) get().addCrewFeesToDrafts(member.id)
     // The pay row points at the crew row (foreign key), so the crew member goes first.
     if (workspaceId && clientId) {
       upsertCrewMember(member, clientId)
@@ -2433,6 +2437,7 @@ export const useStore = create<StudioState>((set, get) => ({
 
   setCrewRate: (rate) => {
     const { data, clientId, workspaceId } = get()
+    const wasTouring = !!data.clients.find(c => c.id === clientId)?.finance.crewRates?.find(r => r.crewMemberId === rate.crewMemberId)?.toursWithArtist
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId) return c
@@ -2444,7 +2449,7 @@ export const useStore = create<StudioState>((set, get) => ({
       }),
     }
     set({ data: updated }); saveData(updated)
-    if (rate.toursWithArtist) get().addCrewFeesToDrafts(rate.crewMemberId)
+    if (rate.toursWithArtist && !wasTouring) get().addCrewFeesToDrafts(rate.crewMemberId)
     if (workspaceId && clientId) upsertCrewRate(rate, clientId).catch(console.error)
   },
 
@@ -2495,13 +2500,14 @@ export const useStore = create<StudioState>((set, get) => ({
   addCrewFeesToDrafts: (crewMemberId) => {
     const { data, clientId } = get()
     const client = data.clients.find(c => c.id === clientId)
-    if (!client) return
+    // Budgets are changed with Finance edit access only (the database would refuse the save otherwise).
+    if (!client || !clientId || !get().canEdit('finance')) return
     const day = localToday()
-    const changed: { id: string; before: BudgetLine[] }[] = []
+    const changed: { id: string; undo: Pick<ReturnType<typeof addMissingCrewFees> & object, 'addedIds' | 'perDiemLineId' | 'perDiemAdded'> }[] = []
     for (const b of client.finance.budgets ?? []) {
       const r = addMissingCrewFees(client, b, day, crewMemberId)
       if (!r) continue
-      changed.push({ id: b.id, before: b.lines })
+      changed.push({ id: b.id, undo: { addedIds: r.addedIds, perDiemLineId: r.perDiemLineId, perDiemAdded: r.perDiemAdded } })
       get().updateBudget(b.id, { lines: r.lines })
     }
     if (changed.length === 0) return
@@ -2509,7 +2515,18 @@ export const useStore = create<StudioState>((set, get) => ({
     const name = client.people.find(p => p.id === member?.personId)?.name ?? 'Their'
     notify(
       `Added ${name}'s fee to ${changed.length} draft budget${changed.length === 1 ? '' : 's'}`,
-      { label: 'Undo', run: () => changed.forEach(c => get().updateBudget(c.id, { lines: c.before })) },
+      {
+        label: 'Undo',
+        run: () => {
+          // Takes back exactly what was added (not later edits), and only while this artist is still the one open.
+          if (get().clientId !== clientId) { notify(`Open ${client.name} to undo that.`); return }
+          const now = get().data.clients.find(c => c.id === clientId)
+          for (const c of changed) {
+            const budget = now?.finance.budgets?.find(b => b.id === c.id)
+            if (budget) get().updateBudget(c.id, { lines: withoutAddedCrewFees(budget.lines, c.undo) })
+          }
+        },
+      },
     )
   },
 

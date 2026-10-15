@@ -1,6 +1,6 @@
 // Checks that a crew member's saved fee follows them into budgets.  Run with:  npx tsx scripts/check-crew-fees.ts
 import assert from 'node:assert/strict'
-import { addMissingCrewFees, buildNewBudget, crewLineFor } from '../src/lib/budget'
+import { addMissingCrewFees, buildNewBudget, crewLineFor, withoutAddedCrewFees } from '../src/lib/budget'
 import type { Budget, BudgetLine, Client, CrewMember, CrewRate } from '../src/types'
 
 const TODAY = '2026-10-14'
@@ -65,6 +65,23 @@ assert.equal(zeroPd.lines.find(l => l.bucket === 'per_diems')!.amount, 100)
 
 // a fee per show (not per day) is one fee
 assert.equal(crewLineFor(c1, sam, rate('cm-sam', { rateUnit: 'show', rateShow: 450 })).amount, 450)
+
+// taking exactly that back out: the fee goes, the per diems go back, later edits stay
+const r2 = addMissingCrewFees(c1, c1.finance.budgets[0], TODAY)!
+assert.ok(r2.perDiemLineId && r2.perDiemAdded === 100 && r2.addedIds.length === 1)
+const edited = r2.lines.map(l => (l.bucket === 'guarantee' ? { ...l, amount: 6000 } : l))        // someone changed the guarantee afterwards
+const undone = withoutAddedCrewFees(edited, r2)
+assert.equal(undone.length, 2)
+assert.equal(undone.find(l => l.bucket === 'guarantee')!.amount, 6000)                               // the later edit is kept
+assert.equal(undone.find(l => l.bucket === 'per_diems')!.amount, 100)                                // per diems are back to what they were
+assert.equal(undone.some(l => l.crewMemberId), false)
+
+// two per-diem lines: the per diems are added once, not twice
+const twoPd = budget({ lines: [line('g', 'guarantee', 5000), line('pd1', 'per_diems', 100), line('pd2', 'per_diems', 40)] })
+const once = addMissingCrewFees(client([rate('cm-sam')], [twoPd]), twoPd, TODAY)!
+assert.equal(once.lines.find(l => l.id === 'pd1')!.amount, 200)
+assert.equal(once.lines.find(l => l.id === 'pd2')!.amount, 40)
+assert.equal(once.perDiemLineId, 'pd1')
 
 // a brand-new budget still comes out the same way: one labor line per touring crew member + per diems
 const fresh = buildNewBudget({ client: two, show: { id: 's1', venue: 'Fabric', city: 'London', date: '2026-11-04' } as never })

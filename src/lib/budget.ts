@@ -159,7 +159,7 @@ export function crewLineFor(client: Client, member: CrewMember, rate: CrewRate):
  * is touched (a locked budget is a record of what was agreed). Returns the new lines, or null when there
  * is nothing to add.
  */
-export function addMissingCrewFees(client: Client, budget: Budget, today: string, onlyMemberId?: string): { lines: BudgetLine[]; added: string[] } | null {
+export function addMissingCrewFees(client: Client, budget: Budget, today: string, onlyMemberId?: string): AddedCrewFees | null {
   if (budget.status !== 'draft') return null
   const date = (budget.showId ? client.tour.shows.find(s => s.id === budget.showId)?.date : undefined)
     ?? (budget.offerId ? client.agentData?.offers.find(o => o.id === budget.offerId)?.date : undefined)
@@ -170,12 +170,26 @@ export function addMissingCrewFees(client: Client, budget: Budget, today: string
     !budget.lines.some(l => l.crewMemberId === r.crewMemberId))
   if (missing.length === 0) return null
   const added = missing.map(r => crewLineFor(client, crewById.get(r.crewMemberId)!, r))
-  const perDiems = missing.reduce((a, r) => a + crewPerDiem(r, DEFAULT_CREW_DAYS), 0)
-  const lines = [...budget.lines, ...added]
-  return {
-    lines: perDiems > 0 ? lines.map(l => (l.bucket === 'per_diems' ? { ...l, amount: round2(l.amount + perDiems) } : l)) : lines,
-    added: added.map(l => l.label),
-  }
+  const perDiemAdded = round2(missing.reduce((a, r) => a + crewPerDiem(r, DEFAULT_CREW_DAYS), 0))
+  // Per diems go onto the FIRST per-diem line only (a budget with two such lines must not count them twice).
+  const perDiemLineId = perDiemAdded > 0 ? budget.lines.find(l => l.bucket === 'per_diems')?.id : undefined
+  const lines = [...budget.lines, ...added].map(l => (l.id === perDiemLineId ? { ...l, amount: round2(l.amount + perDiemAdded) } : l))
+  return { lines, added: added.map(l => l.label), addedIds: added.map(l => l.id), perDiemLineId, perDiemAdded: perDiemLineId ? perDiemAdded : 0 }
+}
+
+/** The result of adding crew fees to a budget: the new lines, what was added, and how to take exactly that back out. */
+export interface AddedCrewFees {
+  lines: BudgetLine[]
+  added: string[]                 // labels, for the message
+  addedIds: string[]              // the lines that were added
+  perDiemLineId?: string          // the per-diem line that grew
+  perDiemAdded: number            // by how much
+}
+
+/** The same budget with exactly those additions taken back out, leaving every later edit alone. */
+export function withoutAddedCrewFees(lines: BudgetLine[], undo: Pick<AddedCrewFees, 'addedIds' | 'perDiemLineId' | 'perDiemAdded'>): BudgetLine[] {
+  const gone = new Set(undo.addedIds)
+  return lines.filter(l => !gone.has(l.id)).map(l => (l.id === undo.perDiemLineId ? { ...l, amount: round2(l.amount - undo.perDiemAdded) } : l))
 }
 
 // ── A new budget, from the defaults ──────────────────────────
