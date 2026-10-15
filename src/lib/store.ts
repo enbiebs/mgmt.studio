@@ -380,7 +380,7 @@ interface StudioState {
   // Adds many shows at once (the spreadsheet import). Resolves with how many were saved and how many weren't.
   importShows: (shows: Show[]) => Promise<{ saved: number; failed: number }>
   updateShowStatus: (showId: string, status: ShowStatus) => void
-  updateShowFinancials: (showId: string, patch: { guarantee?: number; deposit?: number; currency?: Currency; viaAgency?: boolean; agencyName?: string; agencyCommissionPct?: number; managementCommissionPct?: number; historyOnly?: boolean }) => void
+  updateShowFinancials: (showId: string, patch: { guarantee?: number; deposit?: number; currency?: Currency; viaAgency?: boolean; agencyName?: string; agencyCommissionPct?: number; managementCommissionPct?: number; historyOnly?: boolean; driveUrl?: string }) => void
   /** No-ops if the show has no guarantee yet, or already has a generated invoice. */
   generateInvoiceFromShow: (showId: string) => void
   deleteShow: (showId: string) => void

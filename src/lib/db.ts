@@ -339,7 +339,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
 
     const cShows = (shows.data ?? [])
       .filter((s: { client_id: string }) => s.client_id === c.id)
-      .map((s: { id: string; date: string; city: string; venue: string; time: string; status: string; notes?: string; guarantee?: number; deposit?: number; currency?: string; tour_offer_id?: string; via_agency?: boolean; agency_name?: string; agency_commission_pct?: number; management_commission_pct?: number; invoice_id?: string; run_id?: string; history_only?: boolean }) => ({
+      .map((s: { id: string; date: string; city: string; venue: string; time: string; status: string; notes?: string; guarantee?: number; deposit?: number; currency?: string; tour_offer_id?: string; via_agency?: boolean; agency_name?: string; agency_commission_pct?: number; management_commission_pct?: number; invoice_id?: string; run_id?: string; history_only?: boolean; drive_url?: string }) => ({
         id: s.id, date: s.date, city: s.city,
         venue: s.venue, time: s.time,
         status: s.status as Show['status'], notes: s.notes,
@@ -351,6 +351,7 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
         invoiceId: s.invoice_id ?? undefined,
         runId: s.run_id ?? undefined,
         historyOnly: s.history_only ? true : undefined,
+        driveUrl: s.drive_url ?? undefined,
       }))
 
     const cShowIds = cShows.map((s: { id: string }) => s.id)
@@ -1059,6 +1060,7 @@ export async function upsertShow(show: Show, clientId: string) {
     invoice_id: show.invoiceId ?? null,
     run_id: show.runId ?? null,
     history_only: show.historyOnly ?? false,
+    drive_url: show.driveUrl ?? null,
     updated_at: new Date().toISOString(),
   })
   if (error) throw error

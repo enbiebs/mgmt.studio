@@ -13,6 +13,7 @@ import { SEAT_OPTIONS, SIZE_FIELDS, SOCIAL_FIELDS } from '@/lib/profile-fields'
 import type { ArtistProfile, Client, ProfileContact, TravelPrefs } from '@/types'
 import { AccessLog } from './AccessLog'
 import { AccountsTab } from './AccountsTab'
+import { DriveLinksCard } from './DriveLinksCard'
 import { Card, FieldsCard, type FieldDef } from './FieldsCard'
 import { PrivateBlock } from './PrivateBlock'
 import { useProfileSecure } from './useProfileSecure'
@@ -84,6 +85,7 @@ export function ProfileView() {
         <div className="space-y-4">
           {tab === 'overview' && (
             <>
+              <DriveLinksCard client={client} canEdit={canEdit} />
               <FieldsCard title="Contact" fields={CONTACT_FIELDS} values={flat} canEdit={canEdit} onSave={next => save(unset(next))} />
               <FieldsCard title="Business" hint="The company the artist contracts through. The tax ID is under Private details." fields={BUSINESS_FIELDS} values={flat} canEdit={canEdit} onSave={next => save(unset(next))} />
               <FieldsCard
