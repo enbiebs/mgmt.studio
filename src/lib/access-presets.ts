@@ -64,6 +64,18 @@ export const PRESETS: AccessPreset[] = [
     levels: { finance: 'edit', legal: 'view' },
   },
   {
+    key: 'agent', label: 'Agent',
+    blurb: 'Books the shows: works on the schedule and booking offers, and can look at the artist\u2019s people and projects.',
+    hidden: 'Money (finance), contracts, music, content and the profile. Booking offers, with their fees, are part of Tour, so they show',
+    levels: { tour: 'edit', team: 'view', projects: 'view' },
+  },
+  {
+    key: 'lawyer', label: 'Lawyer',
+    blurb: 'Reads and works on contracts, and can look at music and the artist\u2019s people.',
+    hidden: 'Money, touring, content, projects and the profile',
+    levels: { legal: 'edit', music: 'view', team: 'view' },
+  },
+  {
     key: 'assistant', label: 'Day-to-day team',
     blurb: 'Works on shows, projects, content and music, and can look at the artist\u2019s people and analytics.',
     hidden: 'Money (finance), contracts and the profile (private details such as ID numbers and home address live there). Booking offers, with their fees, are part of Tour, so they show',
@@ -192,6 +204,43 @@ export function planSteps(plan: GrantChanges, lastIds: string[] = []): GrantStep
     remove: plan.remove.filter(id => !lastIds.includes(id)),
     removeLast: plan.remove.filter(id => lastIds.includes(id)),
   }
+}
+
+export type PageLevels = Partial<Record<SectionKey, Level>>
+
+/** Click a page: none -> view -> edit -> none. Pages with no access are left out of the result. */
+export function cyclePage(levels: PageLevels, section: SectionKey): PageLevels {
+  const current = levels[section] ?? 'none'
+  const next: Level = current === 'none' ? 'view' : current === 'view' ? 'edit' : 'none'
+  const out: PageLevels = { ...levels }
+  if (next === 'none') delete out[section]
+  else out[section] = next
+  return out
+}
+
+/** "View only" / "View and edit": every page they have at all moves to that level (pages with none stay none). */
+export function setAllPages(levels: PageLevels, level: 'view' | 'edit'): PageLevels {
+  const out: PageLevels = {}
+  for (const [section, l] of Object.entries(levels) as [SectionKey, Level | undefined][]) if (l && l !== 'none') out[section] = level
+  return out
+}
+
+/** The one word for a set of pages: nothing, all view, all edit, or a mix. */
+export function overallLevel(levels: PageLevels): 'none' | 'view' | 'edit' | 'mixed' {
+  const have = Object.values(levels).filter((l): l is 'view' | 'edit' => l === 'view' || l === 'edit')
+  if (have.length === 0) return 'none'
+  if (have.every(l => l === 'view')) return 'view'
+  if (have.every(l => l === 'edit')) return 'edit'
+  return 'mixed'
+}
+
+/** A role's own pages, with 'none' entries dropped (what the invite form starts from). */
+export function levelsForRole(key: string): PageLevels {
+  const preset = presetByKey(key)
+  if (!preset) return {}
+  const out: PageLevels = {}
+  for (const [section, l] of Object.entries(preset.levels) as [SectionKey, Level | undefined][]) if (l && l !== 'none') out[section] = l
+  return out
 }
 
 /** One line for a preset: "Can see: …; can change: …". */
