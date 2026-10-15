@@ -421,7 +421,7 @@ export interface AnalyticsData {
 }
 
 // ── Section / view routing ──────────────────────────────────
-export type MainSection  = 'calendar' | 'songs' | 'tour' | 'content' | 'finance' | 'projects' | 'analytics' | 'team' | 'legal'
+export type MainSection  = 'calendar' | 'songs' | 'tour' | 'content' | 'finance' | 'projects' | 'analytics' | 'team' | 'legal' | 'activity'
 export type SongsSub     = 'tracks' | 'labelcopy' | 'checklist' | 'status'
 export type ContentSub   = 'manage' | 'studio' | 'lab'
 export type BizSub       = 'royalties' | 'banking' | 'catalog' | 'pl' | 'invoices' | 'payments'

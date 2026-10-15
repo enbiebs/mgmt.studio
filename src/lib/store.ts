@@ -516,6 +516,8 @@ export const useStore = create<StudioState>((set, get) => ({
     // it; what it actually shows is filtered per-event by each event's real
     // section access (see src/lib/calendar.ts), not gated here.
     if (section === 'calendar') return true
+    // Activity has no grant of its own either: the database decides which entries a person may read.
+    if (section === 'activity') return s.role !== 'artist'
     if (s.role === 'manager') return true
     if (s.role === 'artist') {
       if (s.authClientId !== cid) return false
