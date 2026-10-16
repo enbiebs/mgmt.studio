@@ -366,6 +366,7 @@ function OfferCard({ offer: o, editable, onEdit }: { offer: TourOffer; editable:
   const sheet = useStore(s => latestSheet(s.getClient()?.tour.offerSheets, o.id))
   const reply = replyStatus(o.terms?.respondBy, localToday())
   const upTo = o.terms?.bonuses?.length ? maxPotential(o.guarantee, o.terms) : undefined
+  const covers = [o.terms?.airfare ? 'flights' : '', o.terms?.hotel ? 'hotel' : '', o.terms?.groundTransport ? 'ground' : ''].filter(Boolean)
   const showLine = [o.terms?.billing, o.terms?.capacity ? `${o.terms.capacity.toLocaleString('en-US')} cap` : '', o.terms?.ageLimit].filter(Boolean).join(' · ')
   return (
     <div
@@ -389,6 +390,7 @@ function OfferCard({ offer: o, editable, onEdit }: { offer: TourOffer; editable:
         {upTo !== undefined && <span><span className="text-gray-400">Up to</span> <span className="font-semibold">{fmt(upTo)}</span></span>}
       </div>
       <div className="mt-2 text-xs text-gray-400">{o.promoter}{showLine ? ` · ${showLine}` : ''}</div>
+      {covers.length > 0 && <div className="mt-1 text-xs text-green-700">Promoter covers {covers.join(', ')}</div>}
       {reply && (
         <div className="mt-2">
           <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${reply.tone === 'late' ? 'bg-red-50 text-red-600' : reply.tone === 'soon' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>{reply.label}</span>

@@ -16,7 +16,7 @@ import type {
   AdvanceHospitality, AdvanceLogistics,
   CrewMember, GuestListEntry, TravelItem, Currency, Person, PersonActivity, CatalogWork,
   LegalTemplate, LegalTemplateClause, Stage, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
-  ArtistAccount, ArtistProfile, Venue, FlightLeg, Vendor, Run, Budget, CrewRate, FinanceSettings, BudgetLine, BudgetCommission, BudgetSnapshot, Currency as Cur,
+  ArtistAccount, ArtistProfile, Venue, FlightLeg, Vendor, Run, Budget, CrewRate, FinanceSettings, BudgetLine, BudgetCommission, BudgetSnapshot, BudgetAssumptions, Currency as Cur,
   OfferSheet, OfferTerms, Settlement, Task, TaskLinkType, TaskSource, WorkspacePerson, AgendaPoint, AgendaItemType,
 } from '@/types'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
@@ -571,12 +571,12 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
       .filter((b: { client_id: string }) => b.client_id === c.id)
       .map((b: {
         id: string; offer_id: string | null; show_id: string | null; name: string; currency: string; status: string
-        version: number; lines: BudgetLine[]; commissions: BudgetCommission[]; notes: string | null
+        version: number; lines: BudgetLine[]; commissions: BudgetCommission[]; notes: string | null; assumptions: BudgetAssumptions | null
         original: BudgetSnapshot | null; locked_at: string | null; updated_at: string
       }) => ({
         id: b.id, offerId: b.offer_id ?? undefined, showId: b.show_id ?? undefined, name: b.name,
         currency: b.currency as Cur, status: b.status as Budget['status'], version: b.version,
-        lines: b.lines ?? [], commissions: b.commissions ?? [], notes: b.notes ?? undefined,
+        lines: b.lines ?? [], commissions: b.commissions ?? [], notes: b.notes ?? undefined, assumptions: b.assumptions ?? undefined,
         original: b.original ?? undefined, lockedAt: b.locked_at ?? undefined, updatedAt: b.updated_at,
       }))
 
@@ -1505,7 +1505,7 @@ export async function upsertBudget(b: Budget, clientId: string) {
   const { error } = await supabase.from('budgets').upsert({
     id: b.id, client_id: clientId, offer_id: b.offerId ?? null, show_id: b.showId ?? null,
     name: b.name, currency: b.currency, status: b.status, version: b.version,
-    lines: b.lines, commissions: b.commissions, notes: b.notes ?? null,
+    lines: b.lines, commissions: b.commissions, notes: b.notes ?? null, assumptions: b.assumptions ?? null,
     original: b.original ?? null, locked_at: b.lockedAt ?? null,
     updated_at: new Date().toISOString(),
   })

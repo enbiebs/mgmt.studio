@@ -70,3 +70,19 @@ export const SECTION_FOR_RECORD = { show: 'tour', post: 'content', project: 'pro
 
 /** Calendar feed tokens are random UUIDs. */
 export const calendarTokenSchema = z.string().regex(/^[0-9a-fA-F-]{36}$/)
+
+// A web estimate of one kind of travel for a budget. Only the route, the dates and how many people are ever sent to the
+// search (never anything private), and the place names are plain text with a restricted alphabet so a typed city can't
+// carry instructions.
+const placeText = z.string().trim().min(2).max(80).regex(/^[\p{L}\p{N} .,'’()/&-]+$/u)
+const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+export const travelEstimateBody = z.object({
+  clientId: clientIdSchema,
+  kind: z.enum(['flight', 'hotel', 'ground']),
+  from: placeText.optional(),
+  to: placeText,
+  arrive: isoDay,
+  depart: isoDay,
+  travelers: z.number().int().min(1).max(40),
+  rooms: z.number().int().min(1).max(40),
+}).refine(b => b.depart > b.arrive, { message: 'depart must be after arrive' })
