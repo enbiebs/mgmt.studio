@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/Badge'
 import { ADMIN_KEY, LEVELS, planChanges, presetByKey } from '@/lib/access-presets'
 import { buildCompanyGrid, groupNamesOf, hasNothing, type CompanyGroup, type CompanyRow } from '@/lib/company'
 import { levelChangeWarning, removalWarning, resendWording, withCardNames, type SharingGrant } from '@/lib/sharing'
-import { applyGrantPlan, fetchArtistGrants, loadGroups, renameCompany, revokeArtistAccess, setCompanyAdmin, setGroupMembers } from '@/lib/db'
+import { applyGrantPlan, cancelWaitingInvite, fetchArtistGrants, loadGroups, loadWaitingInvites, removeCompanyMember, renameCompany, revokeArtistAccess, setCompanyAdmin, setGroupMembers, type WaitingInvite } from '@/lib/db'
+import { INVITE_ROLE_LABEL, clientsOfCompany } from '@/lib/companies'
 import { GroupsPanel } from './GroupsPanel'
 import { InviteForm } from '@/components/team/InviteForm'
 
@@ -21,7 +22,9 @@ const NONE = 'none'
 export function CompanyView() {
   const workspaceId = useStore(s => s.workspaceId)
   const rawPeople = useStore(s => s.workspacePeople)
-  const clients = useStore(s => s.data.clients)
+  const allClients = useStore(s => s.data.clients)
+  const clientWorkspace = useStore(s => s.clientWorkspace)
+  const clients = useMemo(() => clientsOfCompany(allClients, clientWorkspace, workspaceId), [allClients, clientWorkspace, workspaceId])   // this company's artists only
   const people = useMemo(() => withCardNames(rawPeople, clients), [rawPeople, clients])
   const myMemberId = useStore(s => s.myMemberId)
   const ownerId = useStore(s => s.companyOwnerId)
@@ -31,6 +34,10 @@ export function CompanyView() {
   const afterAccessChange = useStore(s => s.afterAccessChange)
   const openClient = useStore(s => s.openClient)
   const setSection = useStore(s => s.setSection)
+  const companies = useStore(s => s.contexts)
+  const companyName = useStore(s => s.companyName)
+  const goToCompany = useStore(s => s.goToCompany)
+  const managed = Object.values(companies).filter(c => c.role === 'manager')   // a person can run more than one company
 
   const artists = useMemo(() => clients.filter(c => !c.isDemo), [clients])
   const artistKey = artists.map(a => a.id).join('|')
@@ -45,6 +52,9 @@ export function CompanyView() {
   const [groups, setGroups] = useState<CompanyGroup[]>([])
   const [adminPending, setAdminPending] = useState<{ memberId: string; admin: boolean; label: string } | null>(null)
   const [adminProblem, setAdminProblem] = useState('')
+  const [waiting, setWaiting] = useState<WaitingInvite[]>([])
+  const [removal, setRemoval] = useState<{ memberId: string; label: string; invited: boolean; admin: boolean } | null>(null)
+  const [removalProblem, setRemovalProblem] = useState('')
 
   const reloadOne = useCallback(async (clientId: string) => {
     const g = await fetchArtistGrants(clientId)
@@ -62,8 +72,14 @@ export function CompanyView() {
   }, [artistKey, people, isManager])
   // the team list was read when the app opened; someone may have joined since
   useEffect(() => { if (isManager) void afterAccessChange() }, [isManager, afterAccessChange])
-  const reloadGroups = useCallback(async () => { setGroups(await loadGroups()) }, [])
+  const reloadGroups = useCallback(async () => { setGroups(await loadGroups(workspaceId)) }, [workspaceId])
   useEffect(() => { if (isManager) reloadGroups().catch(console.error) }, [isManager, people, reloadGroups])
+  // invitations to people who already had a login wait here until they accept
+  const reloadWaiting = useCallback(async () => {
+    const all = await loadWaitingInvites()
+    setWaiting(all.filter(w => w.workspaceId === workspaceId))
+  }, [workspaceId])
+  useEffect(() => { if (isManager) reloadWaiting().catch(console.error) }, [isManager, reloadWaiting])
 
   const grid = useMemo(() => buildCompanyGrid(people, grants ?? {}, artists.map(a => a.id)), [people, grants, artists])
 
@@ -130,6 +146,45 @@ export function CompanyView() {
     return { done, failed }
   }
 
+  async function resendWaiting(w: WaitingInvite) {
+    setBusy(w.inviteId); setProblem(p => ({ ...p, [w.inviteId]: '' })); setNotice(n => ({ ...n, [w.inviteId]: '' }))
+    try {
+      const res = await fetch('/api/team/invite/resend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inviteId: w.inviteId }) })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error ?? 'Could not send that again')
+      setNotice(n => ({ ...n, [w.inviteId]: 'Sent again. If they cannot find it, ask them to check spam.' }))
+    } catch (e) {
+      setProblem(p => ({ ...p, [w.inviteId]: e instanceof Error ? e.message : 'Could not send that again' }))
+    } finally { setBusy(null) }
+  }
+  async function cancelWaiting(w: WaitingInvite) {
+    setBusy(w.inviteId); setProblem(p => ({ ...p, [w.inviteId]: '' }))
+    try { await cancelWaitingInvite(w.inviteId) }
+    catch (e) { console.error(e); setProblem(p => ({ ...p, [w.inviteId]: 'That could not be saved. Please try again.' })) }
+    finally { try { await reloadWaiting() } catch (e) { console.error(e) }; setBusy(null) }
+  }
+
+  /** Takes someone out of THIS company. Their login, and any other company they work for, are not touched. */
+  async function commitRemoval() {
+    if (!removal) return
+    const { memberId, invited } = removal
+    setBusy(memberId); setRemovalProblem(''); setRemoval(null)
+    try {
+      if (invited) {
+        // someone who never signed in: the invitation and its pre-made login go away (a login that works elsewhere is kept)
+        const res = await fetch('/api/team/invite/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ memberId }) })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(json.error ?? 'Could not cancel that invitation')
+      } else await removeCompanyMember(memberId)
+    } catch (e) {
+      console.error(e)
+      setRemovalProblem(e instanceof Error && e.message && !/row-level|permission|violates/i.test(e.message) ? e.message : 'That could not be saved. Please try again.')
+    } finally {
+      try { await afterAccessChange(); await reloadGroups() } catch (e) { console.error(e) }   // always show what really saved
+      setBusy(null)
+    }
+  }
+
   async function commitAdmin() {
     if (!adminPending) return
     const { memberId, admin } = adminPending
@@ -155,6 +210,16 @@ export function CompanyView() {
       <div className="mx-auto w-full max-w-5xl">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1 basis-64">
+            {managed.length > 1 && (
+              <div className="mb-2 flex flex-wrap gap-1.5" role="group" aria-label="Company">
+                {managed.map(c => (
+                  <button key={c.workspaceId} onClick={() => goToCompany(c.workspaceId)} aria-pressed={c.workspaceId === workspaceId}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${c.workspaceId === workspaceId ? 'bg-accent text-white' : 'border border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
+                    {c.companyName || 'Company'}
+                  </button>
+                ))}
+              </div>
+            )}
             <CompanyName workspaceId={workspaceId} />
             <p className="mt-1 text-sm text-gray-400">
               {grid.rows.length} {grid.rows.length === 1 ? 'person' : 'people'} · {artists.length} {artists.length === 1 ? 'artist' : 'artists'}. Pick what each person can open for each artist.
@@ -193,6 +258,21 @@ export function CompanyView() {
         )}
         {adminProblem && <p role="alert" className="mb-3 text-xs text-red-600">{adminProblem}</p>}
 
+        {removal && (
+          <div role="alert" className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <p>
+              {removal.invited
+                ? `Cancel the invitation to ${removal.label}? They will not be able to use the link in the email.`
+                : `Take ${removal.label} out of ${companyName || 'this company'}? They can no longer open any of its artists${removal.admin ? ' and stop being an admin' : ''}. Their login and anything they do for other companies are not affected.`}
+            </p>
+            <div className="mt-2 flex gap-2">
+              <button disabled={busy !== null} onClick={() => void commitRemoval()} className="rounded-lg bg-accent px-2.5 py-1 font-medium text-white hover:bg-accent-hover disabled:opacity-50">{removal.invited ? 'Cancel invitation' : 'Remove from company'}</button>
+              <button onClick={() => setRemoval(null)} className="rounded-lg border border-amber-200 px-2.5 py-1 font-medium hover:bg-amber-100">Keep</button>
+            </div>
+          </div>
+        )}
+        {removalProblem && <p role="alert" className="mb-3 text-xs text-red-600">{removalProblem}</p>}
+
         <section aria-label="Admins" className="mb-6">
           <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">Admins</div>
           <div className="flex flex-col gap-1.5">
@@ -203,7 +283,10 @@ export function CompanyView() {
                 {a.userId === ownerId && <Badge variant="blue">Owner</Badge>}
                 <span className="text-xs text-gray-500">{a.userId === ownerId ? 'Owns the company and can open every artist.' : 'Runs the company and can open every artist.'}</span>
                 {isOwner && a.userId !== ownerId && (
-                  <button onClick={() => setAdminPending({ memberId: a.memberId, admin: false, label: a.label })} disabled={busy !== null} className="ml-auto text-xs font-medium text-red-600 hover:underline disabled:opacity-50">Take back admin</button>
+                  <span className="ml-auto flex gap-3">
+                    <button onClick={() => setAdminPending({ memberId: a.memberId, admin: false, label: a.label })} disabled={busy !== null} className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50">Take back admin</button>
+                    <button onClick={() => setRemoval({ memberId: a.memberId, label: a.label, invited: false, admin: true })} disabled={busy !== null} className="text-xs font-medium text-gray-500 hover:text-red-600 disabled:opacity-50">Remove from company</button>
+                  </span>
                 )}
               </div>
             ))}
@@ -211,6 +294,28 @@ export function CompanyView() {
         </section>
 
         <GroupsPanel workspaceId={workspaceId} groups={groups} grid={grid} artists={artists.map(a => ({ id: a.id, name: a.name }))} onChanged={reloadGroups} applyToGroup={applyToGroup} />
+
+        {waiting.length > 0 && (
+          <section aria-label="Waiting to accept" className="mb-6">
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">Waiting to accept</div>
+            <p className="mb-2 text-xs text-gray-500">These people already have a login. They are added to the company, with the access you chose, only when they accept.</p>
+            <div className="flex flex-col gap-1.5">
+              {waiting.map(w => (
+                <div key={w.inviteId} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-gray-100 px-4 py-2.5 text-sm">
+                  <span className="min-w-0 break-all font-medium">{w.email}</span>
+                  <Badge variant="amber">Waiting</Badge>
+                  <span className="text-xs text-gray-500">{INVITE_ROLE_LABEL[w.role] ?? w.role}{w.artists.length > 0 ? ` · ${w.artists.join(', ')}` : ''}</span>
+                  <span className="ml-auto flex gap-3">
+                    <button onClick={() => void resendWaiting(w)} disabled={busy !== null} className="text-[11px] font-medium text-gray-500 hover:text-gray-900 disabled:opacity-50">Send again</button>
+                    <button onClick={() => void cancelWaiting(w)} disabled={busy !== null} className="text-[11px] font-medium text-gray-500 hover:text-red-600 disabled:opacity-50">Cancel</button>
+                  </span>
+                  {notice[w.inviteId] && <p role="status" className="basis-full text-[11px] text-green-700">{notice[w.inviteId]}</p>}
+                  {problem[w.inviteId] && <p role="alert" className="basis-full text-[11px] text-red-600">{problem[w.inviteId]}</p>}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section aria-label="People">
           <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">People</div>
@@ -249,6 +354,11 @@ export function CompanyView() {
                           <button onClick={() => void resend(row)} disabled={busy !== null || id === myMemberId} className="mt-1 text-[11px] font-medium text-gray-500 hover:text-gray-900 disabled:opacity-50">
                             {resendWording(!!row.person.invited).button}
                           </button>
+                          {id !== myMemberId && (
+                            <button onClick={() => setRemoval({ memberId: id, label: row.person.label, invited: !!row.person.invited, admin: false })} disabled={busy !== null} className="mt-1 block text-[11px] font-medium text-gray-500 hover:text-red-600 disabled:opacity-50">
+                              {row.person.invited ? 'Cancel invitation' : 'Remove from company'}
+                            </button>
+                          )}
                           {isOwner && (
                             <button
                               onClick={() => setAdminPending({ memberId: id, admin: true, label: row.person.label })} disabled={busy !== null || !!row.person.invited}
@@ -295,7 +405,7 @@ export function CompanyView() {
       {inviteOpen && (
         <Modal wide title="Invite someone to your company" onClose={() => setInviteOpen(false)} footer={<button onClick={() => setInviteOpen(false)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">Close</button>}>
           <p className="text-sm text-gray-600">Choose their role and which artists they can open. When they accept, it is already set up.</p>
-          <InviteForm onSent={() => void afterAccessChange()} />
+          <InviteForm onSent={() => { void afterAccessChange(); reloadWaiting().catch(console.error) }} />
         </Modal>
       )}
     </div>

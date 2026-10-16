@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fail, parseJson, requireUser, serverError } from '@/lib/api-guard'
 import { inviteResendBody } from '@/lib/api-schemas'
+import { managedWorkspace } from '@/lib/company-guard'
+import { nudgeExistingLogin } from '@/lib/invite-server'
 
 // Sends an invitation again, in case the email got lost. Someone who has never signed in gets a fresh invitation (their
 // login and the pages chosen for them already exist, so nothing about their access changes). Someone who HAS signed in
@@ -15,16 +17,23 @@ export async function POST(req: NextRequest) {
   if (who.error) return who.error
   const { supabase, user } = who
 
-  const { data: me } = await supabase
-    .from('workspace_members').select('workspace_id, role').eq('user_id', user.id).single()
-  if (!me || me.role !== 'manager') return fail(403, 'Only a manager can send an invitation again')
-
   const admin = createAdminClient()
-  const { data: target } = await admin
-    .from('workspace_members').select('id, user_id, role, workspace_id').eq('id', body.data.memberId).maybeSingle()
-  if (!target || target.workspace_id !== me.workspace_id || target.role === 'manager' || target.user_id === user.id) {
-    return fail(404, 'That person was not found')
+
+  // An invitation that is still waiting for someone who already had a login: send the sign-in email again.
+  if (body.data.inviteId) {
+    const { data: invite } = await admin.from('pending_invites').select('id, email, workspace_id').eq('id', body.data.inviteId).is('used_at', null).maybeSingle()
+    if (!invite) return fail(404, 'That invitation was not found')
+    const mw = await managedWorkspace(supabase, user.id, invite.workspace_id, 'send an invitation again')
+    if ('error' in mw) return fail(404, 'That invitation was not found')
+    await nudgeExistingLogin(invite.email, new URL(req.url).origin)
+    return NextResponse.json({ ok: true, kind: 'invite' })
   }
+
+  const { data: target } = await admin
+    .from('workspace_members').select('id, user_id, role, workspace_id').eq('id', body.data.memberId!).maybeSingle()
+  if (!target || target.role === 'manager' || target.user_id === user.id) return fail(404, 'That person was not found')
+  const mw = await managedWorkspace(supabase, user.id, target.workspace_id, 'send an invitation again')
+  if ('error' in mw) return fail(404, 'That person was not found')
 
   const { data: login, error: loginErr } = await admin.auth.admin.getUserById(target.user_id)
   if (loginErr) return serverError('Resend invite: read login', loginErr, "Couldn't send that again. Please try again.")

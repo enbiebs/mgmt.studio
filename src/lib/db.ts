@@ -28,6 +28,7 @@ import type { InboxChoice } from '@/lib/inbox'
 import { sectionsWithItems, type ItemException, type ItemType, type ItemEffect } from '@/lib/item-access'
 import { planSteps, type GrantChanges } from '@/lib/access-presets'
 import { dealFromRow, showDealRow, type DealKey, type ShowDealRow } from '@/lib/show-deals'
+import type { Membership } from '@/lib/companies'
 import type { SharingGrant } from '@/lib/sharing'
 import { uid } from '@/lib/utils'
 
@@ -813,9 +814,9 @@ export async function deleteAgendaPointRow(id: string) {
 }
 
 /** The teammates on the management side, and which artists each can open. Empty for an artist's own login. */
-export async function loadWorkspacePeople(): Promise<WorkspacePerson[]> {
+export async function loadWorkspacePeople(workspaceId?: string | null): Promise<WorkspacePerson[]> {
   const supabase = createClient()
-  const { data, error } = await supabase.rpc('workspace_people')
+  const { data, error } = await supabase.rpc('workspace_people', workspaceId ? { p_workspace: workspaceId } : undefined)
   if (error) throw error
   return ((data ?? []) as { member_id: string; user_id: string; label: string; role: string; all_clients: boolean; client_ids: string[]; invited?: boolean; person_id?: string | null; email?: string | null }[])
     .map(r => ({ memberId: r.member_id, userId: r.user_id, label: r.label, role: r.role as UserRole, allClients: r.all_clients, clientIds: r.client_ids ?? [], invited: !!r.invited, personId: r.person_id ?? undefined, email: r.email ?? undefined }))
@@ -835,10 +836,10 @@ export async function setCompanyAdmin(memberId: string, admin: boolean): Promise
 }
 
 /** Every group in the company with who is in it (managers only; anyone else gets nothing). */
-export async function loadGroups(): Promise<{ id: string; name: string; memberIds: string[] }[]> {
+export async function loadGroups(workspaceId?: string | null): Promise<{ id: string; name: string; memberIds: string[] }[]> {
   const supabase = createClient()
   const [g, m] = await Promise.all([
-    supabase.from('company_groups').select('id, name').order('name'),
+    (workspaceId ? supabase.from('company_groups').select('id, name').eq('workspace_id', workspaceId) : supabase.from('company_groups').select('id, name')).order('name'),
     supabase.from('company_group_members').select('group_id, member_id'),
   ])
   if (g.error) throw g.error
@@ -950,6 +951,66 @@ export async function getMyMembership(): Promise<{
     memberId: data.id, workspaceId: data.workspace_id, role: data.role as UserRole,
     personId: data.person_id, clientId: data.client_id,
   }
+}
+
+/** Every company this login belongs to (a freelancer can be in several), earliest first. */
+export async function getMyMemberships(): Promise<Membership[]> {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+  const { data, error } = await supabase
+    .from('workspace_members')
+    .select('id, workspace_id, role, person_id, client_id, created_at')
+    .eq('user_id', user.id)
+    .order('created_at')
+  if (error) throw error
+  return (data ?? []).map(d => ({ memberId: d.id, workspaceId: d.workspace_id, role: d.role as UserRole, personId: d.person_id, clientId: d.client_id }))
+}
+
+// ── Invitations for someone who already has a login, and leaving a company ──
+export interface CompanyInvite { inviteId: string; workspaceId: string; company: string; role: string; artists: string[]; invitedAt: string }
+
+export async function loadMyCompanyInvites(): Promise<CompanyInvite[]> {
+  const { data, error } = await createClient().rpc('my_company_invites')
+  if (error) throw error
+  return ((data ?? []) as { invite_id: string; workspace_id: string; company: string; role: string; artists: string[]; invited_at: string }[])
+    .map(r => ({ inviteId: r.invite_id, workspaceId: r.workspace_id, company: r.company, role: r.role, artists: r.artists ?? [], invitedAt: r.invited_at }))
+}
+
+export async function acceptCompanyInvite(inviteId: string): Promise<void> {
+  const { error } = await createClient().rpc('accept_company_invite', { p_invite: inviteId })
+  if (error) throw new Error(error.message)
+}
+
+export async function declineCompanyInvite(inviteId: string): Promise<void> {
+  const { error } = await createClient().rpc('decline_company_invite', { p_invite: inviteId })
+  if (error) throw new Error(error.message)
+}
+
+export async function leaveCompany(workspaceId: string): Promise<void> {
+  const { error } = await createClient().rpc('leave_company', { p_workspace: workspaceId })
+  if (error) throw new Error(error.message)
+}
+
+export interface WaitingInvite { inviteId: string; workspaceId: string; email: string; role: string; artists: string[]; invitedAt: string }
+
+/** The invitations a manager has sent to people who already had a login and have not answered yet. */
+export async function loadWaitingInvites(): Promise<WaitingInvite[]> {
+  const { data, error } = await createClient().rpc('company_pending_invites')
+  if (error) throw error
+  return ((data ?? []) as { invite_id: string; workspace_id: string; email: string; role: string; artists: string[]; invited_at: string }[])
+    .map(r => ({ inviteId: r.invite_id, workspaceId: r.workspace_id, email: r.email, role: r.role, artists: r.artists ?? [], invitedAt: r.invited_at }))
+}
+
+export async function cancelWaitingInvite(inviteId: string): Promise<void> {
+  const { error } = await createClient().rpc('cancel_company_invite', { p_invite: inviteId })
+  if (error) throw new Error(error.message)
+}
+
+/** Takes someone out of the company (their login and any other company they work for are untouched). */
+export async function removeCompanyMember(memberId: string): Promise<void> {
+  const { error } = await createClient().rpc('remove_company_member', { p_member: memberId })
+  if (error) throw new Error(error.message)
 }
 
 export async function getMyWorkspaceId(): Promise<string | null> {

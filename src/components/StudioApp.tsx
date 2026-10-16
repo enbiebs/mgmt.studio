@@ -15,6 +15,7 @@ import { effectiveSub, shareOnlyTabs } from '@/lib/item-access'
 import { canOpenSection, visibleTourTabs } from '@/lib/tour-tabs'
 import { CompanyView } from '@/components/company/CompanyView'
 import { CompanySetupCard } from '@/components/dashboard/CompanySetupCard'
+import { CompanyInvitesCard, YourCompaniesCard } from '@/components/dashboard/CompaniesCards'
 import { AppHeader }  from '@/components/layout/AppHeader'
 import { Subnav }     from '@/components/layout/Subnav'
 import { Rail }       from '@/components/layout/Rail'
@@ -64,7 +65,7 @@ import { ProfileView } from '@/components/profile/ProfileView'
 import { ARTIST_SIDE_NAME, PRODUCT_NAME } from '@/lib/brand'
 
 export function StudioApp() {
-  const { view, section, songsSub: rawSongsSub, contentSub: rawContentSub, bizSub: rawBizSub, tourSub: rawTourSub, clientId, data, role, hasAccess, isShareOnly, accessibleClientIds, openModal, isLoading, goToCompany } = useStore()
+  const { view, section, songsSub: rawSongsSub, contentSub: rawContentSub, bizSub: rawBizSub, tourSub: rawTourSub, clientId, data, role, hasAccess, isShareOnly, accessibleClientIds, openModal, isLoading, goToCompany, contexts, clientWorkspace, homeWorkspaceId, workspaceId } = useStore()
   // Someone with only a shared item lands on a tab that shows it, not an empty one.
   const allowedTabs = isShareOnly(section) ? shareOnlyTabs(section, data.clients.find(c => c.id === clientId)) : undefined
   const songsSub = effectiveSub(rawSongsSub, allowedTabs) as typeof rawSongsSub
@@ -99,8 +100,27 @@ export function StudioApp() {
         {view === 'dashboard' && role !== 'artist' && (() => {
           const visibleIds = accessibleClientIds()
           const roster = visibleIds === 'all' ? data.clients : data.clients.filter(c => visibleIds.includes(c.id))
+          // Someone who works under several companies sees each company's artists under its own name (their home company first).
+          const companies = Object.values(contexts)
+          const grouped = companies.length > 1
+          const order = [homeWorkspaceId, ...companies.map(c => c.workspaceId)].filter((w, i, a): w is string => !!w && a.indexOf(w) === i)
+          const names = Object.fromEntries(companies.map(c => [c.workspaceId, c.companyName || 'Company']))
+          const groups = grouped
+            ? order.map(ws => ({ ws, name: names[ws], clients: roster.filter(c => clientWorkspace[c.id] === ws), canAdd: contexts[ws]?.role === 'manager' }))
+                .filter(g => g.clients.length > 0 || g.canAdd)
+            : []
+          const addTile = (ws?: string) => (
+            <button
+              onClick={() => openModal('add-client', ws ? { workspaceId: ws } : {})}
+              className="border-2 border-dashed border-gray-200 rounded-2xl p-5 min-h-[220px] flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-accent hover:text-accent transition-colors"
+            >
+              <span className="text-3xl">+</span>
+              <span className="text-sm font-medium">Add a client</span>
+            </button>
+          )
           return (
             <main className="flex-1 overflow-auto p-4 md:p-8">
+              <CompanyInvitesCard />
               <CompanySetupCard />
               <TodayList />
 
@@ -110,27 +130,37 @@ export function StudioApp() {
                   <p className="text-sm text-gray-400 mt-0.5">{roster.length} client{roster.length !== 1 ? 's' : ''}</p>
                 </div>
                 {role === 'manager' && (
-                  <button onClick={goToCompany} className="text-xs font-medium text-accent hover:underline">Your team and what they can open →</button>
+                  <button onClick={() => goToCompany()} className="text-xs font-medium text-accent hover:underline">Your team and what they can open →</button>
                 )}
               </div>
 
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(min(310px,100%),1fr))] gap-4">
-                {roster.map(c => <ClientCard key={c.id} client={c} />)}
-
-                {role === 'manager' && (
-                  <button
-                    onClick={() => openModal('add-client')}
-                    className="border-2 border-dashed border-gray-200 rounded-2xl p-5 min-h-[220px] flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-accent hover:text-accent transition-colors"
-                  >
-                    <span className="text-3xl">+</span>
-                    <span className="text-sm font-medium">Add a client</span>
-                  </button>
-                )}
-              </div>
+              {grouped ? (
+                <div className="flex flex-col gap-8">
+                  {groups.map(g => (
+                    <section key={g.ws} aria-label={g.name}>
+                      <div className="mb-2 flex items-baseline gap-2">
+                        <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{g.name}</h3>
+                        <span className="text-xs text-gray-400">{g.clients.length} client{g.clients.length !== 1 ? 's' : ''}</span>
+                      </div>
+                      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(310px,100%),1fr))] gap-4">
+                        {g.clients.map(c => <ClientCard key={c.id} client={c} />)}
+                        {g.canAdd && addTile(g.ws)}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(310px,100%),1fr))] gap-4">
+                  {roster.map(c => <ClientCard key={c.id} client={c} />)}
+                  {role === 'manager' && addTile()}
+                </div>
+              )}
 
               {roster.length === 0 && (
                 <div className="text-center text-gray-300 py-16 text-sm">No clients you have access to yet</div>
               )}
+
+              <YourCompaniesCard />
 
               <DashboardModals />
             </main>
@@ -138,7 +168,7 @@ export function StudioApp() {
         })()}
 
         {/* ── Company: everyone's access to every artist (managers) ── */}
-        {view === 'company' && role === 'manager' && <CompanyView />}
+        {view === 'company' && role === 'manager' && <CompanyView key={workspaceId ?? 'company'} />}
 
         {/* ── Studio: Artist portal ── */}
         {view === 'studio' && role === 'artist' && <ArtistView />}

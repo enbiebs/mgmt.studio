@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { inputClass } from '@/components/ui/Modal'
 import { ADMIN_KEY, cyclePage, levelsForRole, overallLevel, presetByKey, setAllPages, summarize, type PageLevels, type SectionKey } from '@/lib/access-presets'
+import { clientsOfCompany } from '@/lib/companies'
 import { inviteIsEmpty, loginTypeFor, type InviteArtistAccess } from '@/lib/invite-access'
 import { upsertPerson } from '@/lib/db'
 import type { Person } from '@/types'
@@ -23,8 +24,11 @@ export function InviteForm({ person, defaultClientId, onSent }: {
   defaultClientId?: string
   onSent?: () => void
 }) {
-  const clients = useStore(s => s.data.clients)
-  const artists = useMemo(() => clients.filter(c => !c.isDemo), [clients])
+  const allClients = useStore(s => s.data.clients)
+  const clientWorkspace = useStore(s => s.clientWorkspace)
+  const workspaceId = useStore(s => s.workspaceId)
+  // only the open company's artists can be chosen (a person who works for several companies has the others on their roster too)
+  const artists = useMemo(() => clientsOfCompany(allClients, clientWorkspace, workspaceId).filter(c => !c.isDemo), [allClients, clientWorkspace, workspaceId])
   const afterAccessChange = useStore(s => s.afterAccessChange)
 
   const [email, setEmail] = useState(person?.email ?? '')
@@ -78,7 +82,7 @@ export function InviteForm({ person, defaultClientId, onSent }: {
       }
       const res = await fetch('/api/team/invite', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), role: loginTypeFor(roleKey), personId: person?.id, access }),
+        body: JSON.stringify({ email: email.trim(), role: loginTypeFor(roleKey), personId: person?.id, access, workspaceId: workspaceId ?? undefined }),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) {

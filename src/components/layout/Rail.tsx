@@ -51,7 +51,7 @@ export function Rail() {
 
       {isManager && (
         <button
-          onClick={goToCompany}
+          onClick={() => goToCompany()}
           aria-current={view === 'company' ? 'page' : undefined}
           className={`${ITEM} ${view === 'company' ? ITEM_ON : ITEM_OFF}`}
         >
