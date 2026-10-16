@@ -13,11 +13,12 @@ import { latestSheet } from '@/lib/offer-sheet'
 import { paidSoFar } from '@/lib/settlement-math'
 import { settlementForShow } from '@/lib/budget'
 import { localDateOf } from '@/lib/utils'
+import { buildForecast } from '@/lib/forecast'
 
 export type InboxSeverity = 'urgent' | 'soon' | 'info'
 export type InboxRule =
   | 'invoice' | 'bill' | 'balance' | 'no_settlement' | 'offer_reply' | 'offer_hold' | 'sheet'
-  | 'no_budget' | 'deposits' | 'empty'
+  | 'no_budget' | 'deposits' | 'receivable' | 'empty'
 
 export interface InboxItem {
   key: string
@@ -94,6 +95,15 @@ export function buildInbox(client: Client, today: string, access: InboxAccess): 
         title: `${s.promoter ?? 'The promoter'} still owes you on ${s.venue ?? s.eventName ?? 'a settlement'}`,
         detail: `Settlement ${age <= 0 ? 'received today' : `received ${plural(age, 'day')} ago`}`,
         amount: balance, currency: s.currency, date: since, go: { section: 'tour', sub: 'settlements' },
+      })
+    }
+
+    // A scheduled payment (a deposit, a payment "30 days out") that was due and has not been recorded as received. Fees with
+    // no schedule are not raised here: "No settlement yet" already covers a show that happened.
+    for (const f of buildForecast(client, today).filter(i => i.kind === 'installment' && i.late)) {
+      add('receivable', f.id, f.daysLate > 14 ? 'urgent' : 'soon', {
+        title: `${f.title} was expected ${plural(f.daysLate, 'day')} ago`, detail: 'Record it as received, or chase it',
+        amount: f.amount, currency: f.currency, date: f.date, go: { section: 'finance', sub: 'forecast' },
       })
     }
 

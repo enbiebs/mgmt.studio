@@ -203,6 +203,7 @@ export interface Show {
   notes?: string
   guarantee?: number
   deposit?: number
+  received?: number      // how much of the fee has actually arrived (recorded by hand; the cash forecast counts only what is still to come)
   currency?: Currency
   tourOfferId?: string   // → TourOffer this show was confirmed from, if any
   viaAgency?: boolean               // booked through a booking agency, not directly
@@ -533,7 +534,7 @@ export interface AnalyticsData {
 export type MainSection  = 'calendar' | 'profile' | 'songs' | 'tour' | 'deals' | 'content' | 'finance' | 'projects' | 'analytics' | 'team' | 'legal' | 'activity'
 export type SongsSub     = 'tracks' | 'labelcopy' | 'checklist' | 'status'
 export type ContentSub   = 'manage' | 'studio' | 'lab'
-export type BizSub       = 'royalties' | 'banking' | 'catalog' | 'pl' | 'invoices' | 'payments'
+export type BizSub       = 'royalties' | 'banking' | 'catalog' | 'pl' | 'invoices' | 'payments' | 'forecast'
 export type TourSub      = 'tour' | 'stage-plot' | 'advance' | 'daysheet' | 'crew' | 'guests' | 'travel' | 'offers' | 'budget' | 'settlements'
 export type AnalyticsSub = 'overview' | 'streaming' | 'playlists' | 'social' | 'tiktok' | 'audience' | 'charts'
 export type LegalSub     = 'pipeline' | 'alerts' | 'register' | 'templates'

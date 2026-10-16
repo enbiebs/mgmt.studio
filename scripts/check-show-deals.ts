@@ -5,14 +5,14 @@ import type { Show } from '../src/types'
 
 const show: Show = {
   id: 's1', date: '2026-11-01', city: 'Lisbon', venue: 'LX Factory', time: '20:00', status: 'confirmed',
-  guarantee: 5000, deposit: 1000, currency: 'EUR', viaAgency: true, agencyName: 'Acme Agency', agencyCommissionPct: 10, managementCommissionPct: 15, invoiceId: 'inv-1',
+  guarantee: 5000, deposit: 1000, received: 2000, currency: 'EUR', viaAgency: true, agencyName: 'Acme Agency', agencyCommissionPct: 10, managementCommissionPct: 15, invoiceId: 'inv-1',
   tourOfferId: 'o1', notes: 'load in 4pm',
 }
 
 // the row to save carries every money field and nothing else about the show
 const row = showDealRow(show, 'c1')
-assert.deepEqual(row, { show_id: 's1', client_id: 'c1', guarantee: 5000, deposit: 1000, currency: 'EUR', via_agency: true, agency_name: 'Acme Agency', agency_commission_pct: 10, management_commission_pct: 15, invoice_id: 'inv-1' })
-assert.equal(Object.keys(row).length, DEAL_KEYS.length + 2)                                    // the eight fields plus the show and the artist
+assert.deepEqual(row, { show_id: 's1', client_id: 'c1', guarantee: 5000, deposit: 1000, received: 2000, currency: 'EUR', via_agency: true, agency_name: 'Acme Agency', agency_commission_pct: 10, management_commission_pct: 15, invoice_id: 'inv-1' })
+assert.equal(Object.keys(row).length, DEAL_KEYS.length + 2)                                    // the nine fields plus the show and the artist
 // and reading it back gives the same fields
 const back = dealFromRow(row)
 for (const k of DEAL_KEYS) assert.equal(back[k], show[k], k)
@@ -21,7 +21,7 @@ for (const k of DEAL_KEYS) assert.equal(back[k], show[k], k)
 const empty = showDealRow({ id: 's2' }, 'c1')
 assert.ok(Object.entries(empty).every(([k, v]) => k === 'show_id' || k === 'client_id' || v === null))
 assert.deepEqual(dealFromRow(empty), {
-  guarantee: undefined, deposit: undefined, currency: undefined, viaAgency: undefined, agencyName: undefined,
+  guarantee: undefined, deposit: undefined, received: undefined, currency: undefined, viaAgency: undefined, agencyName: undefined,
   agencyCommissionPct: undefined, managementCommissionPct: undefined, invoiceId: undefined,
 })
 assert.deepEqual(dealFromRow(undefined), {})                                                    // no row (not allowed to read it, or none yet) = no money

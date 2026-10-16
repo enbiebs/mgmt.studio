@@ -16,6 +16,7 @@ import { canOpenSection, visibleTourTabs } from '@/lib/tour-tabs'
 import { CompanyView } from '@/components/company/CompanyView'
 import { CompanySetupCard } from '@/components/dashboard/CompanySetupCard'
 import { CompanyInvitesCard, YourCompaniesCard } from '@/components/dashboard/CompaniesCards'
+import { ForecastCard } from '@/components/dashboard/ForecastCard'
 import { AppHeader }  from '@/components/layout/AppHeader'
 import { Subnav }     from '@/components/layout/Subnav'
 import { Rail }       from '@/components/layout/Rail'
@@ -43,6 +44,7 @@ import { CatalogView }   from '@/components/business/CatalogView'
 import { PLView }        from '@/components/business/PLView'
 import { InvoicesView }  from '@/components/business/InvoicesView'
 import { PaymentsView }  from '@/components/business/PaymentsView'
+import { ForecastView }  from '@/components/business/ForecastView'
 import { ProjectsView }  from '@/components/manager/ProjectsView'
 import { AnalyticsView } from '@/components/analytics/AnalyticsView'
 import { LegalView }     from '@/components/legal/LegalView'
@@ -123,6 +125,7 @@ export function StudioApp() {
               <CompanyInvitesCard />
               <CompanySetupCard />
               <TodayList />
+              <ForecastCard />
 
               <div className="flex items-end justify-between mb-4">
                 <div>
@@ -208,6 +211,7 @@ export function StudioApp() {
                   bizSub === 'pl'       ? <PLView />        :
                   bizSub === 'invoices' ? <InvoicesView />  :
                   bizSub === 'payments' ? <PaymentsView />  :
+                  bizSub === 'forecast' ? <ForecastView />  :
                   <RoyaltiesView />
                 )}
                 {section === 'calendar'   && <CalendarView />}
