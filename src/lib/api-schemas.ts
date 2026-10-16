@@ -43,6 +43,8 @@ const inviteArtistAccess = z.object({
   levels: z.record(z.string().max(20), z.enum(['view', 'edit'])).refine(o => Object.keys(o).every(k => INVITE_SECTION_KEYS.includes(k)), { message: 'unknown page' }).optional(),
 })
 export const inviteBody = z.object({
+  /** The company the invitation is for (needed when the sender manages more than one). */
+  workspaceId: z.string().uuid().optional(),
   email: z.email().max(254),
   role: z.enum(['team', 'agent', 'lawyer', 'artist']),
   personId: shortId.nullish(),
@@ -51,7 +53,8 @@ export const inviteBody = z.object({
 }).refine(b => b.role !== 'artist' || !!b.clientId, { message: 'An artist invite needs an artist' })
   .refine(b => b.role !== 'artist' || !(b.access && b.access.length), { message: 'An artist login does not take page access' })
 export const inviteCancelBody = z.object({ memberId: z.string().uuid() })
-export const inviteResendBody = z.object({ memberId: z.string().uuid() })
+export const inviteResendBody = z.object({ memberId: z.string().uuid().optional(), inviteId: z.string().uuid().optional() })
+  .refine(b => (b.memberId ? 1 : 0) + (b.inviteId ? 1 : 0) === 1, { message: 'Say who to send it to' })
 
 export const gcalConnectBody = z.object({ clientId: clientIdSchema, timeZone: z.string().max(64).regex(/^[A-Za-z0-9_+\-/]+$/).optional() })
 const recordType = z.enum(['show', 'post', 'project'])

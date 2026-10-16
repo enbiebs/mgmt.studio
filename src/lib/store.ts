@@ -42,12 +42,13 @@ import type { InboxChoice } from '@/lib/inbox'
 import { SHOW_UNFINISHED_KEY } from '@/lib/unfinished'
 import { buildOfferSheetSnapshot } from '@/lib/offer-sheet'
 import { hasDealData, splitDealPatch, withoutDeal } from '@/lib/show-deals'
+import { contextFields, openableClientIds, pickHomeWorkspace, type CompanyContext, type Membership } from '@/lib/companies'
 import {
   SECTION_TO_GRANT_KEY, findException, filterClientForViewer,
   type ItemException, type ItemType, type ItemEffect, type Viewer,
 } from '@/lib/item-access'
 import {
-  loadWorkspaceData, getMyMembership, getGrantsForMember, fetchGrantsForMember, getPreviewableMembers,
+  loadWorkspaceData, getMyMemberships, getGrantsForMember, fetchGrantsForMember, getPreviewableMembers,
   loadItemAccess, upsertItemAccess, deleteItemAccess,
   loadInboxState, saveInboxChoice, clearInboxChoice,
   insertTask, saveTask, deleteTaskRow, loadWorkspacePeople, loadCompanyInfo, insertAgendaPoints, saveAgendaPoint, deleteAgendaPointRow,
@@ -166,6 +167,41 @@ function pushDeleteToGoogleCalendar(clientId: string, recordType: 'show' | 'post
 // anyone can be granted.
 const ALL_SECTIONS: MainSection[] = ['songs', 'tour', 'deals', 'content', 'finance', 'team', 'projects', 'analytics', 'legal', 'profile']
 
+/**
+ * What this person can do in the company that owns this artist. For the company that is open (including a manager's
+ * "preview as") these are the live values; for any other company they are the values stored when the app opened. So a
+ * freelancer who manages one company and works in another gets the right role for each artist, whichever is open.
+ */
+function accessFor(s: Pick<StudioState, 'clientWorkspace' | 'workspaceId' | 'previewMemberId' | 'contexts' | 'role' | 'authClientId' | 'grants'>, cid: string) {
+  const ws = s.clientWorkspace[cid]
+  const other = ws && ws !== s.workspaceId && !s.previewMemberId ? s.contexts[ws] : undefined
+  return other ? { role: other.role, authClientId: other.authClientId, grants: other.grants } : { role: s.role, authClientId: s.authClientId, grants: s.grants }
+}
+
+/** Reads one company in full for the person's membership in it: its artists, templates, name, their pages and the team. */
+async function loadCompany(m: Membership) {
+  const [data, loadedTemplates, company] = await Promise.all([
+    loadWorkspaceData(m.workspaceId),
+    loadLegalTemplates(m.workspaceId),
+    loadCompanyInfo(m.workspaceId).catch(() => ({ name: '', ownerUserId: null as string | null })),
+  ])
+  // First load for this workspace — seed the starter templates and
+  // persist them so they're real, editable workspace rows from here on.
+  let legalTemplates = loadedTemplates
+  if (legalTemplates.length === 0) {
+    legalTemplates = JSON.parse(JSON.stringify(DEFAULT_LEGAL_TEMPLATES))
+    legalTemplates.forEach(t => upsertLegalTemplate(t, m.workspaceId).catch(console.error))
+  }
+  const grants: AccessGrant[] = (m.role === 'agent' || m.role === 'lawyer' || m.role === 'team') ? await getGrantsForMember(m.memberId) : []
+  const workspacePeople = m.role === 'artist' ? [] : await loadWorkspacePeople(m.workspaceId).catch(e => { console.error(e); return [] as WorkspacePerson[] })
+  const previewMembers: PreviewMember[] = m.role === 'manager' ? await getPreviewableMembers(m.workspaceId) : []
+  const ctx: CompanyContext = {
+    workspaceId: m.workspaceId, companyName: company.name, ownerUserId: company.ownerUserId, role: m.role,
+    memberId: m.memberId, authClientId: m.clientId, grants, workspacePeople, legalTemplates,
+  }
+  return { ctx, data, previewMembers }
+}
+
 // ── State shape ─────────────────────────────────────────────
 interface StudioState {
   // Data
@@ -176,6 +212,12 @@ interface StudioState {
 
   // Auth / workspace
   workspaceId: string | null
+  /** Everything that depends on WHICH company, for each company this login belongs to (one entry for most people). */
+  contexts: Record<string, CompanyContext>
+  /** Which company each artist belongs to. */
+  clientWorkspace: Record<string, string>
+  /** The company the app opens on. */
+  homeWorkspaceId: string | null
   /** The company's name and who owns it (read when the app opens; the Company page changes the name). */
   companyName: string
   companyOwnerId: string | null
@@ -282,7 +324,8 @@ interface StudioState {
 
   // ── Navigation actions ──
   goToDashboard: () => void
-  goToCompany: () => void
+  /** Opens the Company page for a company the person manages (the open one by default). */
+  goToCompany: (workspaceId?: string) => void
   setCompanyName: (name: string) => void
   openClient: (id: string) => void
   setSection: (section: MainSection) => void
@@ -307,7 +350,8 @@ interface StudioState {
   setOpenMenu: (id: string | null) => void
 
   // ── Client CRUD ──
-  addClient: (name: string, genre: string, color: string) => void
+  /** Adds an artist to the open company, or to `forWorkspaceId` when the person manages several companies. */
+  addClient: (name: string, genre: string, color: string, forWorkspaceId?: string) => void
   updateClient: (id: string, name: string, genre: string, color: string) => void
   deleteClient: (id: string) => void
 
@@ -521,6 +565,9 @@ export const useStore = create<StudioState>((set, get) => ({
   legalTemplates: defaultLegalTemplates(),
 
   workspaceId: null,
+  contexts: {},
+  clientWorkspace: {},
+  homeWorkspaceId: null,
   companyName: '',
   companyOwnerId: null,
   userId:      null,
@@ -582,15 +629,16 @@ export const useStore = create<StudioState>((set, get) => ({
     // section access (see src/lib/calendar.ts), not gated here.
     if (section === 'calendar') return true
     // Activity has no grant of its own either: the database decides which entries a person may read.
-    if (section === 'activity') return s.role !== 'artist'
-    if (s.role === 'manager') return true
-    if (s.role === 'artist') {
-      if (s.authClientId !== cid) return false
+    const a = accessFor(s, cid)
+    if (section === 'activity') return a.role !== 'artist'
+    if (a.role === 'manager') return true
+    if (a.role === 'artist') {
+      if (a.authClientId !== cid) return false
       if (section === 'deals') return false   // what shows pay is management's business; the artist sees what management sends as an offer sheet
       return requireEdit ? section === 'projects' : true
     }
     const key = SECTION_TO_GRANT_KEY[section]
-    if (s.grants.some(g =>
+    if (a.grants.some(g =>
       (g.section === key && (g.clientId === null || g.clientId === cid) && (!requireEdit || g.canEdit))
       || (g.section === 'admin' && g.clientId === cid)   // a Point Person for this artist: everything for them
     )) return true
@@ -601,9 +649,11 @@ export const useStore = create<StudioState>((set, get) => ({
   isShareOnly: (section, clientId) => {
     const s = get()
     const cid = clientId ?? s.clientId
-    if (!cid || s.role === 'manager' || s.role === 'artist' || section === 'calendar') return false
+    if (!cid || section === 'calendar') return false
+    const a = accessFor(s, cid)
+    if (a.role === 'manager' || a.role === 'artist') return false
     const key = SECTION_TO_GRANT_KEY[section]
-    const granted = s.grants.some(g => (g.section === key && (g.clientId === null || g.clientId === cid)) || (g.section === 'admin' && g.clientId === cid))
+    const granted = a.grants.some(g => (g.section === key && (g.clientId === null || g.clientId === cid)) || (g.section === 'admin' && g.clientId === cid))
     return !granted && !!s.data.clients.find(c => c.id === cid)?.itemSections?.includes(section)
   },
 
@@ -611,6 +661,16 @@ export const useStore = create<StudioState>((set, get) => ({
 
   accessibleClientIds: () => {
     const s = get()
+    // A login in several companies: the artists they can open in each, together.
+    if (Object.keys(s.contexts).length > 1 && !s.previewMemberId) {
+      const out: string[] = []
+      for (const ws of Object.keys(s.contexts)) {
+        const c = ws === s.workspaceId ? { ...s.contexts[ws], role: s.role, authClientId: s.authClientId, grants: s.grants } : s.contexts[ws]
+        const mine = s.data.clients.filter(x => s.clientWorkspace[x.id] === ws)
+        out.push(...openableClientIds(c, mine.map(x => x.id), mine.filter(x => x.itemSections?.length).map(x => x.id)))
+      }
+      return out
+    }
     if (s.role === 'manager') return 'all'
     if (s.role === 'artist') return s.authClientId ? [s.authClientId] : []
     const ids = new Set<string>()
@@ -631,60 +691,38 @@ export const useStore = create<StudioState>((set, get) => ({
   initFromSupabase: async (userId) => {
     set({ isLoading: true, userId })
     try {
-      const membership = await getMyMembership()
-      if (!membership) {
+      const memberships = await getMyMemberships()
+      if (memberships.length === 0) {
         // New user with no workspace yet — workspace is created by DB trigger,
         // but may take a moment. Fall back to demo data.
         set({ isLoading: false })
         return
       }
-      const { workspaceId, role, clientId: memberClientId, memberId } = membership
-      const [appData, loadedTemplates] = await Promise.all([
-        loadWorkspaceData(workspaceId),
-        loadLegalTemplates(workspaceId),
-      ])
-      const hasClients = appData.clients.length > 0
-
-      // First load for this workspace — seed the starter templates and
-      // persist them so they're real, editable workspace rows from here on.
-      let legalTemplates = loadedTemplates
-      if (legalTemplates.length === 0) {
-        legalTemplates = JSON.parse(JSON.stringify(DEFAULT_LEGAL_TEMPLATES))
-        legalTemplates.forEach(t => upsertLegalTemplate(t, workspaceId).catch(console.error))
-      }
-
-      let grants: AccessGrant[] = []
-      let previewMembers: PreviewMember[] = []
-      let itemAccess: ItemException[] = []
+      // Every company this login belongs to is read once (most people have one). Opening an artist later switches to
+      // that artist's company from what was read here.
+      const loaded = await Promise.all(memberships.map(loadCompany))
+      const contexts: Record<string, CompanyContext> = Object.fromEntries(loaded.map(l => [l.ctx.workspaceId, l.ctx]))
+      const homeId = pickHomeWorkspace(loaded.map(l => l.ctx), userId) ?? loaded[0].ctx.workspaceId
+      const home = contexts[homeId]
+      const clients = loaded.flatMap(l => l.data.clients)
+      const clientWorkspace: Record<string, string> = Object.fromEntries(loaded.flatMap(l => l.data.clients.map(c => [c.id, l.ctx.workspaceId] as const)))
       // Everyone except the artist has an inbox (the artist's login never sees money alerts).
-      const inboxState = role === 'artist' ? {} : await loadInboxState().catch(e => { console.error(e); return {} as Record<string, InboxChoice> })
-      const workspacePeople = role === 'artist' ? [] : await loadWorkspacePeople().catch(e => { console.error(e); return [] as WorkspacePerson[] })
-      const company = await loadCompanyInfo(workspaceId).catch(() => ({ name: '', ownerUserId: null as string | null }))
-      if (role === 'agent' || role === 'lawyer' || role === 'team') {
-        grants = await getGrantsForMember(memberId)
-      } else if (role === 'manager') {
-        ;[previewMembers, itemAccess] = await Promise.all([getPreviewableMembers(workspaceId), loadItemAccess()])
-      }
+      const inboxState = loaded.some(l => l.ctx.role !== 'artist') ? await loadInboxState().catch(e => { console.error(e); return {} as Record<string, InboxChoice> }) : {}
+      const itemAccess: ItemException[] = loaded.some(l => l.ctx.role === 'manager') ? await loadItemAccess() : []
 
       set({
-        workspaceId,
-        companyName: company.name,
-        companyOwnerId: company.ownerUserId,
+        ...contextFields(home),
+        contexts,
+        clientWorkspace,
+        homeWorkspaceId: homeId,
         isLoading: false,
-        role,
-        authRole: role,
-        myMemberId: memberId,
-        authClientId: memberClientId,
-        grants,
-        previewMembers,
+        previewMembers: loaded.flatMap(l => l.previewMembers),
         itemAccess,
         inboxState,
-        workspacePeople,
-        data: hasClients ? appData : { clients: [] },
-        legalTemplates,
+        data: { clients },
         // Artists land straight in their own client — no roster to pick from.
-        ...(role === 'artist' && memberClientId
-          ? { view: 'studio' as const, clientId: memberClientId }
+        ...(home.role === 'artist' && home.authClientId
+          ? { view: 'studio' as const, clientId: home.authClientId }
           : {}),
       })
       // The database is the source of truth now: remove any old browser copy and stop making new ones.
@@ -711,7 +749,11 @@ export const useStore = create<StudioState>((set, get) => ({
       // previewing is reflected instead of the stale pre-preview copy.
       let data = previewBackup
       if (workspaceId) {
-        try { data = await loadWorkspaceData(workspaceId) } catch (e) { console.error(e) }
+        try {
+          const ids = Object.keys(get().contexts)
+          const all = await Promise.all((ids.length > 0 ? ids : [workspaceId]).map(id => loadWorkspaceData(id)))
+          data = { clients: all.flatMap(d => d.clients) }
+        } catch (e) { console.error(e) }
       }
       set({
         role: 'manager', grants: [], authClientId: null, previewMemberId: null, view: 'dashboard',
@@ -744,18 +786,22 @@ export const useStore = create<StudioState>((set, get) => ({
     const s = get()
     if (s.previewMemberId || !s.myMemberId || !s.authRole || s.authRole === 'artist') return
     const [workspacePeople, grants] = await Promise.all([
-      loadWorkspacePeople().catch(() => s.workspacePeople),
+      loadWorkspacePeople(s.workspaceId).catch(() => s.workspacePeople),
       // A failed read must keep what we had: an empty list would look like "no access to anything".
       s.authRole === 'manager' ? Promise.resolve(s.grants) : fetchGrantsForMember(s.myMemberId).catch(e => { console.error(e); return s.grants }),
     ])
-    set({ workspacePeople, grants })
+    set({ workspacePeople, grants, ...(s.workspaceId && s.contexts[s.workspaceId] ? { contexts: { ...s.contexts, [s.workspaceId]: { ...s.contexts[s.workspaceId], workspacePeople, grants } } } : {}) })
   },
 
   afterAccessChange: async (memberId) => {
     const { memberGrants } = get()
     if (memberId && memberGrants[memberId]) set({ memberGrants: Object.fromEntries(Object.entries(memberGrants).filter(([id]) => id !== memberId)) })
-    const workspacePeople = await loadWorkspacePeople().catch(() => null)
-    if (workspacePeople) set({ workspacePeople })
+    const ws = get().workspaceId
+    const workspacePeople = await loadWorkspacePeople(ws).catch(() => null)
+    if (workspacePeople) {
+      const { contexts } = get()
+      set({ workspacePeople, ...(ws && contexts[ws] ? { contexts: { ...contexts, [ws]: { ...contexts[ws], workspacePeople } } } : {}) })
+    }
   },
 
   loadMemberGrants: async () => {
@@ -784,14 +830,32 @@ export const useStore = create<StudioState>((set, get) => ({
   },
 
   // ── Navigation ──
-  goToDashboard: () => set({ view: 'dashboard', clientId: null, selectedShowId: null, selectedAlbumId: null }),
-  goToCompany: () => set({ view: 'company', clientId: null, selectedShowId: null, selectedAlbumId: null }),
-  setCompanyName: (name) => set({ companyName: name }),
+  goToDashboard: () => {
+    const s = get()
+    // Home belongs to the person's home company; coming back from a company they only work in restores it.
+    const home = !s.previewMemberId && s.homeWorkspaceId && s.homeWorkspaceId !== s.workspaceId ? s.contexts[s.homeWorkspaceId] : undefined
+    set({ view: 'dashboard', clientId: null, selectedShowId: null, selectedAlbumId: null, ...(home ? contextFields(home) : {}) })
+  },
+  goToCompany: (workspaceId) => {
+    const s = get()
+    const target = workspaceId ?? (s.role === 'manager' ? s.workspaceId : Object.values(s.contexts).find(c => c.role === 'manager')?.workspaceId) ?? s.workspaceId
+    const ctx = target && target !== s.workspaceId && !s.previewMemberId ? s.contexts[target] : undefined
+    set({ view: 'company', clientId: null, selectedShowId: null, selectedAlbumId: null, ...(ctx ? contextFields(ctx) : {}) })
+  },
+  setCompanyName: (name) => {
+    const s = get()
+    const ctx = s.workspaceId ? s.contexts[s.workspaceId] : undefined
+    set({ companyName: name, ...(ctx && s.workspaceId ? { contexts: { ...s.contexts, [s.workspaceId]: { ...ctx, companyName: name } } } : {}) })
+  },
   openClient: (id) => {
     const s = get()
-    const firstAccessible = (s.role === 'manager' || s.role === 'artist') ? 'calendar' : (ALL_SECTIONS.find(sec => s.hasAccess(sec, id)) ?? 'songs')
+    const a = accessFor(s, id)
+    const firstAccessible = (a.role === 'manager' || a.role === 'artist') ? 'calendar' : (ALL_SECTIONS.find(sec => s.hasAccess(sec, id)) ?? 'songs')
     const firstSection: MainSection = firstAccessible === 'deals' ? 'tour' : firstAccessible   // Deals & fees opens on the Tour page's Offers tab
-    set({ view: 'studio', clientId: id, section: firstSection, selectedShowId: null, selectedAlbumId: null })
+    // Opening an artist that belongs to another company switches the app to that company (its role, pages and people).
+    const ws = s.clientWorkspace[id]
+    const ctx = ws && ws !== s.workspaceId && !s.previewMemberId ? s.contexts[ws] : undefined
+    set({ view: 'studio', clientId: id, section: firstSection, selectedShowId: null, selectedAlbumId: null, ...(ctx ? contextFields(ctx) : {}) })
   },
   setSection:    (section) => set({ section, selectedShowId: null }),
   setSongsSub:   (sub) => set({ songsSub: sub }),
@@ -825,8 +889,9 @@ export const useStore = create<StudioState>((set, get) => ({
   setOpenMenu: (id) => set({ openMenuId: id }),
 
   // ── Client CRUD ──
-  addClient: (name, genre, color) => {
-    const { data, workspaceId } = get()
+  addClient: (name, genre, color, forWorkspaceId) => {
+    const { data } = get()
+    const workspaceId = forWorkspaceId ?? get().workspaceId
     const id = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') + '-' + uid()
     const newClient: Client = {
       id, name, genre, color,
@@ -847,7 +912,7 @@ export const useStore = create<StudioState>((set, get) => ({
       finance:     EMPTY_FINANCE,
     }
     const updated = { clients: [...data.clients, newClient] }
-    set({ data: updated })
+    set({ data: updated, ...(workspaceId ? { clientWorkspace: { ...get().clientWorkspace, [id]: workspaceId } } : {}) })
     saveData(updated)
     if (workspaceId) {
       upsertClient(newClient, workspaceId).catch(console.error)

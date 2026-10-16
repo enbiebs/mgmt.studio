@@ -15,6 +15,7 @@ import { Modal, FormField, inputClass } from '@/components/ui/Modal'
 import { ADMIN_KEY, levelsForRole, planChanges } from '@/lib/access-presets'
 import { POINT_PERSON_WARNING, withCardNames } from '@/lib/sharing'
 import { applyGrantPlan } from '@/lib/db'
+import { clientsOfCompany } from '@/lib/companies'
 import { MAX_TITLE_CHARS, TITLE_SUGGESTIONS, cleanTitle } from '@/lib/team-roles'
 import { RoleMenu } from './RoleMenu'
 import type { ArtistSharing } from './useArtistSharing'
@@ -33,7 +34,10 @@ export function AddPersonModal({ initialTitle, sharing, canInvite, onInvite, onO
   onClose: () => void
 }) {
   const client = useStore(s => s.getClient())
-  const clients = useStore(s => s.data.clients)
+  const allClients = useStore(s => s.data.clients)
+  const clientWorkspace = useStore(s => s.clientWorkspace)
+  const openWorkspace = useStore(s => s.workspaceId)
+  const clients = clientsOfCompany(allClients, clientWorkspace, openWorkspace)   // only this company's team cards
   const rawLogins = useStore(s => s.workspacePeople)
   const addPerson = useStore(s => s.addPerson)
   const afterAccessChange = useStore(s => s.afterAccessChange)
