@@ -48,7 +48,7 @@ export default function LoginPage() {
           email,
           password,
           options: {
-            data: { workspace_name: workspaceName || email.split('@')[0] },
+            data: { workspace_name: workspaceName.trim() || email.split('@')[0] },
             emailRedirectTo: `${window.location.origin}/auth/callback`,
           },
         })
@@ -92,7 +92,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Mode tabs */}
         <div className="flex bg-gray-100 rounded-xl p-1 mb-6">
-          {([['login', 'Sign in'], ['signup', 'Create account'], ['magic', 'Magic link']] as const).map(([m, label]) => (
+          {([['login', 'Sign in'], ['signup', 'New company'], ['magic', 'Magic link']] as const).map(([m, label]) => (
             <button
               key={m}
               onClick={() => { setMode(m); setMessage(null) }}
@@ -105,6 +105,13 @@ export default function LoginPage() {
           ))}
         </div>
 
+        {mode === 'signup' && (
+          <p className="text-xs text-gray-500 mb-3 -mt-2 leading-relaxed">
+            Starting a management company? Create it here and you will be its owner, then add your artists and invite your team.
+            <strong className="font-semibold text-gray-600"> Joining a team that already uses Mgmt Path?</strong> You do not need to sign up: ask your admin to invite you, and the invitation email takes you straight in.
+          </p>
+        )}
+
         {mode === 'reset' && (
           <p className="text-xs text-gray-400 mb-3 -mt-2">
             Enter your email and we&apos;ll send you a link to set a new password.
@@ -115,12 +122,14 @@ export default function LoginPage() {
           {/* Workspace name (signup only) */}
           {mode === 'signup' && (
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Company / workspace name</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Company name</label>
               <input
                 type="text"
                 value={workspaceName}
                 onChange={e => setWorkspaceName(e.target.value)}
                 placeholder="e.g. Mascolo Management"
+                required
+                maxLength={80}
                 className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
               />
             </div>
@@ -185,7 +194,7 @@ export default function LoginPage() {
           >
             {loading ? 'Loading…' : (
               mode === 'login'  ? 'Sign in' :
-              mode === 'signup' ? 'Create account' :
+              mode === 'signup' ? 'Create my company' :
               mode === 'reset'  ? 'Send reset link' :
               'Send magic link'
             )}
@@ -195,7 +204,7 @@ export default function LoginPage() {
         {/* Footer */}
         <p className="text-center text-xs text-gray-400 mt-6">
           {mode === 'login'
-            ? <>No account? <button className="text-accent hover:underline" onClick={() => setMode('signup')}>Sign up</button></>
+            ? <>Starting a company? <button className="text-accent hover:underline" onClick={() => setMode('signup')}>Create it</button></>
             : <>Have an account? <button className="text-accent hover:underline" onClick={() => setMode('login')}>Sign in</button></>
           }
         </p>

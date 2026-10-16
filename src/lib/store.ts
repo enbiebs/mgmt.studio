@@ -50,7 +50,7 @@ import {
   loadWorkspaceData, getMyMembership, getGrantsForMember, fetchGrantsForMember, getPreviewableMembers,
   loadItemAccess, upsertItemAccess, deleteItemAccess,
   loadInboxState, saveInboxChoice, clearInboxChoice,
-  insertTask, saveTask, deleteTaskRow, loadWorkspacePeople, insertAgendaPoints, saveAgendaPoint, deleteAgendaPointRow,
+  insertTask, saveTask, deleteTaskRow, loadWorkspacePeople, loadCompanyInfo, insertAgendaPoints, saveAgendaPoint, deleteAgendaPointRow,
   type AccessGrant, type PreviewMember,
   upsertClient, deleteClient as dbDeleteClient, setCalendarToken, saveSetupSkipped,
   upsertTrack, deleteTrack as dbDeleteTrack,
@@ -176,6 +176,9 @@ interface StudioState {
 
   // Auth / workspace
   workspaceId: string | null
+  /** The company's name and who owns it (read when the app opens; the Company page changes the name). */
+  companyName: string
+  companyOwnerId: string | null
   userId: string | null
   isLoading: boolean
 
@@ -280,6 +283,7 @@ interface StudioState {
   // ── Navigation actions ──
   goToDashboard: () => void
   goToCompany: () => void
+  setCompanyName: (name: string) => void
   openClient: (id: string) => void
   setSection: (section: MainSection) => void
   setSongsSub: (sub: SongsSub) => void
@@ -517,6 +521,8 @@ export const useStore = create<StudioState>((set, get) => ({
   legalTemplates: defaultLegalTemplates(),
 
   workspaceId: null,
+  companyName: '',
+  companyOwnerId: null,
   userId:      null,
   isLoading:   false,
 
@@ -653,6 +659,7 @@ export const useStore = create<StudioState>((set, get) => ({
       // Everyone except the artist has an inbox (the artist's login never sees money alerts).
       const inboxState = role === 'artist' ? {} : await loadInboxState().catch(e => { console.error(e); return {} as Record<string, InboxChoice> })
       const workspacePeople = role === 'artist' ? [] : await loadWorkspacePeople().catch(e => { console.error(e); return [] as WorkspacePerson[] })
+      const company = await loadCompanyInfo(workspaceId).catch(() => ({ name: '', ownerUserId: null as string | null }))
       if (role === 'agent' || role === 'lawyer' || role === 'team') {
         grants = await getGrantsForMember(memberId)
       } else if (role === 'manager') {
@@ -661,6 +668,8 @@ export const useStore = create<StudioState>((set, get) => ({
 
       set({
         workspaceId,
+        companyName: company.name,
+        companyOwnerId: company.ownerUserId,
         isLoading: false,
         role,
         authRole: role,
@@ -777,6 +786,7 @@ export const useStore = create<StudioState>((set, get) => ({
   // ── Navigation ──
   goToDashboard: () => set({ view: 'dashboard', clientId: null, selectedShowId: null, selectedAlbumId: null }),
   goToCompany: () => set({ view: 'company', clientId: null, selectedShowId: null, selectedAlbumId: null }),
+  setCompanyName: (name) => set({ companyName: name }),
   openClient: (id) => {
     const s = get()
     const firstAccessible = (s.role === 'manager' || s.role === 'artist') ? 'calendar' : (ALL_SECTIONS.find(sec => s.hasAccess(sec, id)) ?? 'songs')

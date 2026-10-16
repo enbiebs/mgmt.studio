@@ -821,11 +821,11 @@ export async function loadWorkspacePeople(): Promise<WorkspacePerson[]> {
     .map(r => ({ memberId: r.member_id, userId: r.user_id, label: r.label, role: r.role as UserRole, allClients: r.all_clients, clientIds: r.client_ids ?? [], invited: !!r.invited, personId: r.person_id ?? undefined, email: r.email ?? undefined }))
 }
 
-/** The company's name (the workspace). Everyone in the company can read it. */
-export async function loadCompanyName(workspaceId: string): Promise<string> {
-  const { data, error } = await createClient().from('workspaces').select('name').eq('id', workspaceId).maybeSingle()
+/** The company's name and who owns it (the workspace). Everyone in the company can read both. */
+export async function loadCompanyInfo(workspaceId: string): Promise<{ name: string; ownerUserId: string | null }> {
+  const { data, error } = await createClient().from('workspaces').select('name, owner_user_id').eq('id', workspaceId).maybeSingle()
   if (error) throw error
-  return data?.name ?? ''
+  return { name: data?.name ?? '', ownerUserId: data?.owner_user_id ?? null }
 }
 
 /** Renames the company. Only a manager of it can; throws when the database refuses. */

@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/Badge'
 import { ADMIN_KEY, LEVELS, planChanges, presetByKey } from '@/lib/access-presets'
 import { buildCompanyGrid, hasNothing, type CompanyRow } from '@/lib/company'
 import { levelChangeWarning, removalWarning, resendWording, withCardNames, type SharingGrant } from '@/lib/sharing'
-import { applyGrantPlan, fetchArtistGrants, loadCompanyName, renameCompany, revokeArtistAccess } from '@/lib/db'
+import { applyGrantPlan, fetchArtistGrants, renameCompany, revokeArtistAccess } from '@/lib/db'
 import { InviteForm } from '@/components/team/InviteForm'
 
 type Pending = { memberId: string; clientId: string; key: string; text: string }
@@ -23,6 +23,7 @@ export function CompanyView() {
   const clients = useStore(s => s.data.clients)
   const people = useMemo(() => withCardNames(rawPeople, clients), [rawPeople, clients])
   const myMemberId = useStore(s => s.myMemberId)
+  const ownerId = useStore(s => s.companyOwnerId)
   const isManager = useStore(s => s.role === 'manager' && s.previewMemberId === null)
   const afterAccessChange = useStore(s => s.afterAccessChange)
   const openClient = useStore(s => s.openClient)
@@ -145,7 +146,8 @@ export function CompanyView() {
               <div key={a.memberId} className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-100 px-4 py-2.5 text-sm">
                 <span className="font-medium">{a.label}</span>
                 {a.memberId === myMemberId && <span className="text-[11px] text-gray-400">(you)</span>}
-                <span className="text-xs text-gray-500">Runs the company and can open every artist.</span>
+                {a.userId === ownerId && <Badge variant="blue">Owner</Badge>}
+                <span className="text-xs text-gray-500">{a.userId === ownerId ? 'Owns the company and can open every artist.' : 'Runs the company and can open every artist.'}</span>
               </div>
             ))}
           </div>
@@ -231,24 +233,18 @@ export function CompanyView() {
 
 /** The company's name, with a Rename button (a manager only; the database enforces it). */
 function CompanyName({ workspaceId }: { workspaceId: string | null }) {
-  const [name, setName] = useState<string | null>(null)
+  const name = useStore(s => s.companyName)
+  const setCompanyName = useStore(s => s.setCompanyName)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [problem, setProblem] = useState('')
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
-    if (!workspaceId) return
-    let live = true
-    loadCompanyName(workspaceId).then(n => { if (live) setName(n) }).catch(console.error)
-    return () => { live = false }
-  }, [workspaceId])
-
   async function save() {
     const next = draft.trim()
     if (!workspaceId || !next || busy) return
     setBusy(true); setProblem('')
-    try { await renameCompany(workspaceId, next); setName(next); setEditing(false) }
+    try { await renameCompany(workspaceId, next); setCompanyName(next); setEditing(false) }
     catch (e) { console.error(e); setProblem('That could not be saved. Names are 1 to 80 characters.') }
     finally { setBusy(false) }
   }
@@ -270,8 +266,8 @@ function CompanyName({ workspaceId }: { workspaceId: string | null }) {
   }
   return (
     <div className="flex flex-wrap items-baseline gap-3">
-      <h1 className="font-serif text-2xl font-medium">{name === null ? 'Company' : name || 'Your company'}</h1>
-      {name !== null && <button onClick={() => { setDraft(name); setEditing(true) }} className="text-xs font-medium text-gray-500 hover:text-gray-900">Rename</button>}
+      <h1 className="font-serif text-2xl font-medium">{name || 'Your company'}</h1>
+      <button onClick={() => { setDraft(name); setEditing(true) }} className="text-xs font-medium text-gray-500 hover:text-gray-900">Rename</button>
     </div>
   )
 }
