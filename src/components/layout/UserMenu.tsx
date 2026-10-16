@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { createClient } from '@/lib/supabase/client'
 import { useDismiss } from './useDismiss'
-import { applyLook, parseLook, type Look } from '@/lib/look'
+import { applyLook, applyTheme, parseLook, parseTheme, type Look, type Theme } from '@/lib/look'
 
 const ROLE_LABEL: Record<string, string> = { manager: 'Manager', artist: 'Artist', agent: 'Agent', lawyer: 'Lawyer', team: 'Team' }
 
@@ -17,6 +17,11 @@ export function UserMenu() {
   function chooseLook(next: Look) {
     applyLook(next)
     setLook(next)
+  }
+  const [theme, setTheme] = useState<Theme>(() => (typeof document === 'undefined' ? 'light' : parseTheme(document.documentElement.dataset.theme)))
+  function chooseTheme(next: Theme) {
+    applyTheme(next)
+    setTheme(next)
   }
   const ref = useRef<HTMLDivElement>(null)
   const close = useCallback(() => setOpen(false), [])
@@ -80,6 +85,18 @@ export function UserMenu() {
               <button
                 key={value} role="menuitemradio" aria-checked={look === value} onClick={() => chooseLook(value)}
                 className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors ${look === value ? 'border-accent bg-accent-soft text-accent' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="px-3 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Theme</div>
+          <div className="flex gap-1 px-3 pb-2" role="group" aria-label="Theme">
+            {([['light', 'Light'], ['dark', 'Dark'], ['auto', 'Auto']] as const).map(([value, label]) => (
+              <button
+                key={value} role="menuitemradio" aria-checked={theme === value} onClick={() => chooseTheme(value)}
+                title={value === 'auto' ? 'Follow this device' : undefined}
+                className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors ${theme === value ? 'border-accent bg-accent-soft text-accent' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
               >
                 {label}
               </button>

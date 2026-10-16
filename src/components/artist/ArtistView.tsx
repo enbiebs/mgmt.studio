@@ -114,7 +114,7 @@ export function ArtistView() {
     : 0
 
   return (
-    <div className="flex-1 overflow-auto bg-gray-50" style={portalStyle(client.color)}>
+    <div className="flex-1 overflow-auto bg-gray-50" data-portal={portalStyle(client.color) ? '' : undefined} style={portalStyle(client.color)}>
       {/* Artist hero: wears the artist's own color (the portal's accent follows it) */}
       <div className="bg-canvas border-b border-gray-100 border-t-[3px] border-t-accent px-4 md:px-6 py-4 md:py-5">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">

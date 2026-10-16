@@ -31,7 +31,8 @@ for (const c of ['#ffff00', '#ffffff', '#f5f5f5', '#fde047', '#ec4899', '#4c8df6
 assert.notEqual(portalTheme('#ffff00')!.accent, '#ffff00')                      // pure yellow with white text would be unreadable
 
 // the style handed to the page
-assert.deepEqual(Object.keys(portalStyle('#4c8df6')!).sort(), ['--color-accent', '--color-accent-hover', '--color-accent-soft'])
+assert.deepEqual(Object.keys(portalStyle('#4c8df6')!).sort(), ['--color-accent', '--color-accent-hover', '--color-accent-soft', '--portal-accent'])
+assert.equal(portalStyle('#4c8df6')!['--portal-accent'], portalStyle('#4c8df6')!['--color-accent'])      // the dark theme lightens the artist's own colour
 assert.equal(portalStyle('not a color'), undefined)                              // anything odd: keep the product's own accent
 assert.equal(portalStyle(undefined), undefined)
 assert.equal(portalTheme('#4c8df6')!.accent, portalStyle('#4c8df6')!['--color-accent'])
