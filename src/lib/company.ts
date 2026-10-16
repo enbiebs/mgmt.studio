@@ -44,6 +44,31 @@ export function buildCompanyGrid(people: WorkspacePerson[], grantsByClient: Reco
   return { admins, rows }
 }
 
+/** A saved list of people ("Booking team"): only who is in it. What each person can open stays their own. */
+export interface CompanyGroup { id: string; name: string; memberIds: string[] }
+
+/** The groups a person is in (names, A to Z), for the little tags on their row. */
+export function groupNamesOf(groups: CompanyGroup[], memberId: string): string[] {
+  return groups.filter(g => g.memberIds.includes(memberId)).map(g => g.name).sort((a, b) => a.localeCompare(b))
+}
+
+/**
+ * Giving a whole group a role on one artist: who would change, who already has it, and who is not in the grid any more
+ * (an admin, or someone who left). Nothing is saved here; the screen saves each person's own access.
+ */
+export function planGroupApply(group: CompanyGroup, grid: CompanyGrid, clientId: string, key: string): { change: CompanyRow[]; same: CompanyRow[]; missing: number } {
+  const change: CompanyRow[] = [], same: CompanyRow[] = []
+  let missing = 0
+  for (const id of group.memberIds) {
+    const row = grid.rows.find(r => r.person.memberId === id)
+    if (!row) { missing++; continue }
+    const current = row.cells[clientId]?.levelKey ?? 'none'
+    if (current === key) same.push(row)
+    else change.push(row)
+  }
+  return { change, same, missing }
+}
+
 /** True when someone has a login but cannot open anything yet (nudge: they would sign in to an empty app). */
 export const hasNothing = (row: CompanyRow) => row.artistCount === 0 && !row.companyWide
 

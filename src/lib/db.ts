@@ -828,6 +828,55 @@ export async function loadCompanyInfo(workspaceId: string): Promise<{ name: stri
   return { name: data?.name ?? '', ownerUserId: data?.owner_user_id ?? null }
 }
 
+/** Makes a signed-in teammate an admin, or takes it back. Only the company's owner can; throws the database's plain message when refused. */
+export async function setCompanyAdmin(memberId: string, admin: boolean): Promise<void> {
+  const { error } = await createClient().rpc('set_company_admin', { p_member: memberId, p_admin: admin })
+  if (error) throw new Error(error.message)
+}
+
+/** Every group in the company with who is in it (managers only; anyone else gets nothing). */
+export async function loadGroups(): Promise<{ id: string; name: string; memberIds: string[] }[]> {
+  const supabase = createClient()
+  const [g, m] = await Promise.all([
+    supabase.from('company_groups').select('id, name').order('name'),
+    supabase.from('company_group_members').select('group_id, member_id'),
+  ])
+  if (g.error) throw g.error
+  if (m.error) throw m.error
+  return (g.data ?? []).map(x => ({ id: x.id, name: x.name, memberIds: (m.data ?? []).filter(r => r.group_id === x.id).map(r => r.member_id) }))
+}
+
+export async function createGroup(workspaceId: string, name: string): Promise<string> {
+  const { data, error } = await createClient().from('company_groups').insert({ workspace_id: workspaceId, name }).select('id').single()
+  if (error) throw new Error(error.code === '23505' ? 'You already have a group with that name' : error.message)
+  return data.id
+}
+
+export async function renameGroup(groupId: string, name: string): Promise<void> {
+  const { error } = await createClient().from('company_groups').update({ name }).eq('id', groupId)
+  if (error) throw new Error(error.code === '23505' ? 'You already have a group with that name' : error.message)
+}
+
+export async function deleteGroup(groupId: string): Promise<void> {
+  const { error } = await createClient().from('company_groups').delete().eq('id', groupId)
+  if (error) throw error
+}
+
+/** Puts exactly these people in the group: adds the new ones, removes the ones who were taken out. */
+export async function setGroupMembers(groupId: string, before: string[], after: string[]): Promise<void> {
+  const supabase = createClient()
+  const add = after.filter(id => !before.includes(id))
+  const remove = before.filter(id => !after.includes(id))
+  if (add.length) {
+    const { error } = await supabase.from('company_group_members').insert(add.map(member_id => ({ group_id: groupId, member_id })))
+    if (error) throw error
+  }
+  if (remove.length) {
+    const { error } = await supabase.from('company_group_members').delete().eq('group_id', groupId).in('member_id', remove)
+    if (error) throw error
+  }
+}
+
 /** Renames the company. Only a manager of it can; throws when the database refuses. */
 export async function renameCompany(workspaceId: string, name: string): Promise<void> {
   const { data, error } = await createClient().from('workspaces').update({ name }).eq('id', workspaceId).select('id')
