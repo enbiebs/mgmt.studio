@@ -40,5 +40,6 @@ export function portalTheme(color: string | undefined | null): PortalTheme | nul
 /** The inline style that re-points the product's accent tokens at the artist's color. */
 export function portalStyle(color: string | undefined | null): Record<string, string> | undefined {
   const t = portalTheme(color)
-  return t ? { '--color-accent': t.accent, '--color-accent-hover': t.hover, '--color-accent-soft': t.soft } : undefined
+  // --portal-accent is the artist's colour itself: the dark theme lightens it from there (see globals.css, [data-portal])
+  return t ? { '--color-accent': t.accent, '--color-accent-hover': t.hover, '--color-accent-soft': t.soft, '--portal-accent': t.accent } : undefined
 }
