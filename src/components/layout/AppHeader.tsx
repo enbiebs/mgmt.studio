@@ -55,7 +55,7 @@ export function AppHeader() {
         </div>
       )}
 
-      <header className="flex-shrink-0 flex flex-wrap items-center min-h-[52px] px-3 md:px-6 gap-x-3 border-b border-gray-100 md:flex-nowrap">
+      <header className="glass glass-strong glass-bar flex-shrink-0 flex flex-wrap items-center min-h-[52px] px-3 md:px-6 gap-x-3 border-b border-gray-100 md:flex-nowrap">
         {/* Phone: a way back to the roster when inside an artist */}
         {inStudio && (
           <button

@@ -63,7 +63,7 @@ export function TodayList() {
 
       <AddTodo />
 
-      <section className="mb-8 bg-canvas border border-gray-100 rounded-2xl p-4 md:p-5">
+      <section className="glass mb-8 bg-canvas border border-gray-100 rounded-2xl p-4 md:p-5">
         {empty && (
           <div className="py-4 text-sm text-gray-400">
             {scope === 'mine' ? 'Nothing on your list. Add a to-do above, or enjoy the quiet.' : 'Nothing on anyone’s list right now.'}

@@ -37,7 +37,7 @@ export function CompanySetupCard() {
   const run = (key: string) => key === 'artist' ? openModal('add-client') : goToCompany()
 
   return (
-    <section aria-label="Set up your company" className="mb-6 rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
+    <section aria-label="Set up your company" className="glass mb-6 rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="font-serif text-lg font-medium leading-tight">Set up {companyName || 'your company'}</div>

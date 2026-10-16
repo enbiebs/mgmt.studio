@@ -56,7 +56,7 @@ export function ClientCard({ client: c }: { client: Client }) {
 
   return (
     <div
-      className="relative bg-canvas border border-gray-100 rounded-2xl p-5 cursor-pointer hover:shadow-lg hover:border-gray-200 transition-all duration-200 group"
+      className="glass relative bg-canvas border border-gray-100 rounded-2xl p-5 cursor-pointer hover:shadow-lg hover:border-gray-200 transition-all duration-200 group"
       onClick={() => openClient(c.id)}
     >
       {/* ── 3-dot menu ── */}

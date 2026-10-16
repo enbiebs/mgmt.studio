@@ -44,7 +44,7 @@ function CompanyBlock({ group, showName }: { group: ForecastGroup; showName: boo
   }, [group.items, day])
 
   return (
-    <div className="rounded-2xl border border-gray-100 px-4 py-3">
+    <div className="glass rounded-2xl border border-gray-100 px-4 py-3">
       {showName && <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">{group.name}</div>}
       <div className="flex flex-wrap gap-x-8 gap-y-1 text-sm">
         {windows.map(w => (

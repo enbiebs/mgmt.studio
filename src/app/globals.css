@@ -49,6 +49,86 @@ body {
 
 ::selection { background: var(--color-accent-soft); }
 
+/* ── Glass look ("Ember") ───────────────────────────────────────────────────────────────────────────────────────────
+   The default look: frosted panels over a warm glow. A person can switch back to plain paper in the account menu; the
+   choice lives in a cookie and arrives as <html data-look="glass|solid">, so everything below applies to glass only.
+   Rules this follows:
+   • Glass is for chrome and cards (sidebar, header, pop-ups, Home cards). Pages full of numbers and forms sit on one
+     near-solid frosted sheet so tables stay crisp.
+   • A panel that blurs must never sit inside another blurred element (its parent would become the backdrop), so panels are
+     siblings over the backdrop.
+   • Small grey text and the accent step one shade darker on glass so they keep 4.5:1 over any colour behind them
+     (scripts/check-look.ts proves it against the worst spot of the glow).
+   • Falls back to plain panels without blur support, when the system asks for less transparency, and when printing.
+   These rules are not in a @layer on purpose: unlayered CSS beats Tailwind's utility layer, so `.glass` wins over the
+   `bg-canvas` / `border-gray-100` already on an element without touching them. */
+:root {
+  --glass:        rgba(255, 255, 255, 0.62);
+  --glass-strong: rgba(255, 255, 255, 0.8);
+  --glass-edge:   rgba(255, 255, 255, 0.8);
+  --glass-hi:     inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --glass-shadow: 0 10px 34px rgba(70, 40, 20, 0.12);
+  --glass-sheet:  rgba(251, 250, 247, 0.9);
+  --ember:
+    radial-gradient(60vmax 50vmax at 8% 6%, #ffb48a 0%, transparent 62%),
+    radial-gradient(55vmax 45vmax at 94% 18%, #f6c3c9 0%, transparent 60%),
+    radial-gradient(65vmax 50vmax at 68% 100%, #ffe0a6 0%, transparent 64%),
+    #f6efe6;
+}
+html[data-look="glass"] {
+  --color-gray-400: #68635a;
+  --color-gray-500: #5c584f;
+  --color-accent: #b83816;
+  --color-accent-hover: #a53112;
+}
+html[data-look="glass"] body { background: var(--ember); background-attachment: fixed; }
+html[data-look="glass"] .app-shell { background: transparent; }
+
+html[data-look="glass"] .glass {
+  background: var(--glass);
+  border-color: var(--glass-edge);
+  box-shadow: var(--glass-hi), var(--glass-shadow);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  backdrop-filter: blur(22px) saturate(1.5);
+}
+html[data-look="glass"] .glass-strong { background: var(--glass-strong); }
+/* A pop-up's dimmed backdrop fades in with `fill-mode: both`, which would keep it a "backdrop root" forever and stop the
+   dialog inside it from blurring the page. After it has faded in it must let go (it still holds its end state when closing). */
+html[data-look="glass"] .modal-scrim.animate-in:not(.animate-out) { animation-fill-mode: backwards; }
+/* A blurred panel is its own layer, so a dropdown inside it would be painted over by the panels after it. The header and sidebar
+   sit above the page, and any panel is lifted while something inside it is being used. */
+html[data-look="glass"] .glass { position: relative; }
+html[data-look="glass"] .glass:focus-within { z-index: 20; }
+html[data-look="glass"] .glass-bar, html[data-look="glass"] .glass-rail { z-index: 30; }
+/* the sidebar and header float as panels with a little air around them */
+html[data-look="glass"] .glass-rail { margin: 10px 0 10px 10px; border-width: 1px; border-radius: 18px; }
+html[data-look="glass"] .glass-bar  { margin: 10px 10px 0 10px; border-width: 1px; border-radius: 16px; }
+/* the near-solid sheet behind everything on an artist's pages */
+html[data-look="glass"] .glass-sheet {
+  margin: 10px; border-radius: 18px; overflow: hidden;
+  background: var(--glass-sheet);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--glass-hi), var(--glass-shadow);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  backdrop-filter: blur(16px) saturate(1.3);
+}
+@media (max-width: 767px) {
+  html[data-look="glass"] .glass { -webkit-backdrop-filter: blur(12px) saturate(1.3); backdrop-filter: blur(12px) saturate(1.3); }
+  html[data-look="glass"] .glass-bar { margin: 8px 8px 0 8px; }
+  html[data-look="glass"] .glass-sheet { margin: 8px; border-radius: 14px; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  html[data-look="glass"] .glass, html[data-look="glass"] .glass-sheet { background: var(--color-canvas); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  html[data-look="glass"] .glass, html[data-look="glass"] .glass-sheet { background: var(--color-canvas); }
+}
+@media print {
+  html[data-look="glass"] body { background: #fff; }
+  html[data-look="glass"] .glass, html[data-look="glass"] .glass-sheet { background: #fff; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+
 /* Quiet scrollbars that match the paper. */
 * { scrollbar-width: thin; scrollbar-color: var(--color-gray-200) transparent; }
 
