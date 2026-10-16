@@ -9,9 +9,10 @@ import { useStore } from '@/lib/store'
 import { Modal, inputClass } from '@/components/ui/Modal'
 import { Badge } from '@/components/ui/Badge'
 import { ADMIN_KEY, LEVELS, planChanges, presetByKey } from '@/lib/access-presets'
-import { buildCompanyGrid, hasNothing, type CompanyRow } from '@/lib/company'
+import { buildCompanyGrid, groupNamesOf, hasNothing, type CompanyGroup, type CompanyRow } from '@/lib/company'
 import { levelChangeWarning, removalWarning, resendWording, withCardNames, type SharingGrant } from '@/lib/sharing'
-import { applyGrantPlan, fetchArtistGrants, renameCompany, revokeArtistAccess } from '@/lib/db'
+import { applyGrantPlan, fetchArtistGrants, loadGroups, renameCompany, revokeArtistAccess, setCompanyAdmin, setGroupMembers } from '@/lib/db'
+import { GroupsPanel } from './GroupsPanel'
 import { InviteForm } from '@/components/team/InviteForm'
 
 type Pending = { memberId: string; clientId: string; key: string; text: string }
@@ -24,6 +25,8 @@ export function CompanyView() {
   const people = useMemo(() => withCardNames(rawPeople, clients), [rawPeople, clients])
   const myMemberId = useStore(s => s.myMemberId)
   const ownerId = useStore(s => s.companyOwnerId)
+  const userId = useStore(s => s.userId)
+  const isOwner = !!ownerId && ownerId === userId
   const isManager = useStore(s => s.role === 'manager' && s.previewMemberId === null)
   const afterAccessChange = useStore(s => s.afterAccessChange)
   const openClient = useStore(s => s.openClient)
@@ -39,6 +42,9 @@ export function CompanyView() {
   const [notice, setNotice] = useState<Record<string, string>>({})
   const [pending, setPending] = useState<Pending | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [groups, setGroups] = useState<CompanyGroup[]>([])
+  const [adminPending, setAdminPending] = useState<{ memberId: string; admin: boolean; label: string } | null>(null)
+  const [adminProblem, setAdminProblem] = useState('')
 
   const reloadOne = useCallback(async (clientId: string) => {
     const g = await fetchArtistGrants(clientId)
@@ -56,6 +62,8 @@ export function CompanyView() {
   }, [artistKey, people, isManager])
   // the team list was read when the app opened; someone may have joined since
   useEffect(() => { if (isManager) void afterAccessChange() }, [isManager, afterAccessChange])
+  const reloadGroups = useCallback(async () => { setGroups(await loadGroups()) }, [])
+  useEffect(() => { if (isManager) reloadGroups().catch(console.error) }, [isManager, people, reloadGroups])
 
   const grid = useMemo(() => buildCompanyGrid(people, grants ?? {}, artists.map(a => a.id)), [people, grants, artists])
 
@@ -108,6 +116,37 @@ export function CompanyView() {
     } finally { setBusy(null) }
   }
 
+  /** Gives each of these people the role on one artist, one by one, then re-reads what really saved. */
+  async function applyToGroup(rows: CompanyRow[], clientId: string, key: string) {
+    let done = 0, failed = 0
+    for (const row of rows) {
+      try {
+        if (key === NONE) await revokeArtistAccess(row.person.memberId, clientId)
+        else await applyGrantPlan(row.person.memberId, clientId, planChanges(row.cells[clientId].grants, clientId, presetByKey(key)?.levels ?? {}, key === ADMIN_KEY), adminIdsOf(row, clientId))
+        done++
+      } catch (e) { console.error(e); failed++ }
+    }
+    try { await reloadOne(clientId); await afterAccessChange() } catch (e) { console.error(e) }
+    return { done, failed }
+  }
+
+  async function commitAdmin() {
+    if (!adminPending) return
+    const { memberId, admin } = adminPending
+    setBusy(memberId); setAdminProblem(''); setAdminPending(null)
+    try {
+      await setCompanyAdmin(memberId, admin)
+      // an admin sees everything, so they leave any groups (a group is only for people whose access is chosen one by one)
+      if (admin) for (const g of groups.filter(x => x.memberIds.includes(memberId))) await setGroupMembers(g.id, g.memberIds, g.memberIds.filter(id => id !== memberId))
+    } catch (e) {
+      console.error(e)
+      setAdminProblem(e instanceof Error && e.message ? e.message : 'That could not be saved. Please try again.')
+    } finally {
+      try { await afterAccessChange(); await reloadGroups() } catch (e) { console.error(e) }   // always show what really saved
+      setBusy(null)
+    }
+  }
+
   const pendingRow = pending ? grid.rows.find(r => r.person.memberId === pending.memberId) : undefined
   const loading = grants === null && !loadError
 
@@ -139,6 +178,21 @@ export function CompanyView() {
           </div>
         )}
 
+        {adminPending && (
+          <div role="alert" className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <p>
+              {adminPending.admin
+                ? `${adminPending.label} will be able to see and change everything for every artist, including money and private details, and can invite and remove people. Only you, the owner, can make or take back admins.`
+                : `${adminPending.label} stops being an admin. They keep their login but can only open what you give them for each artist, which is nothing until you choose roles.`}
+            </p>
+            <div className="mt-2 flex gap-2">
+              <button disabled={busy !== null} onClick={() => void commitAdmin()} className="rounded-lg bg-accent px-2.5 py-1 font-medium text-white hover:bg-accent-hover disabled:opacity-50">{adminPending.admin ? 'Make admin' : 'Take back admin'}</button>
+              <button onClick={() => setAdminPending(null)} className="rounded-lg border border-amber-200 px-2.5 py-1 font-medium hover:bg-amber-100">Keep as is</button>
+            </div>
+          </div>
+        )}
+        {adminProblem && <p role="alert" className="mb-3 text-xs text-red-600">{adminProblem}</p>}
+
         <section aria-label="Admins" className="mb-6">
           <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">Admins</div>
           <div className="flex flex-col gap-1.5">
@@ -148,10 +202,15 @@ export function CompanyView() {
                 {a.memberId === myMemberId && <span className="text-[11px] text-gray-400">(you)</span>}
                 {a.userId === ownerId && <Badge variant="blue">Owner</Badge>}
                 <span className="text-xs text-gray-500">{a.userId === ownerId ? 'Owns the company and can open every artist.' : 'Runs the company and can open every artist.'}</span>
+                {isOwner && a.userId !== ownerId && (
+                  <button onClick={() => setAdminPending({ memberId: a.memberId, admin: false, label: a.label })} disabled={busy !== null} className="ml-auto text-xs font-medium text-red-600 hover:underline disabled:opacity-50">Take back admin</button>
+                )}
               </div>
             ))}
           </div>
         </section>
+
+        <GroupsPanel workspaceId={workspaceId} groups={groups} grid={grid} artists={artists.map(a => ({ id: a.id, name: a.name }))} onChanged={reloadGroups} applyToGroup={applyToGroup} />
 
         <section aria-label="People">
           <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">People</div>
@@ -182,11 +241,23 @@ export function CompanyView() {
                             <span className="font-medium">{row.person.label}</span>
                             {row.person.invited && <Badge variant="amber">Invited</Badge>}
                           </div>
+                          {groupNamesOf(groups, id).length > 0 && (
+                            <div className="mt-0.5 flex flex-wrap gap-1">{groupNamesOf(groups, id).map(n => <span key={n} className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">{n}</span>)}</div>
+                          )}
                           {row.companyWide && <div className="text-[11px] text-amber-700">Also has every artist (set by a manager)</div>}
                           {!row.person.invited && hasNothing(row) && <div className="text-[11px] text-amber-700">Has a login, can&apos;t open any artist yet</div>}
                           <button onClick={() => void resend(row)} disabled={busy !== null || id === myMemberId} className="mt-1 text-[11px] font-medium text-gray-500 hover:text-gray-900 disabled:opacity-50">
                             {resendWording(!!row.person.invited).button}
                           </button>
+                          {isOwner && (
+                            <button
+                              onClick={() => setAdminPending({ memberId: id, admin: true, label: row.person.label })} disabled={busy !== null || !!row.person.invited}
+                              title={row.person.invited ? 'They need to sign in once before they can be made an admin' : undefined}
+                              className="mt-1 block text-[11px] font-medium text-gray-500 hover:text-gray-900 disabled:opacity-50"
+                            >
+                              Make admin
+                            </button>
+                          )}
                           {notice[id] && <p role="status" className="mt-1 max-w-[220px] text-[11px] text-green-700">{notice[id]}</p>}
                           {problem[id] && <p role="alert" className="mt-1 max-w-[220px] text-[11px] text-red-600">{problem[id]}</p>}
                         </th>

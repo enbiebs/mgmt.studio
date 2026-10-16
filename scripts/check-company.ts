@@ -1,6 +1,6 @@
 // Checks the Company page's grid.  Run with:  npx tsx scripts/check-company.ts
 import assert from 'node:assert/strict'
-import { buildCompanyGrid, hasNothing, isPointPerson } from '../src/lib/company'
+import { buildCompanyGrid, groupNamesOf, hasNothing, isPointPerson, planGroupApply, type CompanyGroup } from '../src/lib/company'
 import type { SharingGrant } from '../src/lib/sharing'
 import type { WorkspacePerson } from '../src/types'
 
@@ -46,5 +46,23 @@ assert.ok(!hasNothing(row('Ann')))
 // no artists, or no people: empty, never an error
 assert.deepEqual(buildCompanyGrid([], {}, []).rows, [])
 assert.equal(buildCompanyGrid(people, {}, []).rows.length, 5)
+
+// ── groups: a list of people, nothing more ──
+const booking: CompanyGroup = { id: 'g1', name: 'Booking', memberIds: ['ann', 'zed', 'bo', 'gone'] }
+const tour: CompanyGroup = { id: 'g2', name: 'Advance team', memberIds: ['zed'] }
+assert.deepEqual(groupNamesOf([booking, tour], 'zed'), ['Advance team', 'Booking'])         // A to Z
+assert.deepEqual(groupNamesOf([booking, tour], 'ann'), ['Booking'])
+assert.deepEqual(groupNamesOf([booking, tour], 'lee'), [])
+
+// giving the group a role on one artist: who changes, who already has it, who is no longer around
+const toCrew = planGroupApply(booking, grid, 'a', 'crew')
+assert.deepEqual(toCrew.change.map(r => r.person.label).sort(), ['Ann', 'Bo'])               // Ann is a Point Person and Bo is custom there
+assert.deepEqual(toCrew.same.map(r => r.person.label), ['Zed'])                                // Zed is already the crew level on artist a
+assert.equal(toCrew.missing, 1)                                                               // 'gone' is not in the grid
+const toNone = planGroupApply(booking, grid, 'c', 'none')
+assert.equal(toNone.change.length, 0); assert.equal(toNone.same.length, 3)                     // nobody has artist c: nothing to take away
+const onB = planGroupApply({ id: 'g3', name: 'x', memberIds: ['zed'] }, grid, 'b', 'custom')
+assert.equal(onB.same.length, 1)                                                              // Zed's mix on artist b counts as already "custom"
+assert.deepEqual(planGroupApply({ id: 'g4', name: 'empty', memberIds: [] }, grid, 'a', 'crew'), { change: [], same: [], missing: 0 })
 
 console.log('company: all checks passed')
