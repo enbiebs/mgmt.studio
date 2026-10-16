@@ -6,7 +6,7 @@
 // ──────────────────────────────────────────────────────────
 import type { Show } from '@/types'
 
-export const DEAL_KEYS = ['guarantee', 'deposit', 'currency', 'viaAgency', 'agencyName', 'agencyCommissionPct', 'managementCommissionPct', 'invoiceId'] as const
+export const DEAL_KEYS = ['guarantee', 'deposit', 'received', 'currency', 'viaAgency', 'agencyName', 'agencyCommissionPct', 'managementCommissionPct', 'invoiceId'] as const
 export type DealKey = (typeof DEAL_KEYS)[number]
 export type ShowDealFields = Pick<Show, DealKey>
 
@@ -16,6 +16,7 @@ export interface ShowDealRow {
   client_id: string
   guarantee: number | null
   deposit: number | null
+  received: number | null
   currency: string | null
   via_agency: boolean | null
   agency_name: string | null
@@ -28,7 +29,7 @@ export interface ShowDealRow {
 export function showDealRow(show: Pick<Show, 'id' | DealKey>, clientId: string): ShowDealRow {
   return {
     show_id: show.id, client_id: clientId,
-    guarantee: show.guarantee ?? null, deposit: show.deposit ?? null, currency: show.currency ?? null,
+    guarantee: show.guarantee ?? null, deposit: show.deposit ?? null, received: show.received ?? null, currency: show.currency ?? null,
     via_agency: show.viaAgency ?? null, agency_name: show.agencyName ?? null,
     agency_commission_pct: show.agencyCommissionPct ?? null, management_commission_pct: show.managementCommissionPct ?? null,
     invoice_id: show.invoiceId ?? null,
@@ -39,7 +40,7 @@ export function showDealRow(show: Pick<Show, 'id' | DealKey>, clientId: string):
 export function dealFromRow(row: Partial<ShowDealRow> | undefined): ShowDealFields {
   if (!row) return {}
   return {
-    guarantee: row.guarantee ?? undefined, deposit: row.deposit ?? undefined, currency: (row.currency ?? undefined) as Show['currency'],
+    guarantee: row.guarantee ?? undefined, deposit: row.deposit ?? undefined, received: row.received ?? undefined, currency: (row.currency ?? undefined) as Show['currency'],
     viaAgency: row.via_agency ?? undefined, agencyName: row.agency_name ?? undefined,
     agencyCommissionPct: row.agency_commission_pct ?? undefined, managementCommissionPct: row.management_commission_pct ?? undefined,
     invoiceId: row.invoice_id ?? undefined,

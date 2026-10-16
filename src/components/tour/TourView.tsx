@@ -377,6 +377,7 @@ function ShowFinancials({ show, editable, onViewOffer }: { show: Show; editable:
   const canSeeFinance = useStore(s => s.hasAccess('finance'))
   const [guarantee, setGuarantee] = useState(String(show.guarantee ?? ''))
   const [deposit, setDeposit] = useState(String(show.deposit ?? ''))
+  const [received, setReceived] = useState(String(show.received ?? ''))
   const [currency, setCurrency] = useState<Currency>(show.currency ?? 'USD')
   const [viaAgency, setViaAgency] = useState(show.viaAgency ?? false)
   const [agencyName, setAgencyName] = useState(show.agencyName ?? '')
@@ -387,6 +388,7 @@ function ShowFinancials({ show, editable, onViewOffer }: { show: Show; editable:
     updateShowFinancials(show.id, {
       guarantee: guarantee ? Number(guarantee) : undefined,
       deposit: deposit ? Number(deposit) : undefined,
+      received: received ? Number(received) : undefined,
       currency, viaAgency,
       agencyName: viaAgency ? (agencyName || undefined) : undefined,
       agencyCommissionPct: viaAgency && agencyPct ? Number(agencyPct) : undefined,
@@ -432,6 +434,14 @@ function ShowFinancials({ show, editable, onViewOffer }: { show: Show; editable:
               </select>
             </FormField>
           </div>
+          <div className="grid grid-cols-3 gap-3 mb-2">
+            <FormField label="Received so far">
+              <input type="number" className={inputClass} value={received} placeholder="0"
+                onChange={e => setReceived(e.target.value)}
+                onBlur={() => commit({ received: received ? Number(received) : undefined })} />
+            </FormField>
+            <div className="col-span-2 self-end pb-2 text-[11px] text-gray-400">How much of the fee has arrived. The cash forecast only counts what is still to come.</div>
+          </div>
           <label className="flex items-center gap-2 text-xs text-gray-500 mb-2">
             <input type="checkbox" checked={viaAgency} className="rounded"
               onChange={e => { const v = e.target.checked; setViaAgency(v); commit({ viaAgency: v }) }} />
@@ -461,6 +471,7 @@ function ShowFinancials({ show, editable, onViewOffer }: { show: Show; editable:
         <div className="flex gap-4 text-sm mb-2">
           {show.guarantee != null && <span><span className="text-gray-400">Guarantee</span> <span className="font-semibold">{show.guarantee} {show.currency ?? 'USD'}</span></span>}
           {show.deposit != null && <span><span className="text-gray-400">Deposit</span> <span className="font-semibold">{show.deposit} {show.currency ?? 'USD'}</span></span>}
+          {show.received != null && <span><span className="text-gray-400">Received</span> <span className="font-semibold">{show.received} {show.currency ?? 'USD'}</span></span>}
         </div>
       )}
 
