@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { createClient } from '@/lib/supabase/client'
 import { useDismiss } from './useDismiss'
+import { applyLook, parseLook, type Look } from '@/lib/look'
 
 const ROLE_LABEL: Record<string, string> = { manager: 'Manager', artist: 'Artist', agent: 'Agent', lawyer: 'Lawyer', team: 'Team' }
 
@@ -11,6 +12,12 @@ export function UserMenu() {
   const { role, authRole, previewMemberId, previewMembers, previewAs, showUnfinished, setShowUnfinished, signOut } = useStore()
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState('')
+  // The look is chosen per person per browser: it is remembered in a cookie and shown as <html data-look>.
+  const [look, setLook] = useState<Look>(() => (typeof document === 'undefined' ? 'glass' : parseLook(document.documentElement.dataset.look)))
+  function chooseLook(next: Look) {
+    applyLook(next)
+    setLook(next)
+  }
   const ref = useRef<HTMLDivElement>(null)
   const close = useCallback(() => setOpen(false), [])
   useDismiss(ref, open, close)
@@ -66,6 +73,18 @@ export function UserMenu() {
             </>
           )}
 
+          <div className="h-px bg-gray-100 my-1" />
+          <div className="px-3 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Look</div>
+          <div className="flex gap-1 px-3 pb-2" role="group" aria-label="Look">
+            {([['glass', 'Frosted glass'], ['solid', 'Plain paper']] as const).map(([value, label]) => (
+              <button
+                key={value} role="menuitemradio" aria-checked={look === value} onClick={() => chooseLook(value)}
+                className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors ${look === value ? 'border-accent bg-accent-soft text-accent' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="h-px bg-gray-100 my-1" />
           {authRole === 'manager' && (
             <label className="flex items-start gap-2 px-3 py-2 text-xs text-gray-500 cursor-pointer hover:bg-gray-50">

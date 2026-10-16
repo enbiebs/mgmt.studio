@@ -93,7 +93,7 @@ export function StudioApp() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-canvas text-gray-900">
+    <div className="app-shell flex h-screen overflow-hidden bg-canvas text-gray-900">
       {role !== 'artist' && <Rail />}
       <div className="flex-1 min-w-0 flex flex-col">
         <AppHeader />
@@ -171,63 +171,72 @@ export function StudioApp() {
         })()}
 
         {/* ── Company: everyone's access to every artist (managers) ── */}
-        {view === 'company' && role === 'manager' && <CompanyView key={workspaceId ?? 'company'} />}
+        {view === 'company' && role === 'manager' && (
+          <div className="glass-sheet flex-1 min-h-0 flex flex-col">
+            <CompanyView key={workspaceId ?? 'company'} />
+          </div>
+        )}
 
-        {/* ── Studio: Artist portal ── */}
-        {view === 'studio' && role === 'artist' && <ArtistView />}
+        {/* ── Studio: one near-solid frosted sheet holds the artist's pages (plain wrapper in the solid look) ── */}
+        {view === 'studio' && (
+          <div className="glass-sheet flex-1 min-h-0 flex flex-col">
+            {/* Artist portal */}
+            {role === 'artist' && <ArtistView />}
 
-        {/* ── Studio: everyone else shares the real Manager views, gated by hasAccess() ── */}
-        {view === 'studio' && role !== 'artist' && (
-          canOpenSection(section, s => hasAccess(s)) ? (
-            <>
-              <Subnav />
-              {section === 'tour' && ['advance', 'daysheet', 'travel', 'guests'].includes(tourSub) && <ShowProgressBar />}
-              <div className="flex-1 min-h-0 flex overflow-hidden">
-                {section === 'songs'    && (
-                  songsSub === 'labelcopy' ? <LabelCopyView /> :
-                  songsSub === 'checklist' ? <ChecklistView /> :
-                  songsSub === 'status'    ? <StatusView />    :
-                  <SongsView />
-                )}
-                {section === 'tour'     && (
-                  tourSub === 'offers'   ? <OffersView />           :
-                  tourSub === 'budget'   ? <BudgetView />           :
-                  tourSub === 'settlements' ? <SettlementsView />   :
-                  tourSub === 'advance'  ? <AdvanceView />          :
-                  tourSub === 'daysheet' ? <DaySheetView />         :
-                  tourSub === 'travel'   ? <TravelView />           :
-                  tourSub === 'crew'     ? <CrewView />             :
-                  tourSub === 'guests'   ? <GuestListView />        :
-                  <TourView />
-                )}
-                {section === 'content'  && (
-                  contentSub === 'studio' ? <StudioView />    :
-                  contentSub === 'lab'    ? <LabPlaceholder /> :
-                  <ManageView />
-                )}
-                {section === 'finance'  && (
-                  bizSub === 'banking'  ? <BankingView />   :
-                  bizSub === 'catalog'  ? <CatalogView />   :
-                  bizSub === 'pl'       ? <PLView />        :
-                  bizSub === 'invoices' ? <InvoicesView />  :
-                  bizSub === 'payments' ? <PaymentsView />  :
-                  bizSub === 'forecast' ? <ForecastView />  :
-                  <RoyaltiesView />
-                )}
-                {section === 'calendar'   && <CalendarView />}
-                {section === 'projects'   && <ProjectsView />}
-                {section === 'analytics'  && <AnalyticsView />}
-                {section === 'team'       && <TeamView />}
-                {section === 'legal'      && <LegalView />}
-                {section === 'activity'   && <ActivityView />}
-                {section === 'profile'    && <ProfileView />}
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
-              You don&apos;t have access to this section for this client.
-            </div>
-          )
+            {/* Everyone else shares the real Manager views, gated by hasAccess() */}
+            {role !== 'artist' && (
+              canOpenSection(section, s => hasAccess(s)) ? (
+                <>
+                  <Subnav />
+                  {section === 'tour' && ['advance', 'daysheet', 'travel', 'guests'].includes(tourSub) && <ShowProgressBar />}
+                  <div className="flex-1 min-h-0 flex overflow-hidden">
+                    {section === 'songs'    && (
+                      songsSub === 'labelcopy' ? <LabelCopyView /> :
+                      songsSub === 'checklist' ? <ChecklistView /> :
+                      songsSub === 'status'    ? <StatusView />    :
+                      <SongsView />
+                    )}
+                    {section === 'tour'     && (
+                      tourSub === 'offers'   ? <OffersView />           :
+                      tourSub === 'budget'   ? <BudgetView />           :
+                      tourSub === 'settlements' ? <SettlementsView />   :
+                      tourSub === 'advance'  ? <AdvanceView />          :
+                      tourSub === 'daysheet' ? <DaySheetView />         :
+                      tourSub === 'travel'   ? <TravelView />           :
+                      tourSub === 'crew'     ? <CrewView />             :
+                      tourSub === 'guests'   ? <GuestListView />        :
+                      <TourView />
+                    )}
+                    {section === 'content'  && (
+                      contentSub === 'studio' ? <StudioView />    :
+                      contentSub === 'lab'    ? <LabPlaceholder /> :
+                      <ManageView />
+                    )}
+                    {section === 'finance'  && (
+                      bizSub === 'banking'  ? <BankingView />   :
+                      bizSub === 'catalog'  ? <CatalogView />   :
+                      bizSub === 'pl'       ? <PLView />        :
+                      bizSub === 'invoices' ? <InvoicesView />  :
+                      bizSub === 'payments' ? <PaymentsView />  :
+                      bizSub === 'forecast' ? <ForecastView />  :
+                      <RoyaltiesView />
+                    )}
+                    {section === 'calendar'   && <CalendarView />}
+                    {section === 'projects'   && <ProjectsView />}
+                    {section === 'analytics'  && <AnalyticsView />}
+                    {section === 'team'       && <TeamView />}
+                    {section === 'legal'      && <LegalView />}
+                    {section === 'activity'   && <ActivityView />}
+                    {section === 'profile'    && <ProfileView />}
+                  </div>
+                </>
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
+                  You don&apos;t have access to this section for this client.
+                </div>
+              )
+            )}
+          </div>
         )}
 
         {/* Artists have no side rail, so their credit line sits at the foot of the page */}

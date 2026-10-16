@@ -32,7 +32,7 @@ export function Rail() {
   const roster = ids === 'all' ? data.clients : data.clients.filter(c => ids.includes(c.id))
 
   return (
-    <aside aria-label="Main" className="hidden md:flex w-[232px] flex-shrink-0 flex-col gap-1 border-r border-gray-100 bg-gray-50 px-3 py-4 overflow-y-auto">
+    <aside aria-label="Main" className="glass glass-strong glass-rail hidden md:flex w-[232px] flex-shrink-0 flex-col gap-1 border-r border-gray-100 bg-gray-50 px-3 py-4 overflow-y-auto">
       <div className="px-2 pb-3">
         <div className="flex items-center gap-2 font-serif font-semibold text-[17px]">
           <BrandMark /> {PRODUCT_NAME}
