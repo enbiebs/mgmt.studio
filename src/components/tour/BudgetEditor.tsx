@@ -9,6 +9,8 @@
 import { Fragment, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { inputClass } from '@/components/ui/Modal'
+import { NumInput, TextInput } from './budget-inputs'
+import { BudgetAssumptionsPanel } from './BudgetAssumptions'
 import {
   BUCKET_LABEL, BUCKET_SECTION, COMMISSION_BASE_LABEL, INCOME_BUCKETS, PRODUCTION_BUCKETS, actualCostsForShow, computeBudget,
   crewLineAmount, crewLineFor, crewPerDiem, newCommission, newLine, pctOfGross, type CrewDays,
@@ -17,49 +19,6 @@ import type { Budget, BudgetBucket, BudgetCommission, BudgetLine, BudgetSection,
 
 const money = (n: number, currency: string) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(Math.round(n))
-
-// A number box that only saves when you tab/click away or press Enter, so typing
-// a figure doesn't save a half-typed value on every keystroke.
-function NumInput({ value, onCommit, disabled, className = '' }: { value: number; onCommit: (n: number) => void; disabled?: boolean; className?: string }) {
-  const [draft, setDraft] = useState<string | null>(null)
-  const shown = draft ?? String(value)
-  function commit() {
-    if (draft === null) return
-    const n = Number(draft.replace(/,/g, ''))
-    setDraft(null)
-    if (Number.isFinite(n) && n !== value) onCommit(n)
-  }
-  return (
-    <input
-      type="text" inputMode="decimal" disabled={disabled}
-      className={`w-full px-2 py-1 border border-gray-200 rounded-md text-sm text-right outline-none focus:border-accent bg-canvas disabled:opacity-60 disabled:border-transparent ${className}`}
-      value={shown}
-      onChange={e => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-    />
-  )
-}
-
-function TextInput({ value, onCommit, disabled, className = '' }: { value: string; onCommit: (s: string) => void; disabled?: boolean; className?: string }) {
-  const [draft, setDraft] = useState<string | null>(null)
-  function commit() {
-    if (draft === null) return
-    const v = draft.trim()
-    setDraft(null)
-    if (v && v !== value) onCommit(v)
-  }
-  return (
-    <input
-      type="text" disabled={disabled}
-      className={`w-full px-2 py-1 border border-transparent hover:border-gray-200 rounded-md text-sm outline-none focus:border-accent bg-transparent disabled:opacity-100 ${className}`}
-      value={draft ?? value}
-      onChange={e => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-    />
-  )
-}
 
 const COLS = 'grid grid-cols-[minmax(0,1fr)_104px_116px_104px_64px] gap-2 items-center'
 
@@ -97,7 +56,7 @@ export function BudgetEditor({ budget, client }: { budget: Budget; client: Clien
   const [addBucket, setAddBucket] = useState<BudgetBucket>('supplies')
 
   const show = client.tour.shows.find(s => s.id === budget.showId)
-  const offer = client.agentData.offers.find(o => o.id === budget.offerId)
+  const offer = client.agentData.offers.find(o => o.id === budget.offerId) ?? (budget.showId ? client.agentData.offers.find(o => o.showId === budget.showId) : undefined)
   const original = budget.original
   const cur = budget.currency
   const people = new Map(client.people.map(p => [p.id, p.name]))
@@ -169,10 +128,13 @@ export function BudgetEditor({ budget, client }: { budget: Budget; client: Clien
       <div className="px-3 py-1 border-t border-gray-50">
         <div className={COLS}>
           <div className={`flex items-center gap-1 ${indent ? 'pl-4' : ''}`}>
-            <TextInput value={l.label} onCommit={label => patchLine(l.id, { label })} disabled={!editable} />
+            <div className="min-w-0 flex-1">
+              <TextInput value={l.label} onCommit={label => patchLine(l.id, { label })} disabled={!editable} />
+              {l.calc && <div className="px-2 text-[10px] text-gray-400" title="Worked out from the assumptions above. Type over the amount to set it by hand.">{l.calc.basis}</div>}
+            </div>
           </div>
           <Cell n={original ? (o?.amount ?? 0) : null} currency={cur} muted />
-          {editable ? <NumInput value={l.amount} onCommit={amount => patchLine(l.id, { amount })} /> : <Cell n={l.amount} currency={cur} />}
+          {editable ? <NumInput value={l.amount} onCommit={amount => patchLine(l.id, { amount, calc: undefined })} /> : <Cell n={l.amount} currency={cur} />}
           <Cell n={showActual ? actualOf(l.bucket) : null} currency={cur} />
           <div className="text-right text-xs text-gray-400 tabular-nums flex items-center justify-end gap-1">
             {now.gross > 0 ? `${pctOfGross(l.amount, now.gross).toFixed(1)}%` : ''}
@@ -263,6 +225,8 @@ export function BudgetEditor({ budget, client }: { budget: Budget; client: Clien
         )}
         {actual && actual.missingRates.length > 0 && <span className="ml-2 text-amber-700">Some costs are in {actual.missingRates.join(', ')} and no exchange rate was available, so they are counted 1:1.</span>}
       </div>
+
+      <BudgetAssumptionsPanel budget={budget} client={client} offer={offer} show={show} editable={editable} />
 
       <div className="border border-gray-200 rounded-xl overflow-x-auto">
        <div className="min-w-[600px]">

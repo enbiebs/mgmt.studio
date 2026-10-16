@@ -36,7 +36,8 @@ import { EMPTY_TOUR } from '@/lib/advance-demo'
 import { notify } from '@/lib/notify'
 import { nextPosition, pointsFor, MAX_AGENDA_POINTS } from '@/lib/agenda'
 import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE, today as localToday } from '@/lib/utils'
-import { buildNewBudget, snapshotOf, newLine, frozenRates, makeConverter, settlementEarned, addMissingCrewFees, withoutAddedCrewFees, BUCKET_LABEL, type FxRates } from '@/lib/budget'
+import { snapshotOf, newLine, frozenRates, makeConverter, settlementEarned, addMissingCrewFees, withoutAddedCrewFees, BUCKET_LABEL, type FxRates } from '@/lib/budget'
+import { buildBudgetFromOffer, currencyFormatter, fillFromOffer, type FillResult } from '@/lib/budget-assumptions'
 import { balanceOf } from '@/lib/settlement-math'
 import type { InboxChoice } from '@/lib/inbox'
 import { SHOW_UNFINISHED_KEY } from '@/lib/unfinished'
@@ -474,7 +475,9 @@ interface StudioState {
   setCrewRate: (rate: CrewRate) => void
   setFinanceSettings: (settings: FinanceSettings) => void
   addBudget: (target: { showId?: string; offerId?: string }) => string | null
-  updateBudget: (budgetId: string, patch: Partial<Pick<Budget, 'name' | 'currency' | 'lines' | 'commissions' | 'notes'>>) => void
+  updateBudget: (budgetId: string, patch: Partial<Pick<Budget, 'name' | 'currency' | 'lines' | 'commissions' | 'notes' | 'assumptions'>>) => void
+  /** "Fill in from the offer": the offer's buyout and bonus lines, starting assumptions, and the travel lines when estimates exist. Never overwrites a typed number. */
+  fillBudgetFromOffer: (budgetId: string) => FillResult | null
   deleteBudget: (budgetId: string) => void
   /** Adds a touring crew member's saved fee to the artist's draft budgets for shows that haven't happened (with an Undo). */
   addCrewFeesToDrafts: (crewMemberId: string) => void
@@ -2319,7 +2322,7 @@ export const useStore = create<StudioState>((set, get) => ({
     // artist and their saved rates are already in it).
     const client = data.clients.find(c => c.id === clientId)
     const newBudget: Budget | undefined = client
-      ? { id: 'bud-' + uid(), updatedAt: new Date().toISOString(), ...buildNewBudget({ client, offer: newOffer }) }
+      ? { id: 'bud-' + uid(), updatedAt: new Date().toISOString(), ...buildBudgetFromOffer({ client, offer: newOffer }) }
       : undefined
     const updated = {
       clients: data.clients.map(c => {
@@ -2608,7 +2611,7 @@ export const useStore = create<StudioState>((set, get) => ({
     // One budget per offer/show: reuse it if it's already there.
     const existing = (client.finance.budgets ?? []).find(b => (offer && b.offerId === offer.id) || (show && b.showId === show.id))
     if (existing) return existing.id
-    const budget: Budget = { id: 'bud-' + uid(), updatedAt: new Date().toISOString(), ...buildNewBudget({ client, show, offer }) }
+    const budget: Budget = { id: 'bud-' + uid(), updatedAt: new Date().toISOString(), ...buildBudgetFromOffer({ client, show, offer }) }
     const updated = { clients: data.clients.map(c => c.id !== clientId ? c : { ...c, finance: { ...c.finance, budgets: [...(c.finance.budgets ?? []), budget] } }) }
     set({ data: updated }); saveData(updated)
     if (workspaceId && clientId) upsertBudget(budget, clientId).catch(console.error)
@@ -2626,6 +2629,18 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated }); saveData(updated)
     if (workspaceId && clientId && next) upsertBudget(next, clientId).catch(console.error)
+  },
+
+  fillBudgetFromOffer: (budgetId) => {
+    const { data, clientId, fxRates } = get()
+    const client = data.clients.find(c => c.id === clientId)
+    const budget = client?.finance.budgets?.find(b => b.id === budgetId)
+    if (!client || !budget || !get().canEdit('finance')) return null
+    const offer = client.agentData.offers.find(o => o.id === budget.offerId) ?? (budget.showId ? client.agentData.offers.find(o => o.showId === budget.showId) : undefined)
+    const show = client.tour.shows.find(s => s.id === budget.showId)
+    const res = fillFromOffer(budget, client, offer, show, { convert: makeConverter(fxRates).convert, fmt: currencyFormatter(budget.currency) })
+    if (res.patch) get().updateBudget(budgetId, res.patch)
+    return res
   },
 
   deleteBudget: (budgetId) => {

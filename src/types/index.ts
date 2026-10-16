@@ -977,6 +977,33 @@ export interface BudgetLine {
   amount:        number
   crewMemberId?: string
   days?:         { advance: number; travel: number; show: number }   // crew lines: what the amount was worked out from
+  calc?:         BudgetLineCalc                                      // travel lines: worked out from the budget's assumptions (typing over the amount clears this)
+}
+
+// A travel line that the assumptions drive: amount = gross estimate - what the promoter covers.
+export interface BudgetLineCalc { basis: string; gross: number; promoterCovers: number }
+
+// Where an estimate came from: typed by hand, the artist's own past trips, or a web search.
+export type EstimateSource = 'typed' | 'history' | 'web'
+export interface BudgetEstimate {
+  amount:   number                                  // in the budget's currency: flight = per person round trip, hotel = per room per night, ground = the whole trip
+  source:   EstimateSource
+  low?:     number
+  high?:    number
+  note?:    string                                  // "Based on 2 of your past trips to Lisbon" / a one-line summary of the web search
+  sources?: { title: string; url: string }[]        // web pages the estimate came from
+  asOf?:    string                                  // ISO date the estimate was made
+}
+export interface BudgetAssumptions {
+  travelers: number                                 // people who fly and stay (the artist and touring crew)
+  rooms:     number
+  from?:     string                                 // where they fly from, e.g. "Los Angeles"
+  to?:       string                                 // the show city
+  arrive?:   string                                 // ISO dates
+  depart?:   string
+  flight?:   BudgetEstimate
+  hotel?:    BudgetEstimate
+  ground?:   BudgetEstimate
 }
 
 export type CommissionBase = 'gross' | 'after_sound_lights' | 'after_production' | 'flat'
@@ -1007,6 +1034,7 @@ export interface Budget {
   lines:       BudgetLine[]
   commissions: BudgetCommission[]
   notes?:      string
+  assumptions?: BudgetAssumptions
   original?:   BudgetSnapshot
   lockedAt?:   string
   updatedAt?:  string
