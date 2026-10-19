@@ -43,6 +43,7 @@ export interface ProgressFact {
 
 export interface ShowProgress {
   cancelled: boolean
+  lapsed: boolean            // a hold whose date has passed without it being confirmed
   steps: ProgressStep[]
   current: number            // index of the step the show is on; STEPS.length when everything is done
   next: NextStep | null
@@ -64,13 +65,14 @@ export function progressForShow(client: Client, show: Show, today: string): Show
   const invoice = show.invoiceId ? client.finance.invoices.find(i => i.id === show.invoiceId) : undefined
   const away = dayDiff(show.date, today)             // days until the show; negative once it has happened
   const past = away < 0
+  const lapsed = past && show.status === 'hold'      // a hold that was never confirmed before its date
   const owed = settlement ? balanceOf(settlement) : 0
 
   // ── Which steps are finished ────────────────────────────
   const done: Record<StepKey, boolean> = {
     offer: true,                                      // a show on the calendar already got past the offer
     confirmed: show.status === 'confirmed',
-    advance: advance?.status === 'complete',
+    advance: past || advance?.status === 'complete',   // once the show has happened there is nothing left to advance; the next step is the settlement
     travel: past || (travel.length > 0 && travelPending.length === 0),
     showday: past,
     settlement: !!settlement,
@@ -94,6 +96,8 @@ export function progressForShow(client: Client, show: Show, today: string): Show
   const stepKey = current < STEPS.length ? STEPS[current].key : null
   if (show.status === 'cancelled') {
     waiting = 'This show is cancelled'
+  } else if (lapsed) {
+    waiting = 'This hold passed without being confirmed'
   } else if (stepKey === 'confirmed') {
     next = { label: 'Confirm the hold', detail: 'It is still a hold. Confirm it when the promoter locks it in.', go: { section: 'tour', sub: 'tour' } }
   } else if (stepKey === 'advance') {
@@ -120,6 +124,7 @@ export function progressForShow(client: Client, show: Show, today: string): Show
     {
       key: 'advance', label: 'Advance', go: { section: 'tour', sub: 'advance' },
       ...(advance?.status === 'complete' ? { value: 'Complete', tone: 'ok' as const }
+        : past ? { value: 'Not completed', tone: 'quiet' as const }       // too late to matter now
         : advance ? { value: advance.status === 'draft' ? 'Draft' : 'In progress', tone: 'todo' as const }
         : { value: 'Not started', tone: 'todo' as const }),
     },
@@ -154,5 +159,5 @@ export function progressForShow(client: Client, show: Show, today: string): Show
     },
   ]
 
-  return { cancelled: show.status === 'cancelled', steps, current, next, waiting, facts }
+  return { cancelled: show.status === 'cancelled', lapsed, steps, current, next, waiting, facts }
 }

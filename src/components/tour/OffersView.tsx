@@ -330,7 +330,7 @@ function PipelineTab({ offers, editable, onEdit }: { offers: TourOffer[]; editab
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       {PIPELINE_STAGES.map(status => {
         const cfg = STATUS_CONFIG[status]
-        const items = byStatus(status)
+        const items = byStatus(status).sort((a, b) => a.date.localeCompare(b.date))      // soonest date first
         const total = items.reduce((s, o) => s + o.guarantee + (o.buyout ?? 0), 0)
         return (
           <div key={status}>
@@ -382,7 +382,10 @@ function OfferCard({ offer: o, editable, onEdit }: { offer: TourOffer; editable:
           {cfg.label}
         </span>
       </div>
-      <div className="text-xs text-gray-500 mb-3">{fmtDate(o.date)}</div>
+      <div className="text-xs text-gray-500 mb-3">
+        {fmtDate(o.date)}
+        {(o.status === 'inquiry' || o.status === 'hold') && o.date < localToday() && <span className="ml-2 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-500">Date passed</span>}
+      </div>
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
         <span><span className="text-gray-400">Guarantee</span> <span className="font-semibold">{fmt(o.guarantee)}</span></span>
         {o.door   && <span><span className="text-gray-400">Door</span> <span className="font-semibold">{o.door}%</span></span>}

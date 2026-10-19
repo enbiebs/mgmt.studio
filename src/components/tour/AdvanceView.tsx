@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import type { ShowAdvance, AdvanceStatus, AdvanceContact, AdvanceSchedule, Show, Venue } from '@/types'
 import { uid, shiftTime, fromDateStr, today as localToday } from '@/lib/utils'
+import { defaultShow, orderShows } from '@/lib/date-state'
 import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
 
 // Fields shared between a Venue and a ShowAdvance — copied straight across
@@ -155,7 +156,7 @@ export function AdvanceView() {
 
   if (!client) return null
 
-  const shows = client.tour.shows.filter(s => !s.historyOnly)
+  const shows = orderShows(client.tour.shows.filter(s => !s.historyOnly), localToday())
   const advances = client.tour.advances ?? []
   const guestList = client.tour.guestList ?? []
   const venues = client.tour.venues ?? []
@@ -168,6 +169,12 @@ export function AdvanceView() {
       schedule: {}, production: {}, hospitality: {}, logistics: {},
       contacts: [],
     }
+  }
+
+  // Nothing picked yet: open on the next upcoming show, not the oldest one in the list. (On a phone the list stays in front.)
+  if (!selectedShowId && !sharedSelectedShowId) {
+    const first = defaultShow(shows, localToday())
+    if (first) { setSelectedShowId(first.id); setAdvance(getAdvance(first.id)) }
   }
 
   function selectShow(show: Show) {
@@ -330,7 +337,7 @@ export function AdvanceView() {
                 <button
                   key={show.id}
                   onClick={() => selectShow(show)}
-                  className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${isSelected ? 'bg-accent-soft' : ''}`}
+                  className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${isSelected ? 'bg-accent-soft' : show.date < localToday() ? 'opacity-60' : ''}`}
                 >
                   <div className="flex items-start gap-2">
                     <div className={`w-1.5 h-1.5 rounded-full mt-[5px] flex-shrink-0 ${cfg.dot}`} />

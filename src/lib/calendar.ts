@@ -9,6 +9,8 @@
 // ──────────────────────────────────────────────────────────
 
 import type { Client, MainSection, UserRole } from '@/types'
+import { dueState, eventState, type DateState } from '@/lib/date-state'
+import { today as todayStr } from '@/lib/utils'
 
 export type CalendarEventDomain = 'show' | 'release' | 'post' | 'invoice' | 'contract' | 'project' | 'bill' | 'offer'
 
@@ -47,51 +49,55 @@ export interface CalendarEvent {
   showId?: string
   albumId?: string
   offerId?: string
+  state: DateState       // upcoming / soon / overdue / done, worked out from the date (see date-state.ts)
+  cancelled?: boolean    // a cancelled show stays on the calendar, struck through, and is never counted as upcoming
 }
 
 export function getCalendarEvents(
   client: Client,
-  canSee: (domain: CalendarEventDomain) => boolean
+  canSee: (domain: CalendarEventDomain) => boolean,
+  today: string = todayStr(),
 ): CalendarEvent[] {
   const events: CalendarEvent[] = []
 
   if (canSee('show')) {
     for (const s of client.tour.shows) {
-      events.push({ id: `show-${s.id}`, date: s.date, domain: 'show', title: s.venue, subtitle: s.city, showId: s.id })
+      const cancelled = s.status === 'cancelled'
+      events.push({ id: `show-${s.id}`, date: s.date, domain: 'show', title: s.venue, subtitle: s.city, showId: s.id, cancelled, state: cancelled ? 'done' : eventState(s.date, today) })
     }
   }
 
   if (canSee('release')) {
     for (const a of client.songs.albums) {
       if (!a.releaseDate) continue
-      events.push({ id: `release-${a.id}`, date: a.releaseDate, domain: 'release', title: a.title, subtitle: 'Release', albumId: a.id })
+      events.push({ id: `release-${a.id}`, date: a.releaseDate, domain: 'release', title: a.title, subtitle: 'Release', albumId: a.id, state: eventState(a.releaseDate, today) })
     }
   }
 
   if (canSee('post')) {
     for (const p of client.content.posts) {
-      events.push({ id: `post-${p.id}`, date: p.date, domain: 'post', title: p.title, subtitle: p.time })
+      events.push({ id: `post-${p.id}`, date: p.date, domain: 'post', title: p.title, subtitle: p.time, state: eventState(p.date, today) })
     }
   }
 
   if (canSee('invoice')) {
     for (const i of client.finance.invoices) {
       if (i.status !== 'sent' && i.status !== 'overdue') continue
-      events.push({ id: `invoice-${i.id}`, date: i.dueDate, domain: 'invoice', title: `Invoice due — ${i.to}`, subtitle: i.number })
+      events.push({ id: `invoice-${i.id}`, date: i.dueDate, domain: 'invoice', title: `Invoice due — ${i.to}`, subtitle: i.number, state: dueState(i.dueDate, today) })
     }
   }
 
   if (canSee('contract')) {
     for (const c of client.legal.contracts) {
       if (!c.expiryDate || c.status === 'terminated') continue
-      events.push({ id: `contract-${c.id}`, date: c.expiryDate, domain: 'contract', title: `${c.title} expires`, subtitle: c.counterparty })
+      events.push({ id: `contract-${c.id}`, date: c.expiryDate, domain: 'contract', title: `${c.title} expires`, subtitle: c.counterparty, state: dueState(c.expiryDate, today) })
     }
   }
 
   if (canSee('project')) {
     for (const p of client.projects) {
       if (!p.dueDate || p.status === 'done') continue
-      events.push({ id: `project-${p.id}`, date: p.dueDate, domain: 'project', title: p.title, subtitle: 'Project due' })
+      events.push({ id: `project-${p.id}`, date: p.dueDate, domain: 'project', title: p.title, subtitle: 'Project due', state: dueState(p.dueDate, today) })
     }
   }
 
@@ -102,6 +108,7 @@ export function getCalendarEvents(
         id: `bill-${e.id}`, date: e.dueDate, domain: 'bill',
         title: `Bill due — ${e.vendor}`,
         subtitle: `${e.currency} ${e.amount.toLocaleString()}${e.billNumber ? ` · ${e.billNumber}` : ''}`,
+        state: dueState(e.dueDate, today),
       })
     }
   }
@@ -115,6 +122,7 @@ export function getCalendarEvents(
       events.push({
         id: `offer-${o.id}`, date: o.date, domain: 'offer', title: o.venue,
         subtitle: `${o.status === 'hold' ? 'Hold' : 'Inquiry'} · ${o.city}`, offerId: o.id,
+        state: eventState(o.date, today),     // an open offer for a date that has passed just fades; chasing it is the inbox's job
       })
     }
   }

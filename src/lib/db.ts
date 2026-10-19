@@ -360,6 +360,8 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
         historyOnly: s.history_only ? true : undefined,
         driveUrl: s.drive_url ?? undefined,
       }))
+      // The database returns rows in no particular order; keep shows in date order so every screen starts from the same order.
+      .sort((a: { date: string; time: string }, b: { date: string; time: string }) => a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? ''))
 
     const cShowIds = cShows.map((s: { id: string }) => s.id)
 

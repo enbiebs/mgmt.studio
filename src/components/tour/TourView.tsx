@@ -8,7 +8,8 @@ import { ShowProgressPanel } from '@/components/tour/ShowProgressPanel'
 import { ShowFolderLink } from '@/components/tour/ShowFolderLink'
 import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
-import { MONTH_NAMES, MONTH_SHORT, today } from '@/lib/utils'
+import { MONTH_NAMES, MONTH_SHORT, fmt, today } from '@/lib/utils'
+import { isUpcomingShow, splitShows } from '@/lib/date-state'
 import { STATUS_CONFIG as INVOICE_STATUS_CONFIG, isOverdue } from '@/components/business/InvoicesView'
 import type { Currency, Show } from '@/types'
 
@@ -28,13 +29,18 @@ export function TourView() {
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const [showPlayed, setShowPlayed] = useState(false)
 
   if (!client) return null
   const allShows = client.tour.shows
   const shows    = allShows.filter(s => !s.historyOnly)      // shows that still need work
   const history  = allShows.filter(s => s.historyOnly)       // past shows kept for fee comparisons
-  const upcoming = shows.filter(s => s.date >= today())
+  // Shows still ahead come first (soonest at the top); shows already played sit in a collapsed group below (most recent first).
+  // "Upcoming" counts only shows that are still going to happen, so a cancelled show is never counted.
+  const { upcoming: ahead, past: played } = splitShows(shows, today())
+  const upcoming = shows.filter(s => isUpcomingShow(s, today()))
   const selected = allShows.find(s => s.id === selectedShowId)
+  const playedOpen = showPlayed || (!!selected && played.some(s => s.id === selected.id))
 
   // "Advance Dashboard" lite — flags upcoming shows with something outstanding,
   // computed entirely from data already in the store (no new tables).
@@ -70,7 +76,7 @@ export function TourView() {
       <button
         key={s.id}
         onClick={() => { setSelectedShow(s.id); pane.openDetail() }}
-        className={`w-full flex items-center gap-3 px-4 py-3 border-b border-gray-100 text-left transition-colors ${dim ? 'opacity-60' : ''} ${
+        className={`w-full flex items-center gap-3 px-4 py-3 border-b border-gray-100 text-left transition-colors ${dim || s.status === 'cancelled' ? 'opacity-60' : ''} ${
           selectedShowId === s.id ? 'bg-accent-soft' : 'hover:bg-gray-50'
         }`}
       >
@@ -78,9 +84,13 @@ export function TourView() {
           <div className="text-[9px] font-bold uppercase tracking-wider text-gray-400">{MONTH_SHORT[d.getMonth()]}</div>
           <div className="text-lg font-bold font-serif leading-none">{d.getDate()}</div>
         </div>
-        <div>
-          <div className="text-sm font-medium leading-tight">{s.venue}</div>
-          <div className="text-xs text-gray-400 mt-0.5">{s.city}{dim ? ` · ${d.getFullYear()}` : ''}</div>
+        <div className="min-w-0 flex-1">
+          <div className={`truncate text-sm font-medium leading-tight ${s.status === 'cancelled' ? 'line-through text-gray-400' : ''}`}>{s.venue}</div>
+          <div className="truncate text-xs text-gray-400 mt-0.5">{s.city}{dim ? ` · ${d.getFullYear()}` : ''}</div>
+        </div>
+        <div className="flex-shrink-0 text-right">
+          <div className={`text-[10px] font-bold uppercase tracking-wider ${s.status === 'confirmed' ? 'text-green-600' : s.status === 'cancelled' ? 'text-red-500' : 'text-amber-500'}`}>{s.status}</div>
+          {canSeeDeals && s.guarantee ? <div className="text-xs tabular-nums text-gray-500">{fmt(s.guarantee, s.currency ?? 'USD')}</div> : null}
         </div>
       </button>
     )
@@ -124,7 +134,21 @@ export function TourView() {
             </div>
           ) : (
             <>
-              {shows.map(s => showRow(s))}
+              {ahead.length === 0 && shows.length > 0 && (
+                <div className="px-4 py-3 border-b border-gray-100 text-xs text-gray-400">No upcoming shows</div>
+              )}
+              {ahead.map(s => showRow(s))}
+              {played.length > 0 && (
+                <>
+                  <button
+                    onClick={() => setShowPlayed(v => !v)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 border-b border-gray-100 text-left text-[11px] font-bold uppercase tracking-widest text-gray-400 hover:bg-gray-50"
+                  >
+                    <span>Played ({played.length})</span><span>{playedOpen ? '▴' : '▾'}</span>
+                  </button>
+                  {playedOpen && played.map(s => showRow(s, true))}
+                </>
+              )}
               {history.length > 0 && (
                 <>
                   <button
