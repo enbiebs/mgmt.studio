@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { loginPathFor } from '@/lib/safe-redirect'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -62,7 +63,10 @@ export async function proxy(request: NextRequest) {
   // Redirect unauthenticated users to login
   if (!user && !isAuthRoute) {
     const url = request.nextUrl.clone()
-    url.pathname = '/login'
+    // Remember where they were headed (a link to a show, say), so signing in lands there rather than on Home.
+    const login = loginPathFor(request.nextUrl.pathname, request.nextUrl.search)
+    url.pathname = login.pathname
+    url.search = login.search
     return NextResponse.redirect(url)
   }
 

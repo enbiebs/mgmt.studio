@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { hasAuthHash } from '@/lib/auth-hash'
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from '@/lib/brand'
+import { safeNextPath } from '@/lib/safe-redirect'
 
 type Mode = 'login' | 'signup' | 'magic' | 'reset'
 
@@ -29,6 +30,8 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
+    // The page they were headed to, carried through the emailed link as well (only a plain path on this site is kept).
+    const nextQuery = () => { const n = safeNextPath(new URLSearchParams(window.location.search).get('next')); return n === '/' ? '' : `?next=${encodeURIComponent(n)}` }
     // Created here, not at render time — Next.js statically prerenders this
     // page at build time, when Supabase env vars may not be present (e.g.
     // a demo-mode deployment). Calling createClient() during render throws
@@ -40,7 +43,8 @@ export default function LoginPage() {
       if (mode === 'login') {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
-        window.location.href = '/'
+        // Back to where they were headed (a link they were sent), or Home. The address comes from a link, so it is checked first.
+        window.location.href = safeNextPath(new URLSearchParams(window.location.search).get('next'))
       }
 
       else if (mode === 'signup') {
@@ -59,7 +63,7 @@ export default function LoginPage() {
       else if (mode === 'magic') {
         const { error } = await supabase.auth.signInWithOtp({
           email,
-          options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+          options: { emailRedirectTo: `${window.location.origin}/auth/callback${nextQuery()}` },
         })
         if (error) throw error
         setMessage({ text: 'Magic link sent — check your email.', type: 'success' })
