@@ -275,6 +275,9 @@ interface StudioState {
   selectedShowId: string | null
   /** Set by the ⌘K bar: the Offers screen opens its "paste an offer" box and clears this. */
   offerPasteRequest: boolean
+  /** Set by the ⌘K bar: the Offers screen opens its "add an offer" form (and Banking its "log a deposit" form) and clears this. */
+  offerAddRequest: boolean
+  depositAddRequest: boolean
   // Which release (single/EP/album) the Label Copy / Checklist / Status
   // sub-tabs are showing — mirrors selectedShowId's role for Tour.
   selectedAlbumId: string | null
@@ -341,6 +344,10 @@ interface StudioState {
   setSelectedShow: (id: string | null) => void
   requestOfferPaste: () => void
   clearOfferPasteRequest: () => void
+  requestOfferAdd: () => void
+  clearOfferAddRequest: () => void
+  requestDepositAdd: () => void
+  clearDepositAddRequest: () => void
   setSelectedAlbum: (id: string | null) => void
   setStudioConcept: (name: string) => void
   calPrev: () => void
@@ -609,6 +616,8 @@ export const useStore = create<StudioState>((set, get) => ({
   legalSub:      'pipeline',
   selectedShowId: null,
   offerPasteRequest: false,
+  offerAddRequest: false,
+  depositAddRequest: false,
   selectedAlbumId: null,
   studioConcept: null,
 
@@ -872,6 +881,10 @@ export const useStore = create<StudioState>((set, get) => ({
   setSelectedShow: (id) => set({ selectedShowId: id }),
   requestOfferPaste: () => set({ offerPasteRequest: true }),
   clearOfferPasteRequest: () => set({ offerPasteRequest: false }),
+  requestOfferAdd: () => set({ offerAddRequest: true }),
+  clearOfferAddRequest: () => set({ offerAddRequest: false }),
+  requestDepositAdd: () => set({ depositAddRequest: true }),
+  clearDepositAddRequest: () => set({ depositAddRequest: false }),
   setSelectedAlbum: (id) => set({ selectedAlbumId: id }),
   setStudioConcept: (name) => set({ studioConcept: name }),
 
