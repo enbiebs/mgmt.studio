@@ -23,6 +23,13 @@ export function AnalyticsView() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      {/* The demo artist's numbers are made up, so say so on every analytics screen */}
+      {client.isDemo && (
+        <div className="px-4 py-1.5 bg-amber-50 border-b border-amber-100 text-[11px] text-amber-800">
+          <span className="font-semibold uppercase tracking-wide mr-2">Sample data</span>
+          These numbers are made up for the demo. A real artist&apos;s analytics are connected to their accounts.
+        </div>
+      )}
       {/* Panel */}
       <div className="flex-1 overflow-auto">
         {analyticsSub === 'overview'  && <OverviewPanel  analytics={a} color={client.color} name={client.name} />}
