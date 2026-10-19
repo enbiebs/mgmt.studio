@@ -111,8 +111,6 @@ export function buildToday({ clients, inbox, me, scope, today, canTour = () => t
   }
   for (const c of clients) {
     for (const p of c.projects ?? []) {
-      // A demo artist's sample projects never raise real reminders; only one you chose to take shows.
-      if (c.isDemo && (!me || p.assigneeId !== me)) continue
       const bucket = projectBucket(p, me, scope, today)
       if (bucket) rows.push({ kind: 'project', key: `project:${p.id}`, bucket, project: p, clientId: c.id, clientName: c.name })
     }
@@ -122,7 +120,13 @@ export function buildToday({ clients, inbox, me, scope, today, canTour = () => t
     if (!canTour(c.id)) continue
     for (const kd of buildKeyDates(c, today)) rows.push({ kind: 'keydate', key: `keydate:${kd.key}:${c.id}`, bucket: bucketOf(kd.due, today), keyDate: kd })
   }
-  for (const item of inbox) rows.push({ kind: 'auto', key: `auto:${item.key}`, bucket: autoBucket(item, today), item })
+  // A project that already has its own row (it is given to someone, or it is an unclaimed request) must not show a second time as an alert.
+  // An unassigned overdue project has no row under "Mine", so its alert is what keeps it from being missed.
+  const projectsShown = new Set(rows.flatMap(r => (r.kind === 'project' ? [r.project.id] : [])))
+  for (const item of inbox) {
+    if (item.rule === 'project' && projectsShown.has(item.entityId)) continue
+    rows.push({ kind: 'auto', key: `auto:${item.key}`, bucket: autoBucket(item, today), item })
+  }
 
   const dateOf = (r: TodoRow) => (r.kind === 'task' ? r.task.dueDate : r.kind === 'project' ? r.project.dueDate : r.kind === 'keydate' ? r.keyDate.due : r.item.date) ?? '9999-12-31'
   const titleOf = (r: TodoRow) => (r.kind === 'task' ? r.task.title : r.kind === 'project' ? r.project.title : r.kind === 'keydate' ? r.keyDate.title : r.item.title)

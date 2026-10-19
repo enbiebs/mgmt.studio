@@ -1,7 +1,7 @@
 'use client'
 // The cash forecast for the signed-in person: for the artist that is open, and (for Home) for every artist they can see
 // money for. Money needs Finance access, so an artist's own login, or someone without Finance for an artist, gets nothing
-// for that artist. A demo artist is left out of the roll-up (its figures are made up), like it is for the Inbox.
+// for that artist. A demo artist is left out of the roll-up: its figures are made up, so they must never be added into real cash.
 
 import { useMemo } from 'react'
 import { useStore } from '@/lib/store'

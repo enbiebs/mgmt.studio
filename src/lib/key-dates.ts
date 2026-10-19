@@ -39,8 +39,6 @@ export const keyDateKey = (rule: KeyDateRule, showId: string) => `${rule}:${show
  * sheet from a few days out. Each is worked out from the show's date and goes away once someone takes it.
  */
 export function buildKeyDates(client: Client, today: string, existing: Task[] = client.tasks ?? []): KeyDate[] {
-  // A demo artist's sample shows never raise real reminders.
-  if (client.isDemo) return []
   const taken = new Set(existing.map(t => t.autoKey).filter(Boolean))
   const out: KeyDate[] = []
   for (const show of client.tour?.shows ?? []) {
