@@ -1,6 +1,7 @@
 'use client'
 // ──────────────────────────────────────────────────────────
-//  The ⌘K bar: jump to any page, artist, show, offer or invoice, or do a common action, from anywhere.
+//  The ⌘K bar: jump to any page, artist, show, offer, invoice, contract, song, release, person, guest, booking, settlement,
+//  bill, budget or post, or do a common action, from anywhere.
 //  Only what this person may see is searched (artists they can open, sections they have access to).
 // ──────────────────────────────────────────────────────────
 
@@ -11,6 +12,7 @@ import { notify } from '@/lib/notify'
 import { dueLabel, parseQuickTodo, taskDestination, todoPrefix } from '@/lib/tasks'
 import { recallLastArtist, rememberLastArtist, useMe } from '@/lib/useToday'
 import { searchCommands, type Searchable } from '@/lib/command-search'
+import { buildRecordEntries, type SearchTarget } from '@/lib/search-records'
 import { DRIVE_FOLDERS, folderLink } from '@/lib/drive-links'
 import { Icon, type IconName } from '@/components/ui/Icon'
 import type { BizSub, MainSection, TourSub } from '@/types'
@@ -31,6 +33,20 @@ function jump(clientId: string, section: MainSection, then?: (s: ReturnType<type
   s.openClient(clientId)
   s.setSection(section)
   then?.(s)
+}
+
+/** Opens a found record: its artist, page and tab, and the show / release / budget when it is one. */
+function openTarget(t: SearchTarget) {
+  jump(t.clientId, t.section, st => {
+    if (t.tourSub) st.setTourSub(t.tourSub)
+    if (t.bizSub) st.setBizSub(t.bizSub)
+    if (t.songsSub) st.setSongsSub(t.songsSub)
+    if (t.legalSub) st.setLegalSub(t.legalSub)
+    if (t.contentSub) st.setContentSub(t.contentSub)
+    if (t.selectedShowId) st.setSelectedShow(t.selectedShowId)
+    if (t.selectedAlbumId) st.setSelectedAlbum(t.selectedAlbumId)
+    if (t.selectedBudgetId) st.setSelectedBudget(t.selectedBudgetId)
+  })
 }
 
 export function CommandBar() {
@@ -90,6 +106,20 @@ export function CommandBar() {
         run: () => jump(c.id, 'tour', st => { st.setTourSub('offers'); st.requestOfferPaste() }),
       })
     }
+    // "New offer for nimino", "Log a deposit for nimino": straight to the form, for the open artist (or each artist you can edit).
+    const actFor = view === 'studio' && current ? [current] : roster
+    for (const c of actFor) {
+      if (hasAccess('deals', c.id, true)) out.push({
+        id: `new-offer-${c.id}`, group: 'Actions', icon: 'plus', label: `New offer for ${c.name}`,
+        hint: 'Add a booking offer', keywords: 'add create booking offer inquiry hold',
+        run: () => jump(c.id, 'tour', st => { st.setTourSub('offers'); st.requestOfferAdd() }),
+      })
+      if (hasAccess('finance', c.id, true)) out.push({
+        id: `log-deposit-${c.id}`, group: 'Actions', icon: 'plus', label: `Log a deposit for ${c.name}`,
+        hint: 'Money that arrived, to divide up', keywords: 'add deposit payment income royalty banking',
+        run: () => jump(c.id, 'finance', st => { st.setBizSub('banking'); st.requestDepositAdd() }),
+      })
+    }
     if (roster.some(c => hasAccess('projects', c.id, true))) {
       out.push({
         id: 'add-todo', group: 'Actions', icon: 'plus', label: 'Add a to-do', hint: 'Type: to-do: call the promoter friday', keywords: 'task reminder note todo',
@@ -133,7 +163,7 @@ export function CommandBar() {
         if (o.showId && showIds.has(o.showId)) continue
         out.push({
           id: `offer-${o.id}`, group: 'Offers', icon: 'tour', label: place(o.venue, o.city),
-          hint: `${c.name} · ${cap(o.status)} offer · ${dateText(o.date)}`,
+          hint: `${c.name} · ${cap(o.status)} offer · ${dateText(o.date)}`, keywords: `${o.promoter ?? ''} ${o.country ?? ''}`,
           run: () => jump(c.id, 'tour', st => st.setTourSub('offers')),
         })
       }
@@ -143,7 +173,7 @@ export function CommandBar() {
       for (const inv of c.finance?.invoices ?? []) {
         out.push({
           id: `invoice-${inv.id}`, group: 'Invoices', icon: 'finance', label: `${inv.number} · ${inv.to}`,
-          hint: `${c.name} · ${cap(inv.status)}`,
+          hint: `${c.name} · ${cap(inv.status)}`, keywords: `${inv.category} ${inv.toEmail ?? ''}`,
           run: () => jump(c.id, 'finance', st => st.setBizSub('invoices')),
         })
       }
@@ -176,6 +206,16 @@ export function CommandBar() {
     return out
   }, [open, data, clientId, view, role, nav, hasAccess, accessibleClientIds])
 
+  // Contracts, songs, releases, people, guests, travel, settlements, bills, budgets and posts (behind the same access as their pages).
+  // They are only searched once something is typed, so the list you see on opening stays short.
+  const recordItems = useMemo<Command[]>(() => {
+    if (!open) return []
+    const ids = accessibleClientIds()
+    const roster = ids === 'all' ? data.clients : data.clients.filter(c => ids.includes(c.id))
+    return buildRecordEntries(roster, (section, id) => hasAccess(section, id))
+      .map(e => ({ id: e.id, group: e.group, icon: e.icon, label: e.label, hint: e.hint, keywords: e.keywords, run: () => openTarget(e.target) }))
+  }, [open, data, hasAccess, accessibleClientIds])
+
   // "to-do: call the promoter friday" shows where it will be filed; Enter files it for you (with an Undo).
   const todoItems = useMemo<Command[]>(() => {
     const typed = open ? todoPrefix(query) : null
@@ -199,7 +239,10 @@ export function CommandBar() {
     }))
   }, [open, query, data, view, clientId, me, hasAccess, accessibleClientIds])
 
-  const results = useMemo(() => (todoItems.length > 0 ? todoItems : searchCommands(items, query)), [todoItems, items, query])
+  const results = useMemo(
+    () => (todoItems.length > 0 ? todoItems : searchCommands(query.trim() ? [...items, ...recordItems] : items, query)),
+    [todoItems, items, recordItems, query],
+  )
   const active = Math.min(sel, Math.max(0, results.length - 1))
 
   useEffect(() => {
@@ -241,7 +284,7 @@ export function CommandBar() {
         </div>
 
         <div ref={listRef} id="command-list" role="listbox" className="max-h-[360px] overflow-y-auto p-2">
-          {results.length === 0 && <div className="px-3 py-6 text-sm text-gray-500 text-center">Nothing matches &ldquo;{query}&rdquo;. Try a venue, a city, or an invoice number.</div>}
+          {results.length === 0 && <div className="px-3 py-6 text-sm text-gray-500 text-center">Nothing matches &ldquo;{query}&rdquo;. Try an artist, a venue, a song, a person, a contract or an invoice number.</div>}
           {results.map((r, i) => (
             <div key={r.id}>
               {(i === 0 || results[i - 1].group !== r.group) && (

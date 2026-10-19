@@ -112,6 +112,9 @@ export function BankingView() {
   const editable = useStore(s => s.canEdit('finance'))
   const { markDepositDone, dismissDeposit, loadBankData } = useStore()
   const [addOpen, setAddOpen] = useState(false)
+  // The ⌘K bar's "Log a deposit" opens the form here.
+  const depositRequested = useStore(s => s.depositAddRequest)
+  const clearDepositRequest = useStore(s => s.clearDepositAddRequest)
 
   useEffect(() => {
     if (client?.id) loadBankData(client.id)
@@ -249,7 +252,7 @@ export function BankingView() {
         </button>
       )}
 
-      {addOpen && <AddDepositModal onClose={() => setAddOpen(false)} />}
+      {(addOpen || depositRequested) && <AddDepositModal onClose={() => { setAddOpen(false); clearDepositRequest() }} />}
     </div>
   )
 }

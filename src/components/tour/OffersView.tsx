@@ -54,6 +54,8 @@ export function OffersView() {
   // The ⌘K bar can ask for the paste box from anywhere; it opens here and the request is cleared once handled.
   const pasteRequested = useStore(s => s.offerPasteRequest)
   const clearPasteRequest = useStore(s => s.clearOfferPasteRequest)
+  const addRequested = useStore(s => s.offerAddRequest)
+  const clearAddRequest = useStore(s => s.clearOfferAddRequest)
   // An offer that was read from pasted text: the form opens with it filled in.
   const [pasted, setPasted] = useState<{ offer: OfferPrefill; notices: string[] } | null>(null)
   const [sendingOfferId, setSendingOfferId] = useState<string | null>(null)
@@ -133,11 +135,11 @@ export function OffersView() {
           onRead={(offer, notices) => { setPasteOpen(false); clearPasteRequest(); setPasted({ offer, notices }) }}
         />
       )}
-      {(addOpen || editingOffer || pasted) && (
+      {(addOpen || addRequested || editingOffer || pasted) && (
         <OfferFormModal
           initial={editingOffer}
           prefill={pasted}
-          onClose={() => { setAddOpen(false); setEditingOffer(null); setPasted(null) }}
+          onClose={() => { setAddOpen(false); setEditingOffer(null); setPasted(null); clearAddRequest() }}
           onSendSheet={id => setSendingOfferId(id)}
         />
       )}
