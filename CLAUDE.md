@@ -2,13 +2,41 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## How we work here (always applies)
+
+**Who you are working with.** Eli runs a music-management company and is not a developer. Explain in plain words, step by step, with no jargon. Ask exactly **one** question per message. Before building anything non-trivial, say what could go wrong. New ideas go on the backlog; finish the current thing first and pick the simplest path (prefer an existing tool over building our own).
+
+**Nothing leaves this machine without Eli's yes, one step at a time.**
+- Commit, push and open a PR only after "commit it and open the PR". Merge only after "merge it" (or "auto fix, merge it"). One yes does not carry over to the next step.
+- Never run a database migration or change live data on your own. Propose it, wait for a yes, do a rolled-back trial first (a `do $$ ... raise exception ... $$` block), run it for real, then verify with counts.
+- Never create files in `supabase/migrations/` by working around a permission block. Say so and let Eli decide.
+- Never touch who-has-access tables (`access_grants`, `workspace_members`, `pending_invites`, `artist_accounts`) from a seed or script.
+- Real artists have no finance data yet; only the demo artist does.
+
+**Before any PR, all four must pass** (`/ship` runs them):
+1. `npx tsc --noEmit -p .` (also covers `scripts/`)
+2. `npm test` (runs every `scripts/check-*.ts`)
+3. `npx eslint .` must show **no more than the baseline: 5 errors, 17 warnings**. Do not add any. If you remove some, lower this number in this file.
+4. `npm run build`
+
+**Building new logic.** Put the rule in a pure module under `src/lib/` and prove it with a `scripts/check-*.ts`. Then mutation-test the check: break the rule on purpose and confirm the check fails. Keep views thin.
+
+**House rules the code already follows (keep following them).**
+- Dates: use `date-state.ts` / `addDays`. Never hard-code a date. The demo artist is generated from one anchor date (`scripts/seed-demo.ts`).
+- Money: use the helpers in `money.ts` / `ledger.ts`. One figure per screen. Never add different currencies together.
+- Deletes: go through the confirm box and undo (`confirm.ts`, `RowMenu`, `delete-effects.ts` mirrors the database cascades).
+- URLs: `routes.ts` + `url-sync.ts`. Database reads: `loadWorkspaceData` fetches, `assembleWorkspace(rows)` is pure.
+
+**Shipping.** `/ship` does verify, review, commit, PR (and, with `merge`, merge and confirm the deploy). `/fresh-eyes` gets an independent review of the current change. Vercel bot comments on PRs are deploy notices, not feedback. Vercel can be slow; confirm a deploy with `gh api "repos/enbiebs/mgmt.studio/deployments?environment=Production&per_page=2"` rather than assuming. Do not poll CI; Auto-fix wakes the session.
+
 ## Commands
 
 ```bash
 npm run dev       # Start dev server at http://localhost:3000 (uses Turbopack)
 npm run build     # Production build
 npm run lint      # ESLint
-npx tsc --noEmit  # TypeScript check (no test suite exists yet)
+npx tsc --noEmit -p .  # TypeScript check (includes scripts/)
+npm test          # Runs every scripts/check-*.ts and says which passed
 ```
 
 **Reset demo data:** If localStorage has a stale schema, clear it in the browser console:
@@ -24,6 +52,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 When these are absent, the proxy (`src/proxy.ts`) and `AuthProvider` both short-circuit — the app runs fully off `localStorage` + demo data.
 
 ## Architecture
+
+> These notes are older than the navigation rework, the URL routing and the finance layer. Check the code before relying on a detail here.
 
 ### Stack
 - **Next.js 16** (App Router, Turbopack, `'use client'` components throughout)
