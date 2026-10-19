@@ -11,15 +11,17 @@ import { useStore } from '@/lib/store'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { ItemTodos } from '@/components/dashboard/ItemTodos'
 import { Modal, FormField, inputClass } from '@/components/ui/Modal'
-import { uid } from '@/lib/utils'
+import { uid, today as todayStr } from '@/lib/utils'
+import { contractAlerts, daysToExpiry, effectiveStatus, expiryLine, type ContractDisplayStatus } from '@/lib/contract-status'
 import { extractPlaceholders, fillClauses, guessDefault, downloadRtf } from '@/lib/legal-doc-gen'
 import type { Contract, ContractStatus, ContractType, LegalTemplate, LegalTemplateClause } from '@/types'
 
-const STATUS_CONFIG: Record<ContractStatus, { label: string; color: string; bg: string; dot: string }> = {
+const STATUS_CONFIG: Record<ContractDisplayStatus, { label: string; color: string; bg: string; dot: string }> = {
   draft:       { label: 'Draft',       color: 'text-gray-500',   bg: 'bg-gray-100',   dot: 'bg-gray-400'   },
   review:      { label: 'In Review',   color: 'text-amber-700',  bg: 'bg-amber-50',   dot: 'bg-amber-400'  },
   negotiation: { label: 'Negotiating', color: 'text-purple-700', bg: 'bg-purple-50',  dot: 'bg-purple-400' },
   signed:      { label: 'Signed',      color: 'text-green-700',  bg: 'bg-green-50',   dot: 'bg-green-500'  },
+  expiring:    { label: 'Expiring',    color: 'text-amber-700',  bg: 'bg-amber-50',   dot: 'bg-amber-500'  },
   expired:     { label: 'Expired',     color: 'text-red-600',    bg: 'bg-red-50',     dot: 'bg-red-400'    },
   terminated:  { label: 'Terminated',  color: 'text-red-800',    bg: 'bg-red-100',    dot: 'bg-red-600'    },
 }
@@ -50,17 +52,9 @@ function fmtDate(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function daysUntil(iso: string): number {
-  const d = new Date(iso + 'T00:00:00')
-  const now = new Date()
-  return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-}
-
 function fmt(n: number, currency = 'USD') {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n)
 }
-
-const ACTIVE_STATUSES: ContractStatus[] = ['draft', 'review', 'negotiation', 'signed']
 
 export function LegalView() {
   const client = useStore(s => s.getClient())
@@ -70,12 +64,10 @@ export function LegalView() {
   if (!client) return null
   const contracts = client.legal?.contracts ?? []
 
-  const active    = contracts.filter(c => ACTIVE_STATUSES.includes(c.status))
-  const flagged   = contracts.filter(c => c.flagged)
-  const expiring  = contracts.filter(c => c.expiryDate && c.status === 'signed' && daysUntil(c.expiryDate) <= 90 && daysUntil(c.expiryDate) > 0)
-  const expired   = contracts.filter(c => c.expiryDate && daysUntil(c.expiryDate) < 0 && c.status !== 'terminated')
+  // What state each contract is in is worked out from today's date (contract-status.ts), never taken from the stored status alone.
+  const today = todayStr()
+  const { flagged, expiring, expired, count: alertCount } = contractAlerts(contracts, today)
   const pending   = contracts.filter(c => c.status === 'draft' || c.status === 'review' || c.status === 'negotiation')
-  const alertCount = flagged.length + expiring.length + expired.length
 
   const types = Array.from(new Set(contracts.map(c => c.type))) as ContractType[]
 
@@ -99,9 +91,9 @@ export function LegalView() {
       </div>
 
       <div className="p-6">
-        {tab === 'pipeline'  && <PipelineTab contracts={contracts} />}
-        {tab === 'alerts'    && <AlertsTab flagged={flagged} expiring={expiring} expired={expired} />}
-        {tab === 'register'  && <RegisterTab contracts={contracts} types={types} filterType={filterType} setFilterType={setFilterType} filtered={filtered} />}
+        {tab === 'pipeline'  && <PipelineTab contracts={contracts} today={today} />}
+        {tab === 'alerts'    && <AlertsTab flagged={flagged} expiring={expiring} expired={expired} today={today} />}
+        {tab === 'register'  && <RegisterTab contracts={contracts} types={types} filterType={filterType} setFilterType={setFilterType} filtered={filtered} today={today} />}
         {tab === 'templates' && <TemplatesTab />}
       </div>
     </div>
@@ -118,8 +110,12 @@ function StatPill({ label, value, color }: { label: string; value: string; color
 }
 
 // ── Pipeline ────────────────────────────────────────────────
-function PipelineTab({ contracts }: { contracts: Contract[] }) {
+function PipelineTab({ contracts, today }: { contracts: Contract[]; today: string }) {
   const STAGES: ContractStatus[] = ['draft', 'review', 'negotiation', 'signed']
+  // A signed contract still sits in Signed while it is expiring, but once it has expired it leaves for its own red section.
+  const inStage = (c: Contract, s: ContractStatus) => { const e = effectiveStatus(c, today); return s === 'signed' ? e === 'signed' || e === 'expiring' : e === s }
+  const expired = contracts.filter(c => effectiveStatus(c, today) === 'expired').sort((a, b) => (a.expiryDate ?? '').localeCompare(b.expiryDate ?? ''))
+  const closed = contracts.filter(c => c.status === 'terminated')
 
   return (
     <div className="space-y-2">
@@ -127,7 +123,7 @@ function PipelineTab({ contracts }: { contracts: Contract[] }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         {STAGES.map(s => {
           const cfg = STATUS_CONFIG[s]
-          const items = contracts.filter(c => c.status === s)
+          const items = contracts.filter(c => inStage(c, s))
           return (
             <div key={s} className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
@@ -141,26 +137,33 @@ function PipelineTab({ contracts }: { contracts: Contract[] }) {
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {STAGES.map(s => {
-          const items = contracts.filter(c => c.status === s)
+          const items = contracts.filter(c => inStage(c, s))
           return (
             <div key={s} className="space-y-2">
               {items.length === 0 && (
                 <div className="border-2 border-dashed border-gray-100 rounded-xl p-6 text-center text-xs text-gray-300">—</div>
               )}
-              {items.map(c => <ContractCard key={c.id} contract={c} />)}
+              {items.map(c => <ContractCard key={c.id} contract={c} today={today} />)}
             </div>
           )
         })}
       </div>
 
-      {/* Terminated / expired at bottom */}
-      {contracts.filter(c => c.status === 'expired' || c.status === 'terminated').length > 0 && (
+      {/* Past their end date: shown in red, not dimmed, because someone has to decide what happens next */}
+      {expired.length > 0 && (
+        <div className="mt-6 pt-6 border-t border-gray-100">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-red-500 mb-3">Expired, needs a decision</div>
+          <div className="space-y-2">
+            {expired.map(c => <ContractRow key={c.id} contract={c} today={today} />)}
+          </div>
+        </div>
+      )}
+
+      {closed.length > 0 && (
         <div className="mt-6 pt-6 border-t border-gray-100">
           <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Closed</div>
           <div className="space-y-2">
-            {contracts.filter(c => c.status === 'expired' || c.status === 'terminated').map(c => (
-              <ContractRow key={c.id} contract={c} />
-            ))}
+            {closed.map(c => <ContractRow key={c.id} contract={c} today={today} />)}
           </div>
         </div>
       )}
@@ -168,8 +171,9 @@ function PipelineTab({ contracts }: { contracts: Contract[] }) {
   )
 }
 
-function ContractCard({ contract: c }: { contract: Contract }) {
-  const cfg = STATUS_CONFIG[c.status]
+function ContractCard({ contract: c, today }: { contract: Contract; today: string }) {
+  const status = effectiveStatus(c, today)
+  const line = expiryLine(c, today)
   return (
     <div className={`border rounded-xl p-3 ${c.flagged ? 'border-red-200 bg-red-50/50' : 'border-gray-100 bg-canvas'} hover:shadow-sm transition-shadow`}>
       <div className="flex items-start gap-1.5 mb-1">
@@ -183,10 +187,11 @@ function ContractCard({ contract: c }: { contract: Contract }) {
       <div className="flex flex-wrap gap-1 mt-2">
         <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">{TYPE_LABELS[c.type]}</span>
         {c.value ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">{fmt(c.value, c.currency)}</span> : null}
+        {status === 'expiring' && <StatusBadge status={status} />}
       </div>
-      {c.expiryDate && (
-        <div className={`mt-2 text-[10px] ${daysUntil(c.expiryDate) < 90 ? 'text-amber-600' : 'text-gray-400'}`}>
-          Expires {fmtDate(c.expiryDate)}
+      {line && (
+        <div className={`mt-2 text-[10px] ${status === 'expired' ? 'text-red-600 font-medium' : status === 'expiring' ? 'text-amber-600' : 'text-gray-400'}`}>
+          {line}
         </div>
       )}
       {c.notes && <div className="mt-2 text-[10px] text-gray-400 italic line-clamp-2">{c.notes}</div>}
@@ -198,23 +203,25 @@ function ContractCard({ contract: c }: { contract: Contract }) {
   )
 }
 
-function ContractRow({ contract: c }: { contract: Contract }) {
-  const cfg = STATUS_CONFIG[c.status]
+function ContractRow({ contract: c, today }: { contract: Contract; today: string }) {
+  const status = effectiveStatus(c, today)
+  const line = expiryLine(c, today)
   return (
-    <div className="flex items-center gap-3 p-3 border border-gray-100 rounded-xl opacity-60">
+    <div className={`flex items-center gap-3 p-3 border rounded-xl ${status === 'expired' ? 'border-red-200 bg-red-50/40' : 'border-gray-100 opacity-60'}`}>
       <span className="text-sm">{TYPE_ICONS[c.type]}</span>
       <div className="flex-1">
         <div className="text-sm font-medium">{c.title}</div>
         <div className="text-xs text-gray-400">{c.counterparty}</div>
+        {status === 'expired' && line && <div className="text-xs text-red-600 mt-0.5">{line}</div>}
       </div>
-      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${cfg.bg} ${cfg.color}`}>{cfg.label}</span>
+      <StatusBadge status={status} />
       <ItemAccessButton itemType="contract" itemId={c.id} />
     </div>
   )
 }
 
 // ── Alerts ──────────────────────────────────────────────────
-function AlertsTab({ flagged, expiring, expired }: { flagged: Contract[]; expiring: Contract[]; expired: Contract[] }) {
+function AlertsTab({ flagged, expiring, expired, today }: { flagged: Contract[]; expiring: Contract[]; expired: Contract[]; today: string }) {
   if (flagged.length === 0 && expiring.length === 0 && expired.length === 0) {
     return (
       <div className="text-center py-16 text-gray-400">
@@ -232,6 +239,7 @@ function AlertsTab({ flagged, expiring, expired }: { flagged: Contract[]; expiri
           icon="⚑"
           color="text-red-600"
           contracts={flagged}
+          today={today}
           getNote={c => c.notes}
         />
       )}
@@ -241,7 +249,8 @@ function AlertsTab({ flagged, expiring, expired }: { flagged: Contract[]; expiri
           icon="⏰"
           color="text-red-500"
           contracts={expired}
-          getNote={c => c.expiryDate ? `Expired ${fmtDate(c.expiryDate)}` : undefined}
+          today={today}
+          getNote={c => expiryLine(c, today) ?? undefined}
         />
       )}
       {expiring.length > 0 && (
@@ -250,16 +259,17 @@ function AlertsTab({ flagged, expiring, expired }: { flagged: Contract[]; expiri
           icon="⚠️"
           color="text-amber-600"
           contracts={expiring}
-          getNote={c => c.expiryDate ? `Expires ${fmtDate(c.expiryDate)} (${daysUntil(c.expiryDate)} days)` : undefined}
+          today={today}
+          getNote={c => expiryLine(c, today) ?? undefined}
         />
       )}
     </div>
   )
 }
 
-function AlertSection({ title, icon, color, contracts, getNote }: {
+function AlertSection({ title, icon, color, contracts, today, getNote }: {
   title: string; icon: string; color: string;
-  contracts: Contract[]; getNote: (c: Contract) => string | undefined
+  contracts: Contract[]; today: string; getNote: (c: Contract) => string | undefined
 }) {
   return (
     <div>
@@ -274,7 +284,7 @@ function AlertSection({ title, icon, color, contracts, getNote }: {
                 <div className="text-xs text-gray-400 mt-0.5">{c.counterparty} · {TYPE_LABELS[c.type]}</div>
                 {getNote(c) && <div className={`mt-2 text-xs ${color}`}>{getNote(c)}</div>}
               </div>
-              <StatusBadge status={c.status} />
+              <StatusBadge status={effectiveStatus(c, today)} />
             </div>
           </div>
         ))}
@@ -284,12 +294,13 @@ function AlertSection({ title, icon, color, contracts, getNote }: {
 }
 
 // ── Rights Register ─────────────────────────────────────────
-function RegisterTab({ contracts, types, filterType, setFilterType, filtered }: {
+function RegisterTab({ contracts, types, filterType, setFilterType, filtered, today }: {
   contracts: Contract[]
   types: ContractType[]
   filterType: ContractType | 'all'
   setFilterType: (t: ContractType | 'all') => void
   filtered: Contract[]
+  today: string
 }) {
   const sortedFiltered = [...filtered].sort((a, b) => a.type.localeCompare(b.type) || a.title.localeCompare(b.title))
 
@@ -329,7 +340,7 @@ function RegisterTab({ contracts, types, filterType, setFilterType, filtered }: 
           </thead>
           <tbody className="divide-y divide-gray-50">
             {sortedFiltered.map(c => {
-              const daysLeft = c.expiryDate ? daysUntil(c.expiryDate) : null
+              const daysLeft = daysToExpiry(c, today)
               return (
                 <tr key={c.id} className={`hover:bg-gray-50 ${c.flagged ? 'bg-red-50/30' : ''}`}>
                   <td className="px-4 py-3">
@@ -345,13 +356,13 @@ function RegisterTab({ contracts, types, filterType, setFilterType, filtered }: 
                   </td>
                   <td className="px-4 py-3 text-xs">
                     {c.expiryDate ? (
-                      <span className={daysLeft !== null && daysLeft < 90 && daysLeft > 0 ? 'text-amber-600 font-medium' : daysLeft !== null && daysLeft < 0 ? 'text-red-500 font-medium' : 'text-gray-500'}>
+                      <span className={daysLeft !== null && daysLeft < 0 ? 'text-red-500 font-medium' : daysLeft !== null && daysLeft <= 90 ? 'text-amber-600 font-medium' : 'text-gray-500'}>
                         {fmtDate(c.expiryDate)}
                       </span>
                     ) : <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <StatusBadge status={c.status} />
+                    <StatusBadge status={effectiveStatus(c, today)} />
                   </td>
                 </tr>
               )
@@ -696,7 +707,7 @@ function GenerateDocumentModal({ template, onClose }: { template: LegalTemplate;
   )
 }
 
-function StatusBadge({ status }: { status: ContractStatus }) {
+function StatusBadge({ status }: { status: ContractDisplayStatus }) {
   const cfg = STATUS_CONFIG[status]
   return (
     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${cfg.bg} ${cfg.color}`}>

@@ -10,6 +10,7 @@
 
 import type { Client, MainSection, UserRole } from '@/types'
 import { dueState, eventState, type DateState } from '@/lib/date-state'
+import { effectiveStatus } from '@/lib/contract-status'
 import { today as todayStr } from '@/lib/utils'
 
 export type CalendarEventDomain = 'show' | 'release' | 'post' | 'invoice' | 'contract' | 'project' | 'bill' | 'offer'
@@ -89,8 +90,10 @@ export function getCalendarEvents(
 
   if (canSee('contract')) {
     for (const c of client.legal.contracts) {
-      if (!c.expiryDate || c.status === 'terminated') continue
-      events.push({ id: `contract-${c.id}`, date: c.expiryDate, domain: 'contract', title: `${c.title} expires`, subtitle: c.counterparty, state: dueState(c.expiryDate, today) })
+      // Only a signed contract has a real end date to watch: a draft or one still being negotiated does not "expire".
+      if (!c.expiryDate || (c.status !== 'signed' && c.status !== 'expired')) continue
+      const ended = effectiveStatus(c, today) === 'expired'
+      events.push({ id: `contract-${c.id}`, date: c.expiryDate, domain: 'contract', title: `${c.title} ${ended ? 'expired' : 'expires'}`, subtitle: c.counterparty, state: dueState(c.expiryDate, today) })
     }
   }
 
