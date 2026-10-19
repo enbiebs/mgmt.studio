@@ -17,6 +17,7 @@ import { POINT_PERSON_WARNING, withCardNames } from '@/lib/sharing'
 import { applyGrantPlan } from '@/lib/db'
 import { clientsOfCompany } from '@/lib/companies'
 import { MAX_TITLE_CHARS, TITLE_SUGGESTIONS, cleanTitle } from '@/lib/team-roles'
+import { findSameEmail } from '@/lib/people-dedupe'
 import { RoleMenu } from './RoleMenu'
 import type { ArtistSharing } from './useArtistSharing'
 import type { Person } from '@/types'
@@ -57,7 +58,7 @@ export function AddPersonModal({ initialTitle, sharing, canInvite, onInvite, onO
   const logins = withCardNames(rawLogins, clients)
   const key = normal(email)
   const emailOk = EMAIL_OK.test(key)
-  const here = emailOk ? client?.people.find(p => normal(p.email) === key) : undefined
+  const here = emailOk ? findSameEmail(client?.people ?? [], key) : undefined
   let elsewhere: { person: Person; artist: string } | undefined
   if (emailOk && !here) {
     for (const c of clients) {

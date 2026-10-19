@@ -20,6 +20,7 @@ import type {
   OfferSheet, OfferTerms, Settlement, Task, TaskLinkType, TaskSource, WorkspacePerson, AgendaPoint, AgendaItemType,
 } from '@/types'
 import { EMPTY_ANALYTICS } from '@/lib/analytics-demo'
+import { saveFailureMessage } from '@/lib/people-dedupe'
 import { EMPTY_AGENT }     from '@/lib/agent-demo'
 import { EMPTY_LEGAL }     from '@/lib/legal-demo'
 import { EMPTY_FINANCE }   from '@/lib/finance-demo'
@@ -1369,12 +1370,17 @@ export async function deleteStakeholder(stakeholderId: string) {
 // ── People ─────────────────────────────────────────────────
 export async function upsertPerson(person: Person, clientId: string) {
   const supabase = createClient()
-  await supabase.from('people').upsert({
+  const { error } = await supabase.from('people').upsert({
     id: person.id, client_id: clientId,
     name: person.name, email: person.email ?? null,
     phone: person.phone ?? null, org: person.org ?? null, title: person.title ?? null, notes: person.notes ?? null,
     activity: person.activity ?? [],
   })
+  if (error) {
+    console.error(error)
+    // 23505 = the database's one-email-per-artist rule; 42501 = no permission to change people
+    throw new Error(saveFailureMessage(person, error.code))
+  }
 }
 
 export async function deletePerson(personId: string) {

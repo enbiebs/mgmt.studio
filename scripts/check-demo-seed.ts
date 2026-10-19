@@ -15,6 +15,7 @@ import { invoiceTotal } from '../src/lib/money'
 import { buildRecordEntries } from '../src/lib/search-records'
 import { searchCommands } from '../src/lib/command-search'
 import { daysUntil } from '../src/lib/date-state'
+import { duplicateGroups } from '../src/lib/people-dedupe'
 import type { Client } from '../src/types'
 
 const OWNER = 'f7303cf1-f728-46a2-a861-dc7787c00d9c'
@@ -176,6 +177,9 @@ function checkStory(anchor: string) {
   // ── a person can find things ──
   const found = (q: string) => searchCommands(buildRecordEntries([c], () => true), q).map(e => e.id)
   assert.ok(found('Kobalt').length > 0 && found('Long Time').includes('song-dn-t-long-time') && found('Dana').some(i => i.startsWith('person-')) && found('Hoxton').length > 0)
+
+  // ── nobody is listed twice: one email per artist ──
+  assert.deepEqual(duplicateGroups(c.people), [], say('no two people share an email'))
 
   // ── the artist's own side ──
   assert.equal(c.projects.filter(p => p.fromArtist && !p.assigneeId).length, 1)

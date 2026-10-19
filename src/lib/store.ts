@@ -19,7 +19,7 @@ import type {
   UserRole, ProjectStatus, ProjectType, Project, ArtistTodo,
   TrackLabelCopy, ReleaseLabelCopy, ChecklistItemKey, ChecklistItem, TrackPriority,
   GuestListEntry, GuestListCategory, ReleaseStakeholder, StakeholderRole,
-  ArtistAccount, ArtistProfile, CrewMember, ShowAdvance, TravelItem, Person, PersonActivity, Currency,
+  ArtistAccount, ArtistProfile, CrewMember, ShowAdvance, TravelItem, PersonActivity, Currency,
   CatalogWork, RegStatus, Invoice, InvoiceLineItem, InvoiceStatus, RevenueStream,
   LegalTemplate, LegalTemplateClause, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
   ReleaseType, Venue, TourOffer, Expense, Vendor, Run, Budget, BudgetBucket, CrewRate, FinanceSettings,
@@ -34,6 +34,7 @@ import { EMPTY_LEGAL } from '@/lib/legal-demo'
 import { EMPTY_FINANCE } from '@/lib/finance-demo'
 import { EMPTY_TOUR } from '@/lib/advance-demo'
 import { notify } from '@/lib/notify'
+import { addOrReuse, applyPersonPatch, emailTakenMessage } from '@/lib/people-dedupe'
 import { nextPosition, pointsFor, MAX_AGENDA_POINTS } from '@/lib/agenda'
 import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE, today as localToday } from '@/lib/utils'
 import { snapshotOf, newLine, frozenRates, makeConverter, settlementEarned, addMissingCrewFees, withoutAddedCrewFees, BUCKET_LABEL, type FxRates } from '@/lib/budget'
@@ -126,6 +127,11 @@ function saveData(data: AppData) {
 // would silently drop any sibling field), so they get their own small
 // local-storage slot alongside the same persistence pattern.
 const LEGAL_TEMPLATES_KEY = 'studio-legal-templates-v1'
+
+/** A person who could not be saved says so, instead of looking saved on screen. */
+function reportPersonSaveFailed(e: unknown) {
+  notify(e instanceof Error && e.message ? e.message : 'That person could not be saved. Please try again.')
+}
 
 function defaultLegalTemplates(): LegalTemplate[] {
   return JSON.parse(JSON.stringify(DEFAULT_LEGAL_TEMPLATES))
@@ -1727,36 +1733,34 @@ export const useStore = create<StudioState>((set, get) => ({
   // ── People (shared directory) ──
   addPerson: (patch) => {
     const { data, clientId, workspaceId } = get()
-    const newPerson: Person = { id: 'person-' + uid(), ...patch }
+    // One email per artist: if this artist already has someone with that email, use them instead of making a second copy.
+    const result = addOrReuse(data.clients.find(c => c.id === clientId)?.people ?? [], patch, () => 'person-' + uid())
+    if (result.reused) {
+      notify(`${result.reused.name} is already in this list with that email, so I used them instead of adding a second copy. Their saved details were left as they are.`)
+      return result.id
+    }
+    const newPerson = result.people[result.people.length - 1]
     const updated = {
-      clients: data.clients.map(c => c.id !== clientId ? c : { ...c, people: [...(c.people ?? []), newPerson] }),
+      clients: data.clients.map(c => c.id !== clientId ? c : { ...c, people: result.people }),
     }
     set({ data: updated })
     saveData(updated)
-    if (workspaceId && clientId) upsertPerson(newPerson, clientId).catch(console.error)
+    if (workspaceId && clientId) upsertPerson(newPerson, clientId).catch(reportPersonSaveFailed)
     return newPerson.id
   },
 
   updatePerson: (personId, patch) => {
     const { data, clientId, workspaceId } = get()
-    let updatedPerson: Person | undefined
+    const result = applyPersonPatch(data.clients.find(c => c.id === clientId)?.people ?? [], personId, patch)
+    if (!result.person) return
+    // An email someone else on this artist already has is left alone; every other change is kept.
+    if (result.blockedBy) notify(`${emailTakenMessage(result.blockedBy.name, patch.email ?? '')} Everything else was saved; the email was left as it was.`)
     const updated = {
-      clients: data.clients.map(c => {
-        if (c.id !== clientId) return c
-        return {
-          ...c,
-          people: (c.people ?? []).map(p => {
-            if (p.id !== personId) return p
-            const next = { ...p, ...patch }
-            updatedPerson = next
-            return next
-          }),
-        }
-      }),
+      clients: data.clients.map(c => c.id !== clientId ? c : { ...c, people: result.people }),
     }
     set({ data: updated })
     saveData(updated)
-    if (workspaceId && clientId && updatedPerson) upsertPerson(updatedPerson, clientId).catch(console.error)
+    if (workspaceId && clientId) upsertPerson(result.person, clientId).catch(reportPersonSaveFailed)
   },
 
   deletePerson: (personId) => {
