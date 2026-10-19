@@ -12,6 +12,7 @@ import type { Client, Show, TourSub } from '@/types'
 import { dayDiff } from '@/lib/intelligence'
 import { balanceOf, money2 } from '@/lib/settlement-math'
 import { settlementForShow } from '@/lib/budget'
+import { invoiceState } from '@/lib/money'
 
 export const STEPS = [
   { key: 'offer',      label: 'Offer' },
@@ -154,8 +155,8 @@ export function progressForShow(client: Client, show: Show, today: string): Show
     {
       key: 'invoice', label: 'Invoice', money: true, go: { section: 'finance', sub: 'invoices' },
       ...(!invoice ? { value: 'None', tone: 'quiet' as const }
-        : invoice.status === 'paid' ? { value: 'Paid', tone: 'ok' as const }
-        : { value: invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1), tone: invoice.status === 'overdue' ? 'todo' as const : 'quiet' as const }),
+        : invoiceState(invoice, today) === 'paid' ? { value: 'Paid', tone: 'ok' as const }
+        : { value: invoiceState(invoice, today).charAt(0).toUpperCase() + invoiceState(invoice, today).slice(1), tone: invoiceState(invoice, today) === 'overdue' ? 'todo' as const : 'quiet' as const }),
     },
   ]
 

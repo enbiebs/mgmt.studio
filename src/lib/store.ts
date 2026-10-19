@@ -39,6 +39,7 @@ import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE, today as localToday }
 import { snapshotOf, newLine, frozenRates, makeConverter, settlementEarned, addMissingCrewFees, withoutAddedCrewFees, BUCKET_LABEL, type FxRates } from '@/lib/budget'
 import { buildBudgetFromOffer, currencyFormatter, fillFromOffer, type FillResult } from '@/lib/budget-assumptions'
 import { balanceOf } from '@/lib/settlement-math'
+import { showNet } from '@/lib/money'
 import type { InboxChoice } from '@/lib/inbox'
 import { SHOW_UNFINISHED_KEY } from '@/lib/unfinished'
 import { buildOfferSheetSnapshot } from '@/lib/offer-sheet'
@@ -2258,9 +2259,7 @@ export const useStore = create<StudioState>((set, get) => ({
     // An invoice is Finance and the fee it comes from is Deals & fees: it needs edit access to both.
     if (!get().hasAccess('finance', client.id, true) || !get().hasAccess('deals', client.id, true)) return
 
-    const agencyPct = show.viaAgency ? (show.agencyCommissionPct ?? 0) : 0
-    const mgmtPct = show.viaAgency ? (show.managementCommissionPct ?? 0) : 0
-    const net = show.guarantee * (1 - agencyPct / 100 - mgmtPct / 100)
+    const net = showNet(show)
 
     const linkedOffer = show.tourOfferId ? client.agentData?.offers.find(o => o.id === show.tourOfferId) : undefined
     const to = show.viaAgency && show.agencyName ? show.agencyName : (linkedOffer?.promoter ?? show.venue)

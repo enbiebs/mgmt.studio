@@ -10,7 +10,7 @@ import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { ItemTodos } from '@/components/dashboard/ItemTodos'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { addDays, today as localToday } from '@/lib/utils'
-import { invoiceTotal as invTotal } from '@/lib/money'
+import { formatTotals, invoiceState, invoiceTotal as invTotal, sumByCurrency } from '@/lib/money'
 import type { Invoice, InvoiceStatus, Currency, RevenueStream, BankTransaction } from '@/types'
 
 export const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string; bg: string }> = {
@@ -34,7 +34,7 @@ function fmtDate(iso: string) {
 }
 
 export function isOverdue(inv: Invoice) {
-  return inv.status === 'sent' && inv.dueDate < localToday()
+  return invoiceState(inv, localToday()) === 'overdue'
 }
 
 type InvFilter = 'all' | InvoiceStatus
@@ -47,15 +47,17 @@ export function InvoicesView() {
   const [addOpen, setAddOpen] = useState(false)
 
   if (!client) return null
-  const invoices = (client.finance?.invoices ?? []).map(inv =>
-    isOverdue(inv) ? { ...inv, status: 'overdue' as const } : inv
-  )
+  // The due date decides what is overdue, the same way it does on Home, in the forecast and on the show's progress bar.
+  const day = localToday()
+  const invoices = (client.finance?.invoices ?? []).map(inv => ({ ...inv, status: invoiceState(inv, day) }))
 
   const outstanding = invoices.filter(i => i.status === 'sent' || i.status === 'overdue')
   const overdue     = invoices.filter(i => i.status === 'overdue')
-  const totalPaid   = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + invTotal(i), 0)
-  const totalOut    = outstanding.reduce((s, i) => s + invTotal(i), 0)
-  const totalOverdue= overdue.reduce((s, i) => s + invTotal(i), 0)
+  // Totals are kept per currency: pounds and euros are never added into a dollar figure.
+  const totalOf = (list: Invoice[]) => formatTotals(sumByCurrency(list, invTotal, i => i.currency)) || fmt(0)
+  const totalPaid   = totalOf(invoices.filter(i => i.status === 'paid'))
+  const totalOut    = totalOf(outstanding)
+  const totalOverdue= totalOf(overdue)
 
   const filtered = filter === 'all' ? invoices : invoices.filter(i => i.status === filter)
   const sorted   = [...filtered].sort((a, b) => b.issuedDate.localeCompare(a.issuedDate))
@@ -77,9 +79,9 @@ export function InvoicesView() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-        <SCard label="Total Paid (YTD)" value={fmt(totalPaid)} color="text-green-700" count={invoices.filter(i => i.status === 'paid').length} />
-        <SCard label="Outstanding" value={fmt(totalOut)} color="text-blue-700" count={outstanding.length} />
-        <SCard label="Overdue" value={fmt(totalOverdue)} color={totalOverdue > 0 ? 'text-red-600' : 'text-gray-400'} count={overdue.length} />
+        <SCard label="Total paid" value={totalPaid} color="text-green-700" count={invoices.filter(i => i.status === 'paid').length} />
+        <SCard label="Outstanding" value={totalOut} color="text-blue-700" count={outstanding.length} />
+        <SCard label="Overdue" value={totalOverdue} color={overdue.length > 0 ? 'text-red-600' : 'text-gray-400'} count={overdue.length} />
         <SCard label="Total Invoices" value={String(invoices.length)} color="text-gray-700" count={invoices.filter(i => i.status === 'draft').length + ' drafts'} />
       </div>
 
@@ -241,7 +243,7 @@ function SCard({ label, value, color, count }: { label: string; value: string; c
   return (
     <div className="border border-gray-100 rounded-xl p-4">
       <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">{label}</div>
-      <div className={`text-2xl font-bold ${color}`}>{value}</div>
+      <div className={`text-2xl font-bold break-words ${color}`}>{value}</div>
       <div className="text-xs text-gray-400 mt-0.5">{count}</div>
     </div>
   )

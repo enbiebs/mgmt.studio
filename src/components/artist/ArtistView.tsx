@@ -18,7 +18,8 @@
 
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
-import type { ProjectType } from '@/types'
+import type { Currency, ProjectType } from '@/types'
+import { formatTotals, royaltiesOwed } from '@/lib/money'
 import { fmt, today as localToday } from '@/lib/utils'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { STATUS_CONFIG } from '@/components/manager/ProjectsView'
@@ -90,9 +91,7 @@ export function ArtistView() {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 
   // Business snapshot (headline numbers only — no splits/percentages)
-  const usd = client.business.royalties.streams.filter(s => s.currency === 'USD').reduce((a, b) => a + b.amount, 0)
-  const gbp = client.business.royalties.streams.filter(s => s.currency === 'GBP').reduce((a, b) => a + b.amount, 0)
-  const royStr = [usd > 0 ? fmt(usd, 'USD') : '', gbp > 0 ? fmt(gbp, 'GBP') : ''].filter(Boolean).join(' · ') || '—'
+  const royStr = formatTotals(royaltiesOwed(client.business.royalties.streams), (n, cur) => fmt(n, cur as Currency)) || '—'
   const pendingPayouts = client.business.banking.deposits.filter(d => !d.done).length
   const regIssues = client.business.catalog.works.filter(w => w.bmi === 'warn' || w.sx === 'warn' || w.ppl === 'warn').length
 

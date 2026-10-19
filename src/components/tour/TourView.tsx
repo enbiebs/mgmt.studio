@@ -10,6 +10,7 @@ import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/com
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { MONTH_NAMES, MONTH_SHORT, fmt, today } from '@/lib/utils'
 import { isUpcomingShow, splitShows } from '@/lib/date-state'
+import { showNet } from '@/lib/money'
 import { STATUS_CONFIG as INVOICE_STATUS_CONFIG, isOverdue } from '@/components/business/InvoicesView'
 import type { Currency, Show } from '@/types'
 
@@ -424,9 +425,7 @@ function ShowFinancials({ show, editable, onViewOffer }: { show: Show; editable:
   if (!editable && !show.guarantee && !show.deposit) return null
 
   const linkedInvoice = show.invoiceId ? invoices.find(i => i.id === show.invoiceId) : undefined
-  const netExpected = show.guarantee != null
-    ? show.guarantee * (1 - (show.viaAgency ? (show.agencyCommissionPct ?? 0) : 0) / 100 - (show.viaAgency ? (show.managementCommissionPct ?? 0) : 0) / 100)
-    : undefined
+  const netExpected = show.guarantee != null ? showNet(show) : undefined
 
   function viewInvoice() {
     setSection('finance')

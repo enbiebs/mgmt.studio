@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { fmt } from '@/lib/utils'
+import { royaltiesOwed } from '@/lib/money'
 import { Modal, FormField, inputClass } from '@/components/ui/Modal'
 import type { Currency } from '@/types'
 
@@ -13,26 +14,20 @@ export function RoyaltiesView() {
 
   if (!client) return null
   const streams = client.business.royalties.streams
-  const usd = streams.filter(s => s.currency === 'USD').reduce((a, b) => a + b.amount, 0)
-  const gbp = streams.filter(s => s.currency === 'GBP').reduce((a, b) => a + b.amount, 0)
+  // What is owed, one card per currency (euros included; currencies are never added together).
+  const owed = Object.entries(royaltiesOwed(streams)).filter(([, amount]) => amount > 0)
 
   return (
     <div className="flex-1 overflow-auto p-6 max-w-3xl">
       {/* Totals */}
       <div className="flex flex-wrap gap-4 mb-7">
-        {usd > 0 && (
-          <div className="bg-gray-50 rounded-2xl px-5 py-5 flex-1">
-            <div className="font-serif text-3xl font-medium">{fmt(usd, 'USD')}</div>
-            <div className="text-xs text-gray-400 mt-1">USD owed · statements issued</div>
+        {owed.map(([currency, amount]) => (
+          <div key={currency} className="bg-gray-50 rounded-2xl px-5 py-5 flex-1">
+            <div className="font-serif text-3xl font-medium">{fmt(amount, currency as Currency)}</div>
+            <div className="text-xs text-gray-400 mt-1">{currency} owed · statements issued</div>
           </div>
-        )}
-        {gbp > 0 && (
-          <div className="bg-gray-50 rounded-2xl px-5 py-5 flex-1">
-            <div className="font-serif text-3xl font-medium">{fmt(gbp, 'GBP')}</div>
-            <div className="text-xs text-gray-400 mt-1">GBP owed · statements issued</div>
-          </div>
-        )}
-        {usd === 0 && gbp === 0 && (
+        ))}
+        {owed.length === 0 && (
           <div className="bg-gray-50 rounded-2xl px-5 py-5 flex-1">
             <div className="font-serif text-3xl font-medium">$0</div>
             <div className="text-xs text-gray-400 mt-1">Nothing owed yet</div>

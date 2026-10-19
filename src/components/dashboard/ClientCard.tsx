@@ -9,7 +9,8 @@ import { useSetup } from '@/lib/useSetup'
 import { useMe } from '@/lib/useToday'
 import { isMine } from '@/lib/tasks'
 import type { CalendarEventDomain } from '@/lib/calendar'
-import type { Client } from '@/types'
+import { formatTotals, royaltiesOwed } from '@/lib/money'
+import type { Client, Currency } from '@/types'
 import { ArtistAvatar } from '@/components/ui/ArtistAvatar'
 
 export function ClientCard({ client: c }: { client: Client }) {
@@ -38,11 +39,9 @@ export function ClientCard({ client: c }: { client: Client }) {
   // Compute stats
   const tracks        = c.songs.albums.flatMap(a => a.tracks)
   const finished      = tracks.filter(t => t.stage === 'done' || t.stage === 'master').length
-  const usd           = c.business.royalties.streams.filter(s => s.currency === 'USD').reduce((a, b) => a + b.amount, 0)
-  const gbp           = c.business.royalties.streams.filter(s => s.currency === 'GBP').reduce((a, b) => a + b.amount, 0)
   const pendingSplit  = c.business.banking.deposits.filter(d => !d.done).length
   const regIssues     = c.business.catalog.works.filter(w => w.bmi === 'warn' || w.sx === 'warn' || w.ppl === 'warn').length
-  const royStr        = [usd > 0 ? fmt(usd, 'USD') : '', gbp > 0 ? fmt(gbp, 'GBP') : ''].filter(Boolean).join(' · ') || '—'
+  const royStr        = formatTotals(royaltiesOwed(c.business.royalties.streams), (n, cur) => fmt(n, cur as Currency)) || '—'
 
   // "Upcoming" pulls from the same unified calendar aggregator the
   // Calendar tab uses (src/lib/calendar.ts) instead of a one-off inline

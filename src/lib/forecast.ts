@@ -15,9 +15,9 @@
 //  its own. Different currencies are never added together.
 // ──────────────────────────────────────────────────────────
 
-import type { Client, Currency, MainSection, Show } from '@/types'
+import type { Client, Currency, MainSection } from '@/types'
 import { balanceOf } from '@/lib/settlement-math'
-import { invoiceTotal } from '@/lib/money'
+import { invoiceTotal, showNet } from '@/lib/money'
 import { addDays, localDateOf } from '@/lib/utils'
 
 export type ForecastKind = 'installment' | 'show' | 'invoice' | 'settlement' | 'bill'
@@ -56,12 +56,7 @@ const DAY = 86_400_000
 const r2 = (n: number) => Math.round(n * 100) / 100
 const days = (a: string, b: string) => Math.round((Date.parse(a + 'T00:00:00Z') - Date.parse(b + 'T00:00:00Z')) / DAY)
 
-/** What a show is expected to pay out: the fee less the agency's and management's cuts when it was booked through an agency. */
-export function showNet(show: Pick<Show, 'guarantee' | 'viaAgency' | 'agencyCommissionPct' | 'managementCommissionPct'>): number {
-  if (!show.guarantee) return 0
-  const cuts = show.viaAgency ? (show.agencyCommissionPct ?? 0) + (show.managementCommissionPct ?? 0) : 0
-  return r2(show.guarantee * (1 - cuts / 100))
-}
+export { showNet }
 
 // ── Reading a payment term ("30 days out", "net 15", "day of show") ─────────────
 const NUMBER_WORDS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, ten: 10, fourteen: 14, fifteen: 15, thirty: 30, sixty: 60, ninety: 90 }

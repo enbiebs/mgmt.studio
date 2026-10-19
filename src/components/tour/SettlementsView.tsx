@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { SettlementUploadModal } from '@/components/tour/SettlementUploadModal'
 import { SettlementDetail } from '@/components/tour/SettlementDetail'
-import { money2, paidSoFar } from '@/lib/settlement-math'
+import { balanceOf, money2 } from '@/lib/settlement-math'
 import { settlementEarned } from '@/lib/budget'
 import { today as localToday } from '@/lib/utils'
 
@@ -31,7 +31,7 @@ export function SettlementsView() {
   // Money still owed, per currency (never added across currencies).
   const owed = new Map<string, number>()
   for (const s of settlements) {
-    const balance = s.balanceDue ?? s.totalDue - paidSoFar(s)
+    const balance = balanceOf(s)
     if (balance > 0.005) owed.set(s.currency, (owed.get(s.currency) ?? 0) + balance)
   }
 
@@ -82,7 +82,7 @@ export function SettlementsView() {
           )}
           <div className="space-y-2">
             {settlements.map(st => {
-              const balance = st.balanceDue ?? st.totalDue - paidSoFar(st)
+              const balance = balanceOf(st)
               const shows = st.showIds.map(id => client.tour.shows.find(s => s.id === id)).filter((x): x is NonNullable<typeof x> => !!x)
               return (
                 <button key={st.id} onClick={() => setOpenId(st.id)} className="w-full text-left border border-gray-100 rounded-xl p-4 bg-canvas hover:shadow-sm transition-shadow">
