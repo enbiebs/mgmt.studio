@@ -11,6 +11,7 @@ import { ADMIN_KEY, cyclePage, levelsForRole, overallLevel, presetByKey, setAllP
 import { clientsOfCompany } from '@/lib/companies'
 import { inviteIsEmpty, loginTypeFor, type InviteArtistAccess } from '@/lib/invite-access'
 import { upsertPerson } from '@/lib/db'
+import { emailTakenMessage, findSameEmail } from '@/lib/people-dedupe'
 import type { Person } from '@/types'
 import { RoleMenu } from './RoleMenu'
 import { PagesPanel } from './PagesPanel'
@@ -75,7 +76,11 @@ export function InviteForm({ person, defaultClientId, onSent }: {
     try {
       const store = useStore.getState()
       if (person && defaultClientId) {
-        if (email.trim() !== (person.email ?? '')) store.updatePerson(person.id, { email: email.trim() })
+        if (email.trim() !== (person.email ?? '')) {
+          const taken = findSameEmail(store.getClient(defaultClientId)?.people ?? [], email, person.id)
+          if (taken) throw new Error(emailTakenMessage(taken.name, email))
+          store.updatePerson(person.id, { email: email.trim() })
+        }
         // make sure the team member's card is saved before the server looks for it
         const current = store.getClient(defaultClientId)?.people.find(p => p.id === person.id)
         if (current) await upsertPerson(current, defaultClientId)
