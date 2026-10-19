@@ -232,7 +232,7 @@ function ReleaseSection({ album, editable, filter, onOpenTrack, onAddTrack, onDe
                 <td className="px-2.5 py-2.5 text-xs text-gray-400">{t.version}</td>
                 <td className="px-2.5 py-2.5 text-xs text-gray-400">{t.touched}</td>
                 <td className="px-2.5 py-2.5 text-xs text-gray-400 max-w-[220px] truncate">{t.owner || '—'}</td>
-                <td className="px-2.5 py-2.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <td className="px-2.5 py-2.5 md:opacity-0 md:group-hover:opacity-100 focus-within:opacity-100 focus-visible:opacity-100 transition-opacity">
                   {editable && (
                     <div className="flex gap-1.5">
                       {idx < STAGES.length - 1 && (
@@ -560,7 +560,7 @@ function RoundsTab({ track, editable }: { track: Track; editable: boolean }) {
             {editable && (
               <span
                 onClick={(e) => { e.stopPropagation(); if (confirm(`Delete round "${r.label}"? This removes its audio and notes.`)) deleteTrackRound(track.id, r.id) }}
-                className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-300"
+                className="md:opacity-0 md:group-hover:opacity-100 focus-within:opacity-100 focus-visible:opacity-100 transition-opacity hover:text-red-300"
               >
                 ✕
               </span>

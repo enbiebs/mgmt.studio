@@ -92,7 +92,7 @@ export function LabelCopyView() {
               <td className="px-2.5 py-2.5 text-xs text-gray-400">{t.labelCopy?.writers || '—'}</td>
               <td className="px-2.5 py-2.5 text-xs text-gray-400">{t.labelCopy?.explicit ? 'E' : '—'}</td>
               <td className="px-2.5 py-2.5 text-xs text-gray-400">{t.labelCopy?.duration || '—'}</td>
-              <td className="px-2.5 py-2.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <td className="px-2.5 py-2.5 md:opacity-0 md:group-hover:opacity-100 focus-within:opacity-100 focus-visible:opacity-100 transition-opacity">
                 {editable && (
                   <button
                     onClick={() => setEditTrack(t)}

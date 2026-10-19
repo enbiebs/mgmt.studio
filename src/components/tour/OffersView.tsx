@@ -15,6 +15,9 @@ import type { OfferPrefill } from '@/lib/offer-paste'
 import { OfferTermsFields } from '@/components/tour/OfferTermsFields'
 import { draftFromTerms, termsFromDraft, maxPotential, replyStatus } from '@/lib/offer-terms'
 import { latestSheet, longDate, SHEET_STATUS_LABEL, SHEET_STATUS_STYLE } from '@/lib/offer-sheet'
+import { RowMenu } from '@/components/ui/RowMenu'
+import { askConfirm } from '@/lib/confirm'
+import { offerImpact, staysLine } from '@/lib/delete-effects'
 import type { TourOffer, OfferStatus } from '@/types'
 import { today as localToday, localDateOf } from '@/lib/utils'
 
@@ -195,8 +198,11 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
     updateOffer(initial.id, { status })
   }
 
-  function handleDelete() {
-    if (!initial) return
+  async function handleDelete() {
+    if (!initial || !client) return
+    const impact = offerImpact(client, initial)
+    const ok = await askConfirm({ title: `Delete the offer for ${initial.venue || 'this show'}?`, body: staysLine(impact), items: impact.items, confirmLabel: 'Delete offer' })
+    if (!ok) return
     deleteOffer(initial.id)
     onClose()
   }
@@ -210,9 +216,7 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
   return (
     <Modal title={initial ? 'Edit offer' : prefill ? 'Check this offer' : 'Add an offer'} onClose={onClose} wide footer={
       <>
-        {initial && (
-          <button onClick={handleDelete} className="px-3 py-1.5 text-sm text-red-400 hover:text-red-500">Delete</button>
-        )}
+        {initial && <RowMenu up label="More actions for this offer" items={[{ label: 'Delete offer…', danger: true, onSelect: handleDelete }]} />}
         {initial && canSeeBudgets && (
           <button onClick={openBudget} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 mr-auto">Open budget</button>
         )}

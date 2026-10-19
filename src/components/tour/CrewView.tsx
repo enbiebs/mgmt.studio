@@ -102,7 +102,7 @@ export function CrewView() {
               {editable && (
                 <button
                   onClick={(e) => { e.stopPropagation(); if (confirm(`Remove ${person.name} from crew?`)) deleteCrewMember(cm.id) }}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
+                  className="md:opacity-0 md:group-hover:opacity-100 focus-within:opacity-100 focus-visible:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
                 >
                   ✕
                 </button>

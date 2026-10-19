@@ -339,7 +339,7 @@ export function ArtistView() {
                 </div>
                 <button
                   onClick={() => deleteArtistTodo(todo.id)}
-                  className="text-gray-200 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 text-lg leading-none"
+                  className="text-gray-200 hover:text-red-400 transition-colors md:opacity-0 md:group-hover:opacity-100 focus-within:opacity-100 focus-visible:opacity-100 text-lg leading-none"
                 >
                   ×
                 </button>
@@ -358,7 +358,7 @@ export function ArtistView() {
                 <span className="text-sm line-through text-gray-400 flex-1">{todo.title}</span>
                 <button
                   onClick={() => deleteArtistTodo(todo.id)}
-                  className="text-gray-200 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 text-lg leading-none"
+                  className="text-gray-200 hover:text-red-400 transition-colors md:opacity-0 md:group-hover:opacity-100 focus-within:opacity-100 focus-visible:opacity-100 text-lg leading-none"
                 >
                   ×
                 </button>
