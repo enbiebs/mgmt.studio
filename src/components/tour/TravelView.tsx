@@ -8,7 +8,8 @@
 
 import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
-import { uid, fromDateStr } from '@/lib/utils'
+import { uid, fromDateStr, today } from '@/lib/utils'
+import { defaultShow, orderShows } from '@/lib/date-state'
 import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
 import type {
   Show, TravelItem, TravelFlight, TravelHotel, TravelGround,
@@ -649,7 +650,7 @@ export function TravelView() {
 
   if (!client) return null
 
-  const shows = client.tour.shows.filter(s => !s.historyOnly)
+  const shows = orderShows(client.tour.shows.filter(s => !s.historyOnly), today())
   const allTravel = client.tour.travel ?? []
   const generalTravel = allTravel.filter(t => !(t.showIds && t.showIds.length > 0))
 
@@ -659,7 +660,7 @@ export function TravelView() {
   const effectiveGeneral = viewingGeneral || (selectedShowId === null && shows.length === 0)
   const show: Show | undefined = effectiveGeneral
     ? undefined
-    : (selectedShowId ? shows.find(s => s.id === selectedShowId) : shows[0])
+    : (selectedShowId ? shows.find(s => s.id === selectedShowId) : defaultShow(shows, today()))
 
   const showTravel = effectiveGeneral
     ? generalTravel
@@ -766,7 +767,7 @@ export function TravelView() {
               <button
                 key={s.id}
                 onClick={() => { selectShow(s.id); setAddMode(null) }}
-                className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${!effectiveGeneral && show?.id === s.id ? 'bg-accent-soft' : ''}`}
+                className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${!effectiveGeneral && show?.id === s.id ? 'bg-accent-soft' : s.date < today() ? 'opacity-60' : ''}`}
               >
                 <div className="flex items-start gap-2">
                   <div className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${SHOW_DOT[tStatus]}`} />

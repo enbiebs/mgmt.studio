@@ -8,7 +8,8 @@
 
 import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
-import { fromDateStr } from '@/lib/utils'
+import { fromDateStr, today } from '@/lib/utils'
+import { defaultShow, orderShows } from '@/lib/date-state'
 import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
 import type { ShowAdvance, Show } from '@/types'
 import { PRODUCT_NAME } from '@/lib/brand'
@@ -59,15 +60,13 @@ export function DaySheetView() {
 
   if (!client) return null
 
-  const shows = client.tour.shows.filter(s => !s.historyOnly)
+  const shows = orderShows(client.tour.shows.filter(s => !s.historyOnly), today())
   const advances = client.tour.advances ?? []
 
+  // Opens on the next show that is going to happen, not on whichever one happens to be first in the list.
   const show: Show | undefined = selectedShowId
     ? shows.find(s => s.id === selectedShowId)
-    : shows.find(s => {
-        const adv = advances.find(a => a.showId === s.id)
-        return adv?.status === 'complete' || adv?.status === 'in-progress'
-      }) ?? shows[0]
+    : defaultShow(shows, today())
 
   const advance: ShowAdvance | undefined = show
     ? advances.find(a => a.showId === show.id)
@@ -92,7 +91,7 @@ export function DaySheetView() {
                 key={s.id}
                 onClick={() => selectShow(s.id)}
                 className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${
-                  show?.id === s.id ? 'bg-accent-soft' : ''
+                  show?.id === s.id ? 'bg-accent-soft' : s.date < today() ? 'opacity-60' : ''
                 }`}
               >
                 <div className="text-xs font-semibold text-gray-800 truncate">{s.venue}</div>

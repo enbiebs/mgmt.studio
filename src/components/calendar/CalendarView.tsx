@@ -19,6 +19,12 @@ import { AddProjectModal } from '@/components/manager/ProjectsView'
 import { SetupChecklist } from '@/components/calendar/SetupChecklist'
 import { PRODUCT_NAME } from '@/lib/brand'
 
+// How an event looks from its date state: played or finished things fade, a cancelled show is struck through,
+// and a deadline that has passed unfinished is outlined in red. The same wording is used everywhere ("Overdue", "Cancelled").
+const stateClass = (e: CalendarEvent) =>
+  `${e.state === 'done' ? 'opacity-50' : ''} ${e.cancelled ? 'line-through' : ''} ${e.state === 'overdue' ? 'ring-1 ring-red-400' : ''}`
+const stateWord = (e: CalendarEvent) => (e.cancelled ? 'Cancelled' : e.state === 'overdue' ? 'Overdue' : e.state === 'soon' ? 'Due soon' : '')
+
 const ALL_DOMAINS: CalendarEventDomain[] = ['show', 'offer', 'release', 'post', 'invoice', 'contract', 'project', 'bill']
 
 // Quick-add on the calendar grid itself only covers the three record types
@@ -148,10 +154,10 @@ export function CalendarView() {
                 <button
                   key={e.id}
                   onClick={() => openEvent(e)}
-                  className={`w-full text-left border-l-[3px] rounded-r-lg px-3 py-2 ${CALENDAR_DOMAIN_STYLE[e.domain]}`}
+                  className={`w-full text-left border-l-[3px] rounded-r-lg px-3 py-2 ${CALENDAR_DOMAIN_STYLE[e.domain]} ${stateClass(e)}`}
                 >
                   <div className="text-sm font-semibold leading-snug">{e.title}</div>
-                  <div className="text-[11px] opacity-75">{CALENDAR_DOMAIN_LABEL[e.domain]}{e.subtitle ? ` · ${e.subtitle}` : ''}</div>
+                  <div className="text-[11px] opacity-75">{CALENDAR_DOMAIN_LABEL[e.domain]}{e.subtitle ? ` · ${e.subtitle}` : ''}{stateWord(e) ? ` · ${stateWord(e)}` : ''}</div>
                 </button>
               ))}
             </div>
@@ -194,8 +200,8 @@ export function CalendarView() {
                   <div
                     key={e.id}
                     onClick={() => openEvent(e)}
-                    className={`border-l-2 px-1.5 py-0.5 rounded-r text-[10px] font-semibold mb-0.5 cursor-pointer hover:brightness-95 transition-all truncate ${CALENDAR_DOMAIN_STYLE[e.domain]}`}
-                    title={`${CALENDAR_DOMAIN_LABEL[e.domain]} — ${e.title}`}
+                    className={`border-l-2 px-1.5 py-0.5 rounded-r text-[10px] font-semibold mb-0.5 cursor-pointer hover:brightness-95 transition-all truncate ${CALENDAR_DOMAIN_STYLE[e.domain]} ${stateClass(e)}`}
+                    title={`${CALENDAR_DOMAIN_LABEL[e.domain]} — ${e.title}${stateWord(e) ? ` (${stateWord(e)})` : ''}`}
                   >
                     {e.title}
                   </div>

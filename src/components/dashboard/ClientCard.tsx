@@ -49,7 +49,7 @@ export function ClientCard({ client: c }: { client: Client }) {
   // date filter, so it covers everything forward-looking — not just
   // shows — and respects the same per-domain access grants.
   const canSeeDomain = (domain: CalendarEventDomain) => canSeeCalendarDomain(domain, c.id, role, hasAccess)
-  const upcomingEvents = getCalendarEvents(c, canSeeDomain).filter(e => e.date >= today())
+  const upcomingEvents = getCalendarEvents(c, canSeeDomain).filter(e => e.date >= today() && !e.cancelled)     // a cancelled show is not upcoming
   const upcoming       = upcomingEvents.length
   const upcomingShows  = upcomingEvents.filter(e => e.domain === 'show').length
   const upcomingOther  = upcoming - upcomingShows

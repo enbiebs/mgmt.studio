@@ -2,6 +2,7 @@
 import { useStore } from '@/lib/store'
 import { progressForShow } from '@/lib/show-progress'
 import { fromDateStr, today } from '@/lib/utils'
+import { defaultShow } from '@/lib/date-state'
 import { Icon } from '@/components/ui/Icon'
 import { goShowStep } from './progressNav'
 
@@ -11,7 +12,10 @@ export function ShowProgressBar() {
   const showId = useStore(s => s.selectedShowId)
   const tourSub = useStore(s => s.tourSub)
   const setTourSub = useStore(s => s.setTourSub)
-  const show = client?.tour.shows.find(s => s.id === showId)
+  // The per-show screens open on the next upcoming show when none was picked, so the strip follows the same rule.
+  const show = showId
+    ? client?.tour.shows.find(s => s.id === showId)
+    : client && defaultShow(client.tour.shows.filter(s => !s.historyOnly), today())
   if (!client || !show || show.historyOnly) return null
 
   const progress = progressForShow(client, show, today())

@@ -1,7 +1,8 @@
 'use client'
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
-import { fromDateStr } from '@/lib/utils'
+import { fromDateStr, today } from '@/lib/utils'
+import { defaultShow, orderShows } from '@/lib/date-state'
 import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import type { Show, GuestListCategory, GuestListEntry } from '@/types'
@@ -31,10 +32,10 @@ export function GuestListView() {
   const pane = useMobilePane()
 
   if (!client) return null
-  const shows = client.tour.shows.filter(s => !s.historyOnly)
+  const shows = orderShows(client.tour.shows.filter(s => !s.historyOnly), today())
   const allGuests = client.tour.guestList ?? []
   const advances = client.tour.advances ?? []
-  const show: Show | undefined = selectedShowId ? shows.find(s => s.id === selectedShowId) : shows[0]
+  const show: Show | undefined = selectedShowId ? shows.find(s => s.id === selectedShowId) : defaultShow(shows, today())
   const guests = show ? allGuests.filter(g => g.showId === show.id) : []
   const totalQty = guests.reduce((sum, g) => sum + g.qty, 0)
   const checkedInQty = guests.filter(g => g.checkedIn).reduce((sum, g) => sum + g.qty, 0)
@@ -60,7 +61,7 @@ export function GuestListView() {
               <button
                 key={s.id}
                 onClick={() => { setSelectedShowId(s.id); useStore.getState().setSelectedShow(s.id); pane.openDetail() }}
-                className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${(show?.id === s.id) ? 'bg-accent-soft' : ''}`}
+                className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${(show?.id === s.id) ? 'bg-accent-soft' : s.date < today() ? 'opacity-60' : ''}`}
               >
                 <div className="text-xs font-semibold text-gray-800 truncate">{s.venue}</div>
                 <div className="text-[11px] text-gray-400">
