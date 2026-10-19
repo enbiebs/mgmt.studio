@@ -3,9 +3,9 @@ import { useEffect, useState } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 import { useStore } from '@/lib/store'
 import { fmt, today as localToday } from '@/lib/utils'
-import { splitDeposit } from '@/lib/money'
+import { invoiceTotal, splitDeposit } from '@/lib/money'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
-import type { Currency } from '@/types'
+import type { Currency, Invoice } from '@/types'
 
 function ConnectBankButton({ clientId }: { clientId: string }) {
   const editable = useStore(s => s.canEdit('finance'))
@@ -259,6 +259,11 @@ export function BankingView() {
 
 function AddDepositModal({ onClose }: { onClose: () => void }) {
   const { addDeposit } = useStore()
+  const client = useStore(s => s.getClient())
+  // Invoices this money could be paying: sent or paid ones, and not one another deposit already points at.
+  const taken = new Set((client?.business.banking.deposits ?? []).map(d => d.invoiceId).filter(Boolean))
+  const payable: Invoice[] = (client?.finance?.invoices ?? []).filter(i => (i.status === 'sent' || i.status === 'overdue' || i.status === 'paid') && !taken.has(i.id))
+  const [invoiceId, setInvoiceId] = useState('')
   const [name, setName] = useState('')
   const [date, setDate] = useState(localToday())
   const [amount, setAmount] = useState('')
@@ -275,8 +280,19 @@ function AddDepositModal({ onClose }: { onClose: () => void }) {
       (Number(mgmtPct) || 0) / 100,
       (Number(lawyerPct) || 0) / 100,
       (Number(taxesPct) || 0) / 100,
+      invoiceId || undefined,
     )
     onClose()
+  }
+
+  // Picking the invoice fills in what it already says, without overwriting anything typed.
+  function pickInvoice(id: string) {
+    setInvoiceId(id)
+    const inv = payable.find(i => i.id === id)
+    if (!inv) return
+    if (!amount) setAmount(String(invoiceTotal(inv)))
+    setCurrency(inv.currency)
+    if (!name.trim()) setName(`Invoice ${inv.number} · ${inv.to}`)
   }
 
   return (
@@ -286,6 +302,15 @@ function AddDepositModal({ onClose }: { onClose: () => void }) {
         <button onClick={handleAdd} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">Log deposit</button>
       </>
     }>
+      {payable.length > 0 && (
+        <FormField label="Which invoice does this pay? (optional)">
+          <select className={selectClass} value={invoiceId} onChange={e => pickInvoice(e.target.value)}>
+            <option value="">Not an invoice payment</option>
+            {payable.map(i => <option key={i.id} value={i.id}>{i.number} · {i.to} · {fmt(invoiceTotal(i), i.currency)}{i.status === 'paid' ? ' · paid' : ''}</option>)}
+          </select>
+          <span className="mt-1 block text-[11px] text-gray-400">Pick one if this money is the payment for an invoice, so the profit &amp; loss counts it once, not twice.</span>
+        </FormField>
+      )}
       <FormField label="Source">
         <input className={inputClass} placeholder="e.g. Sync Licensing Co." value={name} onChange={e => setName(e.target.value)} autoFocus />
       </FormField>

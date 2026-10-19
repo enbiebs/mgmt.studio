@@ -245,6 +245,7 @@ export interface Deposit {
   lawyer: number
   taxes: number
   done: boolean
+  invoiceId?: string     // → Invoice this deposit pays, if any. The P&L counts the deposit and leaves that invoice out, so the money is counted once
 }
 
 export interface CatalogWork {

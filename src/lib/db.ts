@@ -472,10 +472,11 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
 
     const cDeposits = (deposits.data ?? [])
       .filter((d: { client_id: string }) => d.client_id === c.id)
-      .map((d: { id: string; name: string; date: string; amount: number; currency: string; mgmt: number; lawyer: number; taxes: number; done: boolean }) => ({
+      .map((d: { id: string; name: string; date: string; amount: number; currency: string; mgmt: number; lawyer: number; taxes: number; done: boolean; invoice_id?: string | null }) => ({
         id: d.id, name: d.name, date: d.date, amount: d.amount,
         currency: d.currency as 'USD'|'GBP'|'EUR',
         mgmt: d.mgmt, lawyer: d.lawyer, taxes: d.taxes, done: d.done,
+        invoiceId: d.invoice_id ?? undefined,
       }))
 
     const cBankAccounts = (bankAccounts.data ?? [])
@@ -1654,7 +1655,7 @@ export async function replaceAutoPosts(posts: Post[], clientId: string, releaseI
 
 // ── Deposit ────────────────────────────────────────────────
 export async function upsertDeposit(
-  deposit: { id: string; name: string; date: string; amount: number; currency: string; mgmt: number; lawyer: number; taxes: number; done: boolean },
+  deposit: { id: string; name: string; date: string; amount: number; currency: string; mgmt: number; lawyer: number; taxes: number; done: boolean; invoiceId?: string },
   clientId: string
 ) {
   const supabase = createClient()
@@ -1663,6 +1664,8 @@ export async function upsertDeposit(
     name: deposit.name, date: deposit.date, amount: deposit.amount,
     currency: deposit.currency, mgmt: deposit.mgmt,
     lawyer: deposit.lawyer, taxes: deposit.taxes, done: deposit.done,
+    // Only sent when a deposit is tied to an invoice, so everything else saves exactly as before.
+    ...(deposit.invoiceId ? { invoice_id: deposit.invoiceId } : {}),
   })
 }
 
