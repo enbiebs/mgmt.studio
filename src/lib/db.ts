@@ -110,6 +110,71 @@ export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
     supabase.from('show_deals').select('*').in('client_id', clientIds),
   ])
 
+  return assembleWorkspace({ clientRows, albums, tracks, shows, posts, royaltyStreams, deposits, catalogWorks, projects, artistTodos, tourOffers, contracts, invoices, lineItems, expenses, plMonths, checklistItems, stakeholders, crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems, flightLegs, travelItemShows, people, bankAccounts, bankTransactions, trackRounds, trackNotes, trackNoteReplies, trackCredits, venues, vendors, runsQ, budgetsQ, crewRatesQ, financeSettingsQ, expenseShowsQ, offerSheetsQ, settlementsQ, settlementShowsQ, profilesQ, accountsQ, tasksQ, agendaQ, showDealsQ })
+}
+
+/** The rows fetched for a workspace, one entry per table, in the shape the database client returns them (`data` holds the rows). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Q = { data: any[] | null }
+export interface WorkspaceRows {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  clientRows: any[]
+  albums: Q
+  tracks: Q
+  shows: Q
+  posts: Q
+  royaltyStreams: Q
+  deposits: Q
+  catalogWorks: Q
+  projects: Q
+  artistTodos: Q
+  tourOffers: Q
+  contracts: Q
+  invoices: Q
+  lineItems: Q
+  expenses: Q
+  plMonths: Q
+  checklistItems: Q
+  stakeholders: Q
+  crewMembers: Q
+  showAdvances: Q
+  advanceContacts: Q
+  guestListEntries: Q
+  travelItems: Q
+  flightLegs: Q
+  travelItemShows: Q
+  people: Q
+  bankAccounts: Q
+  bankTransactions: Q
+  trackRounds: Q
+  trackNotes: Q
+  trackNoteReplies: Q
+  trackCredits: Q
+  venues: Q
+  vendors: Q
+  runsQ: Q
+  budgetsQ: Q
+  crewRatesQ: Q
+  financeSettingsQ: Q
+  expenseShowsQ: Q
+  offerSheetsQ: Q
+  settlementsQ: Q
+  settlementShowsQ: Q
+  profilesQ: Q
+  accountsQ: Q
+  tasksQ: Q
+  agendaQ: Q
+  showDealsQ: Q
+}
+
+/**
+ * Turns the fetched rows into the artists the app shows. Pure (no network): the demo seed and its checks run its rows through this very
+ * function, so what is seeded is read back exactly the way the app will read it.
+ */
+export function assembleWorkspace(rows: WorkspaceRows): AppData {
+  const { clientRows, albums, tracks, shows, posts, royaltyStreams, deposits, catalogWorks, projects, artistTodos, tourOffers, contracts, invoices, lineItems, expenses, plMonths, checklistItems, stakeholders, crewMembers, showAdvances, advanceContacts, guestListEntries, travelItems, flightLegs, travelItemShows, people, bankAccounts, bankTransactions, trackRounds, trackNotes, trackNoteReplies, trackCredits, venues, vendors, runsQ, budgetsQ, crewRatesQ, financeSettingsQ, expenseShowsQ, offerSheetsQ, settlementsQ, settlementShowsQ, profilesQ, accountsQ, tasksQ, agendaQ, showDealsQ } = rows
+  const clientIds = clientRows.map(c => c.id)
+
   const dealsByShow = new Map<string, ShowDealRow>((showDealsQ.data ?? []).map((d: ShowDealRow) => [d.show_id, d]))
   const albumRows     = albums.data       ?? []
   const trackRows     = tracks.data       ?? []
