@@ -1,7 +1,7 @@
 'use client'
 // The Inbox for the signed-in person: every item from the artists they can see, minus what
 // they've marked done or snoozed. Money items only appear for people with Finance access,
-// show/offer items for people with Tour access; the artist's own login gets nothing.
+// show/offer items for people with Tour access, contract items for Legal, project items for Projects; the artist's own login gets nothing.
 
 import { useMemo } from 'react'
 import { useStore } from '@/lib/store'
@@ -29,7 +29,7 @@ export function useInbox() {
     const clients = ids === 'all' ? data.clients : data.clients.filter(c => ids.includes(c.id))
     const day = today()
     const all = clients
-      .flatMap(c => buildInbox(c, day, { finance: hasAccess('finance', c.id), tour: hasAccess('tour', c.id), deals: hasAccess('deals', c.id) }))
+      .flatMap(c => buildInbox(c, day, { finance: hasAccess('finance', c.id), tour: hasAccess('tour', c.id), deals: hasAccess('deals', c.id), legal: hasAccess('legal', c.id), projects: hasAccess('projects', c.id) }))
       .sort((a, b) => RANK[a.severity] - RANK[b.severity] || (a.date ?? '').localeCompare(b.date ?? ''))
     const visible = all.filter(i => !isHidden(inboxState[i.key], day))
     const hidden = all.filter(i => isHidden(inboxState[i.key], day))

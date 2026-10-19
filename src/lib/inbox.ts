@@ -14,17 +14,19 @@ import { paidSoFar } from '@/lib/settlement-math'
 import { settlementForShow } from '@/lib/budget'
 import { localDateOf } from '@/lib/utils'
 import { buildForecast } from '@/lib/forecast'
+import { daysToExpiry, effectiveStatus } from '@/lib/contract-status'
 
 export type InboxSeverity = 'urgent' | 'soon' | 'info'
 export type InboxRule =
   | 'invoice' | 'bill' | 'balance' | 'no_settlement' | 'offer_reply' | 'offer_hold' | 'sheet'
-  | 'no_budget' | 'deposits' | 'receivable' | 'empty'
+  | 'no_budget' | 'deposits' | 'receivable' | 'empty' | 'contract' | 'project'
 
 export interface InboxItem {
   key: string
   clientId: string
   clientName: string
   rule: InboxRule
+  entityId: string                    // what it is about (an invoice id, a contract id...), so other lists can avoid showing the same thing twice
   severity: InboxSeverity
   title: string
   detail?: string
@@ -32,11 +34,13 @@ export interface InboxItem {
   currency?: Currency
   date?: string                       // the date it is about, for ordering
   go: { section: MainSection; sub?: string }   // where "Open" takes you
+  demo?: boolean                      // about practice data: shown so the demo looks alive, but the daily email and cash forecast leave it out
 }
 
 // What this person may see for this client: money items need Finance, show items need Tour,
-// offer items need Deals & fees. (The artist's own login never gets an inbox at all.)
-export interface InboxAccess { finance: boolean; tour: boolean; deals: boolean }
+// offer items need Deals & fees, contract items need Legal, project items need Projects.
+// (The artist's own login never gets an inbox at all.)
+export interface InboxAccess { finance: boolean; tour: boolean; deals: boolean; legal: boolean; projects: boolean }
 
 const DAY = 86_400_000
 const days = (a: string, b: string) => Math.round((Date.parse(a + 'T00:00:00Z') - Date.parse(b + 'T00:00:00Z')) / DAY)
@@ -47,13 +51,13 @@ const when = (n: number) => (n === 0 ? 'today' : n === 1 ? 'tomorrow' : `in ${n}
 const RANK: Record<InboxSeverity, number> = { urgent: 0, soon: 1, info: 2 }
 
 export function buildInbox(client: Client, today: string, access: InboxAccess): InboxItem[] {
-  // A demo artist's fake invoices and shows must never raise real alerts.
-  if (client.isDemo) return []
+  // A demo artist raises alerts like any other, so the demo shows the app doing its job. Each item is marked `demo`, so the
+  // daily email and the cash forecast can leave practice data out.
   const items: InboxItem[] = []
   const add = (
     rule: InboxRule, entityId: string, severity: InboxSeverity,
-    rest: Omit<InboxItem, 'key' | 'clientId' | 'clientName' | 'rule' | 'severity'>,
-  ) => items.push({ key: `${rule}:${client.id}:${entityId}:${severity}`, clientId: client.id, clientName: client.name, rule, severity, ...rest })
+    rest: Omit<InboxItem, 'key' | 'entityId' | 'clientId' | 'clientName' | 'rule' | 'severity' | 'demo'>,
+  ) => items.push({ key: `${rule}:${client.id}:${entityId}:${severity}`, entityId, clientId: client.id, clientName: client.name, rule, severity, ...(client.isDemo ? { demo: true } : {}), ...rest })
 
   const settlements = client.finance.settlements ?? []
   const settledShowIds = new Set(settlements.flatMap(s => s.showIds))
@@ -172,6 +176,36 @@ export function buildInbox(client: Client, today: string, access: InboxAccess): 
     const entered = (client.finance.budgets?.length ?? 0) + client.finance.expenses.length + client.finance.invoices.length + settlements.length
     if (entered === 0 && client.tour.shows.some(s => s.status === 'confirmed' && !s.historyOnly)) {
       add('empty', 'all', 'info', { title: `Nothing financial is recorded for ${client.name} yet`, detail: 'An empty inbox here means nothing has been entered, not that all is well', go: { section: 'finance', sub: 'payments' } })
+    }
+  }
+
+  // ── Contracts ─────────────────────────────────────────
+  if (access.legal) {
+    for (const c of client.legal?.contracts ?? []) {
+      const status = effectiveStatus(c, today)
+      const left = daysToExpiry(c, today)
+      const go = { section: 'legal' as const, sub: 'alerts' }
+      if (status === 'expired') {
+        add('contract', c.id, 'urgent', { title: left !== null ? `${c.title} expired ${plural(-left, 'day')} ago` : `${c.title} has expired`, detail: `${c.counterparty} · renew it, or close it`, date: c.expiryDate, go })
+      } else if (status === 'expiring' && left !== null) {
+        add('contract', c.id, left <= 30 ? 'soon' : 'info', { title: left === 0 ? `${c.title} ends today` : `${c.title} ends ${when(left)}`, detail: `${c.counterparty} · decide whether to renew`, date: c.expiryDate, go })
+      } else if (c.flagged && c.status !== 'terminated') {
+        add('contract', c.id, 'soon', { title: `${c.title} is flagged for review`, detail: c.counterparty, date: c.expiryDate, go })
+      }
+    }
+  }
+
+  // ── Projects ──────────────────────────────────────────
+  if (access.projects) {
+    for (const p of client.projects ?? []) {
+      if (p.status === 'done' || !p.dueDate) continue
+      const late = days(today, p.dueDate)
+      const go = { section: 'projects' as const }
+      if (late > 0) {
+        add('project', p.id, late > 7 ? 'urgent' : 'soon', { title: `"${p.title}" is ${plural(late, 'day')} overdue`, detail: p.assigneeId ? undefined : 'Nobody is assigned to it', date: p.dueDate, go })
+      } else if (!p.assigneeId && late >= -7) {
+        add('project', p.id, 'soon', { title: `Nobody is assigned to "${p.title}" (due ${when(-late)})`, date: p.dueDate, go })
+      }
     }
   }
 

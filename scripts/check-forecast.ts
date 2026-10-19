@@ -147,7 +147,7 @@ assert.equal(sch.later.length, 0)
 assert.equal(scheduleByWeek(buildForecast(client({ shows: [show({ date: '2027-06-01' })] }), TODAY), TODAY).later.length, 1)      // beyond the weeks shown
 
 // ── the Inbox raises a late SCHEDULED payment (and only that: a plain late fee is "No settlement yet"'s job) ──
-const access = { finance: true, tour: true, deals: true }
+const access = { finance: true, tour: true, deals: true, legal: true, projects: true }
 const lateSched = client({ shows: [show({ date: '2026-10-20', tourOfferId: 'o1' })], offers: [offer([{ when: '30 days out', pct: 50 }, { when: 'Day of show', pct: 50 }])] })   // the first half was due 2026-09-20
 let inbox = buildInbox(lateSched, TODAY, access).filter(i => i.rule === 'receivable')
 assert.equal(inbox.length, 1)

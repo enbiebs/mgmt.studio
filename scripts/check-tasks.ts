@@ -15,7 +15,7 @@ assert.equal(bucketOf('2026-10-21', TODAY), 'week')    // 7 days out is still "t
 assert.equal(bucketOf('2026-10-22', TODAY), 'later')
 
 const auto = (severity: InboxItem['severity'], date?: string): InboxItem =>
-  ({ key: `k-${severity}-${date}`, clientId: 'c1', clientName: 'A', rule: 'invoice', severity, title: `t-${severity}-${date ?? 'none'}`, date, go: { section: 'finance' } })
+  ({ key: `k-${severity}-${date}`, entityId: `e-${severity}-${date}`, clientId: 'c1', clientName: 'A', rule: 'invoice', severity, title: `t-${severity}-${date ?? 'none'}`, date, go: { section: 'finance' } })
 assert.equal(autoBucket(auto('urgent', '2026-10-10'), TODAY), 'overdue')
 assert.equal(autoBucket(auto('urgent', '2026-10-30'), TODAY), 'today')      // needs you now is never "later"
 assert.equal(autoBucket(auto('urgent'), TODAY), 'today')
@@ -95,10 +95,18 @@ const withProjects = buildToday({ clients: [{ id: 'c1', name: 'Alpha', tasks: []
 assert.deepEqual(withProjects.groups.flatMap(g => g.rows).map(r => (r.kind === 'project' ? r.project.id : '?')).sort(), ['mine-p', 'req'])
 assert.equal(withProjects.needCount, 2)
 
-// a demo artist's sample projects stay off Today unless given to me
+// a demo artist's projects show on Today like any other, so the demo looks alive
 const demoOnly = (p: Project[]) => buildToday({ clients: [{ id: 'd', name: 'Demo', isDemo: true, tasks: [], projects: p } as unknown as Client], inbox: [], me: ME, scope: 'everyone', today: TODAY }).groups.length
-assert.equal(demoOnly([request, proj('x', { dueDate: TODAY })]), 0)
+assert.equal(demoOnly([request, proj('x', { dueDate: TODAY })]), 1)    // one group (today) holding both
 assert.equal(demoOnly([proj('x', { assigneeId: ME, dueDate: TODAY })]), 1)
+
+// an unassigned overdue project: no row under "Mine", so its alert is what keeps it from being missed; under "Everyone" the project row
+// is already there, so the alert is not shown a second time
+const lateAlert = { ...auto('urgent', '2026-10-01'), rule: 'project' as const, entityId: 'late-p', title: 'late project' }
+const lateProject = proj('late-p', { dueDate: '2026-10-01' })
+const rowsOf = (scope: 'mine' | 'everyone') => buildToday({ clients: [{ id: 'c1', name: 'Alpha', tasks: [], projects: [lateProject] } as unknown as Client], inbox: [lateAlert], me: ME, scope, today: TODAY }).groups.flatMap(g => g.rows)
+assert.deepEqual(rowsOf('mine').map(r => r.kind), ['auto'])
+assert.deepEqual(rowsOf('everyone').map(r => r.kind), ['project'])
 
 // key dates show in both views (up for grabs) and need Tour access
 const kdClient = { id: 'k1', name: 'Kay', tasks: [], projects: [], tour: { shows: [{ id: 's9', venue: 'Fabric', city: 'London', date: '2026-11-04', status: 'confirmed' }], advances: [], travel: [], guestList: [] }, finance: { budgets: [], invoices: [], settlements: [], expenses: [] } } as unknown as Client

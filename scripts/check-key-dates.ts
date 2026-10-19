@@ -64,8 +64,8 @@ assert.deepEqual(keys(client([show('s1', '2026-11-04')], {}, [taken])), [])
 assert.deepEqual(keys(client([show('s1', '2026-11-04')], {}, [{ ...taken, doneAt: '2026-10-02T00:00:00Z' }])), [])
 assert.deepEqual(keys(client([show('s1', '2026-11-04')], {}, [{ ...taken, autoKey: keyDateKey('advance', 'other') }])), ['advance:s1'])   // a different show's key does not hide it
 
-// a demo artist never raises key dates
-assert.deepEqual(keys(client([show('s1', '2026-11-04')], { isDemo: true })), [])
+// a demo artist raises key dates like any other, so the demo shows the app working
+assert.deepEqual(keys(client([show('s1', '2026-11-04')], { isDemo: true })), ['advance:s1'])
 
 // several shows come back soonest-due first
 assert.deepEqual(keys(client([show('late', '2026-11-04'), show('early', '2026-10-30')])), ['advance:early', 'advance:late'])
