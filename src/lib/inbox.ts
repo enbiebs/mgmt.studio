@@ -8,12 +8,13 @@
 //  Snooze remember, so something marked done comes back if it gets worse.
 // ──────────────────────────────────────────────────────────
 
-import type { Client, Currency, Invoice, MainSection } from '@/types'
+import type { Client, Currency, MainSection } from '@/types'
 import { latestSheet } from '@/lib/offer-sheet'
 import { paidSoFar } from '@/lib/settlement-math'
 import { settlementForShow } from '@/lib/budget'
 import { localDateOf } from '@/lib/utils'
 import { buildForecast } from '@/lib/forecast'
+import { invoiceTotal } from '@/lib/money'
 import { daysToExpiry, effectiveStatus } from '@/lib/contract-status'
 
 export type InboxSeverity = 'urgent' | 'soon' | 'info'
@@ -44,7 +45,6 @@ export interface InboxAccess { finance: boolean; tour: boolean; deals: boolean; 
 
 const DAY = 86_400_000
 const days = (a: string, b: string) => Math.round((Date.parse(a + 'T00:00:00Z') - Date.parse(b + 'T00:00:00Z')) / DAY)
-const invoiceTotal = (inv: Invoice) => inv.items.reduce((s, i) => s + i.quantity * i.rate, 0)
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 const when = (n: number) => (n === 0 ? 'today' : n === 1 ? 'tomorrow' : `in ${n} days`)
 

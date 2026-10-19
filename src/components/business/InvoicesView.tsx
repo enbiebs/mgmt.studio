@@ -10,6 +10,7 @@ import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { ItemTodos } from '@/components/dashboard/ItemTodos'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { addDays, today as localToday } from '@/lib/utils'
+import { invoiceTotal as invTotal } from '@/lib/money'
 import type { Invoice, InvoiceStatus, Currency, RevenueStream, BankTransaction } from '@/types'
 
 export const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string; bg: string }> = {
@@ -22,10 +23,6 @@ export const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string
 
 const CAT_LABELS: Record<string, string> = {
   touring: 'Touring', streaming: 'Streaming', sync: 'Sync', brand: 'Brand', merch: 'Merch', other: 'Other',
-}
-
-function invTotal(inv: Invoice) {
-  return inv.items.reduce((s, i) => s + i.quantity * i.rate, 0)
 }
 
 function fmt(n: number, currency = 'USD') {

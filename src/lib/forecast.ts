@@ -15,8 +15,9 @@
 //  its own. Different currencies are never added together.
 // ──────────────────────────────────────────────────────────
 
-import type { Client, Currency, Invoice, MainSection, Show } from '@/types'
+import type { Client, Currency, MainSection, Show } from '@/types'
 import { balanceOf } from '@/lib/settlement-math'
+import { invoiceTotal } from '@/lib/money'
 import { addDays, localDateOf } from '@/lib/utils'
 
 export type ForecastKind = 'installment' | 'show' | 'invoice' | 'settlement' | 'bill'
@@ -54,7 +55,6 @@ export const DEFAULT_PAYMENT_DAYS = 30
 const DAY = 86_400_000
 const r2 = (n: number) => Math.round(n * 100) / 100
 const days = (a: string, b: string) => Math.round((Date.parse(a + 'T00:00:00Z') - Date.parse(b + 'T00:00:00Z')) / DAY)
-const invoiceTotal = (inv: Invoice) => inv.items.reduce((s, i) => s + i.quantity * i.rate, 0)
 
 /** What a show is expected to pay out: the fee less the agency's and management's cuts when it was booked through an agency. */
 export function showNet(show: Pick<Show, 'guarantee' | 'viaAgency' | 'agencyCommissionPct' | 'managementCommissionPct'>): number {

@@ -116,7 +116,8 @@ export interface BudgetTotals {
 export function commissionAmount(c: BudgetCommission, base: { gross: number; afterSL: number; afterProduction: number }): number {
   if (c.base === 'flat') return c.flat ?? 0
   const b = c.base === 'gross' ? base.gross : c.base === 'after_sound_lights' ? base.afterSL : base.afterProduction
-  return (b * c.pct) / 100
+  // No commission is charged on a loss: a show whose costs exceed its income must not turn the commission into extra money for the artist.
+  return (Math.max(0, b) * c.pct) / 100
 }
 
 export function computeBudget(lines: BudgetLine[], commissions: BudgetCommission[]): BudgetTotals {
@@ -258,7 +259,8 @@ export function makeConverter(rates: FxRates) {
   }
   return {
     // Falls back to 1:1 (and records the currency) if a rate isn't available.
-    convert: (amount: number, from: string, to: string) => (from === to ? amount : (amount * rate(from)) / rate(to)),
+    // Converted amounts are rounded to the cent, so 100 EUR is 110, not 110.00000000000001.
+    convert: (amount: number, from: string, to: string) => (from === to ? amount : round2((amount * rate(from)) / rate(to))),
     missing,
   }
 }
