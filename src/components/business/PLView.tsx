@@ -3,17 +3,18 @@
 //  PLView — Profit & Loss Dashboard
 //  Replaces the need for a traditional business manager's
 //  monthly P&L reporting. Shows revenue by stream, expenses
-//  by category, net income, and YTD totals.
+//  by category, net income, and year-to-date totals, worked out
+//  month by month (and per currency) in lib/ledger.ts.
 // ──────────────────────────────────────────────────────────
 
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
-import { plMonthsFromTransactions, mergePLMonths } from '@/lib/bank-rollup'
+import { buildPL, monthsThisYear, netIncome, SOURCE_LABEL, totalExpenses, totalRevenue, type PLSource } from '@/lib/ledger'
+import { today } from '@/lib/utils'
 import type { PLMonth } from '@/types'
 
-function fmt(n: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
-}
+const money = (n: number, currency: string) => new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n)
+const SOURCE_STYLE: Record<PLSource, string> = { typed: 'bg-gray-100 text-gray-600', records: 'bg-green-50 text-green-700', bank: 'bg-blue-50 text-blue-700', none: 'bg-gray-50 text-gray-400' }
 
 function fmtMonth(iso: string) {
   const [y, m] = iso.split('-')
@@ -34,18 +35,8 @@ const EXP_COLORS: Record<string, string> = {
   travel: '#f97316', recording: '#8b5cf6', marketing: '#06b6d4', legal: '#ef4444', management: '#64748b', equipment: '#14b8a6', meals: '#f59e0b', other: '#94a3b8',
 }
 
-function totalRev(m: PLMonth) {
-  return Object.values(m.revenue).reduce((a, b) => a + b, 0)
-}
-function totalExp(m: PLMonth) {
-  return Object.values(m.expenses).reduce((a, b) => a + b, 0)
-}
-function netIncome(m: PLMonth) {
-  return totalRev(m) - totalExp(m)
-}
-
 // Simple bar chart via inline SVG
-function BarRow({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
+function BarRow({ label, value, max, color, format }: { label: string; value: number; max: number; color: string; format: (n: number) => string }) {
   const pct = max > 0 ? (value / max) * 100 : 0
   return (
     <div className="flex items-center gap-3">
@@ -53,7 +44,7 @@ function BarRow({ label, value, max, color }: { label: string; value: number; ma
       <div className="flex-1 h-5 bg-gray-50 rounded-full overflow-hidden">
         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
       </div>
-      <div className="w-20 text-xs font-medium text-right text-gray-700">{fmt(value)}</div>
+      <div className="w-20 text-xs font-medium text-right text-gray-700">{format(value)}</div>
     </div>
   )
 }
@@ -80,41 +71,49 @@ function TrendLine({ months, getValue }: { months: PLMonth[]; getValue: (m: PLMo
 export function PLView() {
   const client = useStore(s => s.getClient())
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
+  const [currencyPick, setCurrencyPick] = useState<string | null>(null)
 
   if (!client) return null
-  const bankTransactions = client.business.banking.transactions ?? []
-  const bankMonths = plMonthsFromTransactions(bankTransactions)
-  const months = mergePLMonths(client.finance?.plMonths ?? [], bankMonths)
-  if (months.length === 0) {
-    return <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">No P&L data yet</div>
+  // Each currency has its own P&L: one is never added into another. Months run up to the current month, so it cannot stop early.
+  const ledger = buildPL(client, today())
+  if (ledger.currencies.length === 0) {
+    return <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">No P&L data yet. It fills in as invoices are paid, bills are paid and deposits are logged.</div>
   }
+  const currency = currencyPick && ledger.currencies.includes(currencyPick) ? currencyPick : ledger.currencies[0]
+  const fmt = (n: number) => money(n, currency)
+  const sorted = ledger.months[currency]
+  // Open on the latest month that has anything in it.
+  const active = sorted.find(m => m.month === selectedMonth) ?? [...sorted].reverse().find(m => m.source !== 'none') ?? sorted[sorted.length - 1]
 
-  const sorted = [...months].sort((a, b) => a.month.localeCompare(b.month))
-  const active = sorted.find(m => m.month === selectedMonth) ?? sorted[sorted.length - 1]
-
-  // YTD totals
-  const ytdRev = sorted.reduce((s, m) => s + totalRev(m), 0)
-  const ytdExp = sorted.reduce((s, m) => s + totalExp(m), 0)
+  // Year to date: this calendar year's months only.
+  const ytdMonths = monthsThisYear(sorted, today())
+  const ytdRev = ytdMonths.reduce((s, m) => s + totalRevenue(m), 0)
+  const ytdExp = ytdMonths.reduce((s, m) => s + totalExpenses(m), 0)
   const ytdNet = ytdRev - ytdExp
 
   // Max values for bar charts
   const maxRev = Math.max(...Object.keys(REV_LABELS).map(k => active.revenue[k as keyof typeof active.revenue] || 0))
   const maxExp = Math.max(...Object.keys(EXP_LABELS).map(k => active.expenses[k as keyof typeof active.expenses] || 0))
 
-  const activeRev = totalRev(active)
-  const activeExp = totalExp(active)
+  const activeRev = totalRevenue(active)
+  const activeExp = totalExpenses(active)
   const activeNet = activeRev - activeExp
 
   return (
     <div className="flex-1 overflow-auto p-6">
-      {bankMonths.length > 0 && (
-        <div className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-4">
-          Includes {bankTransactions.filter(t => !t.pending).length} settled transactions from your connected bank account, counted as revenue (unattributed — see Catalog to link specific income) or expenses.
+      {ledger.currencies.length > 1 && (
+        <div role="group" aria-label="Currency" className="inline-flex p-0.5 bg-gray-100 rounded-lg text-xs font-medium mb-4">
+          {ledger.currencies.map(c => (
+            <button key={c} onClick={() => { setCurrencyPick(c); setSelectedMonth(null) }} className={`px-3 py-1 rounded-md ${c === currency ? 'bg-canvas shadow-sm text-gray-900' : 'text-gray-500'}`}>{c}</button>
+          ))}
         </div>
       )}
+      <div className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 mb-4">
+        Each month comes from one place, so nothing is counted twice: a month you entered by hand, otherwise your records (every deposit, paid invoices a deposit does not already cover, and paid bills), otherwise your connected bank. Figures are in {currency}.
+      </div>
       {/* YTD Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-        <SummaryCard label="YTD Revenue" value={fmt(ytdRev)} color="text-green-700" sub={`${sorted.length} months`} />
+        <SummaryCard label="YTD Revenue" value={fmt(ytdRev)} color="text-green-700" sub={`${ytdMonths.length} months this year`} />
         <SummaryCard label="YTD Expenses" value={fmt(ytdExp)} color="text-red-500" sub="All categories" />
         <SummaryCard label="YTD Net Income" value={fmt(ytdNet)} color={ytdNet >= 0 ? 'text-blue-700' : 'text-red-600'} sub={`${((ytdNet / Math.max(ytdRev, 1)) * 100).toFixed(0)}% margin`} />
         <div className="border border-gray-100 rounded-xl p-4">
@@ -150,7 +149,7 @@ export function PLView() {
             {Object.entries(REV_LABELS).map(([k, label]) => {
               const val = active.revenue[k as keyof typeof active.revenue] || 0
               if (val === 0 && maxRev > 0) return null
-              return <BarRow key={k} label={label} value={val} max={maxRev} color={REV_COLORS[k]} />
+              return <BarRow key={k} label={label} value={val} max={maxRev} color={REV_COLORS[k]} format={fmt} />
             })}
           </div>
         </div>
@@ -165,7 +164,7 @@ export function PLView() {
             {Object.entries(EXP_LABELS).map(([k, label]) => {
               const val = active.expenses[k as keyof typeof active.expenses] || 0
               if (val === 0 && maxExp > 0) return null
-              return <BarRow key={k} label={label} value={val} max={maxExp} color={EXP_COLORS[k]} />
+              return <BarRow key={k} label={label} value={val} max={maxExp} color={EXP_COLORS[k]} format={fmt} />
             })}
           </div>
         </div>
@@ -174,7 +173,7 @@ export function PLView() {
       {/* Net income for selected month */}
       <div className={`mt-4 p-4 rounded-xl border ${activeNet >= 0 ? 'border-blue-100 bg-blue-50' : 'border-red-100 bg-red-50'}`}>
         <div className="flex items-center justify-between">
-          <div className="text-sm font-semibold text-gray-600">Net Income — {fmtMonth(active.month)}</div>
+          <div className="text-sm font-semibold text-gray-600">Net Income — {fmtMonth(active.month)} <span className={`ml-2 align-middle rounded-full px-2 py-0.5 text-[10px] font-semibold ${SOURCE_STYLE[active.source]}`}>{SOURCE_LABEL[active.source]}</span></div>
           <div className={`text-2xl font-bold ${activeNet >= 0 ? 'text-blue-700' : 'text-red-600'}`}>{fmt(activeNet)}</div>
         </div>
         <div className="text-xs text-gray-400 mt-1">
@@ -190,6 +189,7 @@ export function PLView() {
           <thead className="bg-gray-50">
             <tr>
               <th className="text-left px-4 py-2 text-xs text-gray-400 font-medium">Month</th>
+              <th className="text-left px-4 py-2 text-xs text-gray-400 font-medium">From</th>
               <th className="text-right px-4 py-2 text-xs text-gray-400 font-medium">Revenue</th>
               <th className="text-right px-4 py-2 text-xs text-gray-400 font-medium">Expenses</th>
               <th className="text-right px-4 py-2 text-xs text-gray-400 font-medium">Net Income</th>
@@ -198,8 +198,8 @@ export function PLView() {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {[...sorted].reverse().map(m => {
-              const rev = totalRev(m)
-              const exp = totalExp(m)
+              const rev = totalRevenue(m)
+              const exp = totalExpenses(m)
               const net = rev - exp
               const margin = rev > 0 ? ((net / rev) * 100).toFixed(0) : '—'
               const isActive = m.month === active.month
@@ -210,6 +210,7 @@ export function PLView() {
                   className={`cursor-pointer hover:bg-gray-50 ${isActive ? 'bg-accent-soft/50' : ''}`}
                 >
                   <td className="px-4 py-2.5 font-medium text-sm">{fmtMonth(m.month)}</td>
+                  <td className="px-4 py-2.5"><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${SOURCE_STYLE[m.source]}`}>{SOURCE_LABEL[m.source]}</span></td>
                   <td className="px-4 py-2.5 text-right text-green-700">{fmt(rev)}</td>
                   <td className="px-4 py-2.5 text-right text-red-500">{fmt(exp)}</td>
                   <td className={`px-4 py-2.5 text-right font-semibold ${net >= 0 ? 'text-blue-700' : 'text-red-600'}`}>{fmt(net)}</td>
@@ -220,6 +221,7 @@ export function PLView() {
             {/* YTD total */}
             <tr className="bg-gray-50 border-t border-gray-200">
               <td className="px-4 py-2.5 font-bold text-xs uppercase tracking-wide text-gray-500">YTD Total</td>
+              <td className="px-4 py-2.5" />
               <td className="px-4 py-2.5 text-right font-bold text-green-700">{fmt(ytdRev)}</td>
               <td className="px-4 py-2.5 text-right font-bold text-red-500">{fmt(ytdExp)}</td>
               <td className={`px-4 py-2.5 text-right font-bold ${ytdNet >= 0 ? 'text-blue-700' : 'text-red-600'}`}>{fmt(ytdNet)}</td>

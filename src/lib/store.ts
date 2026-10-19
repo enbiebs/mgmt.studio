@@ -548,7 +548,7 @@ interface StudioState {
   deleteRoyaltyStream: (streamId: string) => void
 
   // ── Banking ──
-  addDeposit: (name: string, date: string, amount: number, currency: Currency, mgmt: number, lawyer: number, taxes: number) => void
+  addDeposit: (name: string, date: string, amount: number, currency: Currency, mgmt: number, lawyer: number, taxes: number, invoiceId?: string) => void
   markDepositDone: (depositId: string) => void
   dismissDeposit: (depositId: string) => void
 
@@ -3191,11 +3191,12 @@ export const useStore = create<StudioState>((set, get) => ({
   },
 
   // ── Banking ──
-  addDeposit: (name, date, amount, currency, mgmt, lawyer, taxes) => {
+  addDeposit: (name, date, amount, currency, mgmt, lawyer, taxes, invoiceId) => {
     const { data, clientId, workspaceId } = get()
     const newDeposit = {
       id: 'dep-' + uid(), name, date, amount, currency,
       mgmt, lawyer, taxes, done: false,
+      ...(invoiceId ? { invoiceId } : {}),
     }
     const updated = {
       clients: data.clients.map(c => {
