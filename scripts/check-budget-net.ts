@@ -1,6 +1,6 @@
 // Checks a show's money waterfall (income, costs, commissions, net), currency conversion, and crew pay.  Run with:  npx tsx scripts/check-budget-net.ts
 import assert from 'node:assert/strict'
-import { DEFAULT_COMMISSIONS, commissionAmount, computeBudget, crewLineAmount, crewPerDiem, frozenRates, makeConverter, showFigures } from '../src/lib/budget'
+import { DEFAULT_COMMISSIONS, actualBudgetLines, commissionAmount, computeBudget, crewLineAmount, crewPerDiem, frozenRates, makeConverter, settledPnl, showFigures } from '../src/lib/budget'
 import type { Budget, BudgetCommission, BudgetLine, Client, CrewRate, Expense, Settlement, Show } from '../src/types'
 
 const r2 = (n: number) => Math.round(n * 100) / 100
@@ -101,5 +101,23 @@ assert.equal(f.netActual, 5710)
 // a settlement that covers two shows gives each half the income
 const twoNight = { ...settled, showIds: ['s1', 's2'] } as unknown as Settlement
 assert.equal(showFigures(client({ settlements: [twoNight] }), show, budget, 'USD', LIVE).gross, 4500)
+
+// ── the budget as it really went: income stays at budget until a settlement supplies the real one ──
+const costs = { local_transport: 550, hotels: 100 }
+const before = actualBudgetLines(lines, costs, false)
+assert.deepEqual(before.filter(l => l.section === 'income').map(l => l.amount), [10000])           // budgeted income kept
+assert.equal(before.filter(l => l.section !== 'income').length, 2)
+const after = actualBudgetLines(lines, { ...costs, guarantee: 9000 }, true)
+assert.deepEqual(after.filter(l => l.section === 'income').map(l => l.amount), [9000])             // the budget's income is dropped, the settled income stands in
+assert.equal(after.filter(l => l.section === 'income').length, 1)
+
+// ── the settled P&L for a show: original vs current vs settled ──
+const withOriginal = { ...budget, original: { lines: [line('g', 'income', 'guarantee', 12000), line('h', 'production', 'hotels', 1000)], commissions: DEFAULTS } } as unknown as Budget
+const pnl = settledPnl(client({ settlements: [settled] }), show, withOriginal, { EUR: 5, GBP: 5 })!
+assert.equal(pnl.currency, 'USD')
+assert.deepEqual([pnl.current.gross, pnl.current.net], [10000, 4590])                              // the budget as it stands now
+assert.deepEqual([pnl.settled.gross, pnl.settled.production, pnl.settled.net], [9000, 800, 5710])  // real income, real costs at the frozen rates
+assert.deepEqual([pnl.original!.gross, pnl.original!.production], [12000, 1000])                   // what was first promised
+assert.equal(settledPnl(client(), show, undefined, LIVE), null)                                    // no budget, no P&L
 
 console.log('budget-net checks passed')

@@ -17,6 +17,7 @@ import { ItemTodos } from '@/components/dashboard/ItemTodos'
 import { CAT_LABELS } from '@/lib/expense-categories'
 import { VENDOR_FIELD_LABEL } from '@/lib/vendors'
 import { today, today as localToday } from '@/lib/utils'
+import { formatTotals, sumByCurrency } from '@/lib/money'
 import type { Expense, ExpenseCategory, Currency } from '@/types'
 
 const CAT_COLORS: Record<ExpenseCategory, string> = {
@@ -83,19 +84,28 @@ export function PaymentsView() {
     )
   }
 
-  const totalPaid   = expenses.filter(e => e.paid).reduce((s, e) => s + e.amount, 0)
-  const totalUnpaid = expenses.filter(e => !e.paid).reduce((s, e) => s + e.amount, 0)
-  const total       = expenses.reduce((s, e) => s + e.amount, 0)
+  // Totals are kept per currency: pounds and euros are never added into a dollar figure.
+  const totalOf = (list: Expense[]) => formatTotals(sumByCurrency(list, e => e.amount, e => e.currency)) || fmt(0)
+  const totalPaid   = totalOf(expenses.filter(e => e.paid))
+  const totalUnpaid = totalOf(expenses.filter(e => !e.paid))
+  const total       = totalOf(expenses)
+  const hasUnpaid   = expenses.some(e => !e.paid && e.amount > 0)
 
-  // Category breakdown
-  const byCategory = Object.keys(CAT_LABELS).map(k => {
+  // Category breakdown: one bar for each category and currency. Bars are only compared with others in the same currency.
+  const currencies = [...new Set(expenses.map(e => e.currency))]
+  const manyCurrencies = currencies.length > 1
+  const byCategory = Object.keys(CAT_LABELS).flatMap(k => {
     const cat = k as ExpenseCategory
-    const catExp = expenses.filter(e => e.category === cat)
-    const sum = catExp.reduce((s, e) => s + e.amount, 0)
-    return { cat, sum, count: catExp.length }
-  }).filter(x => x.sum > 0).sort((a, b) => b.sum - a.sum)
-
-  const maxCat = byCategory[0]?.sum ?? 1
+    return currencies.map(currency => {
+      const catExp = expenses.filter(e => e.category === cat && e.currency === currency)
+      return { cat, currency, sum: catExp.reduce((s, e) => s + e.amount, 0), count: catExp.length }
+    })
+  }).filter(x => x.sum > 0).sort((a, b) => a.currency.localeCompare(b.currency) || b.sum - a.sum)
+  const maxByCurrency = (currency: string) => Math.max(1, ...byCategory.filter(x => x.currency === currency).map(x => x.sum))
+  // Filter chips: each category once, with how many expenses it holds.
+  const categoryChips = Object.keys(CAT_LABELS)
+    .map(k => ({ cat: k as ExpenseCategory, count: expenses.filter(e => e.category === k).length }))
+    .filter(x => x.count > 0)
 
   // Filter & sort
   let filtered = filterCat === 'all' ? expenses : expenses.filter(e => e.category === filterCat)
@@ -124,28 +134,28 @@ export function PaymentsView() {
       {assigning && <AssignExpenseModal expense={assigning} onClose={() => setAssigning(null)} />}
       {/* Summary */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6">
-        <SCard label="Total Expenses" value={fmt(total)} color="text-gray-800" sub={`${expenses.length} line items`} />
-        <SCard label="Paid" value={fmt(totalPaid)} color="text-green-700" sub={`${expenses.filter(e => e.paid).length} expenses`} />
-        <SCard label="Unpaid / Pending" value={fmt(totalUnpaid)} color={totalUnpaid > 0 ? 'text-red-600' : 'text-gray-400'} sub={`${expenses.filter(e => !e.paid).length} expenses`} />
+        <SCard label="Total Expenses" value={total} color="text-gray-800" sub={`${expenses.length} line items`} />
+        <SCard label="Paid" value={totalPaid} color="text-green-700" sub={`${expenses.filter(e => e.paid).length} expenses`} />
+        <SCard label="Unpaid / Pending" value={totalUnpaid} color={hasUnpaid ? 'text-red-600' : 'text-gray-400'} sub={`${expenses.filter(e => !e.paid).length} expenses`} />
       </div>
 
       {/* Category breakdown */}
       <div className="border border-gray-100 rounded-xl p-5 mb-6">
         <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">Expenses by Category</div>
         <div className="space-y-2.5">
-          {byCategory.map(({ cat, sum, count }) => (
-            <div key={cat} className="flex items-center gap-3 cursor-pointer" onClick={() => setFilterCat(filterCat === cat ? 'all' : cat)}>
-              <div className="w-28 text-xs text-gray-500 text-right flex-shrink-0">{CAT_LABELS[cat]}</div>
+          {byCategory.map(({ cat, currency, sum, count }) => (
+            <div key={`${cat}-${currency}`} className="flex items-center gap-3 cursor-pointer" onClick={() => setFilterCat(filterCat === cat ? 'all' : cat)}>
+              <div className="w-28 text-xs text-gray-500 text-right flex-shrink-0">{CAT_LABELS[cat]}{manyCurrencies ? ` (${currency})` : ''}</div>
               <div className="flex-1 h-5 bg-gray-50 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all"
                   style={{
-                    width: `${(sum / maxCat) * 100}%`,
+                    width: `${(sum / maxByCurrency(currency)) * 100}%`,
                     background: filterCat === cat ? CAT_COLORS[cat] : CAT_COLORS[cat] + '99',
                   }}
                 />
               </div>
-              <div className="w-20 text-xs font-medium text-right text-gray-700">{fmt(sum)}</div>
+              <div className="w-20 text-xs font-medium text-right text-gray-700">{fmt(sum, currency)}</div>
               <div className="w-10 text-xs text-right text-gray-400">{count}</div>
             </div>
           ))}
@@ -161,7 +171,7 @@ export function PaymentsView() {
           >
             All ({expenses.length})
           </button>
-          {byCategory.map(({ cat, count }) => (
+          {categoryChips.map(({ cat, count }) => (
             <button
               key={cat}
               onClick={() => setFilterCat(filterCat === cat ? 'all' : cat)}
@@ -382,7 +392,7 @@ function SCard({ label, value, color, sub }: { label: string; value: string; col
   return (
     <div className="border border-gray-100 rounded-xl p-4">
       <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">{label}</div>
-      <div className={`text-2xl font-bold ${color}`}>{value}</div>
+      <div className={`text-2xl font-bold break-words ${color}`}>{value}</div>
       <div className="text-xs text-gray-400 mt-0.5">{sub}</div>
     </div>
   )

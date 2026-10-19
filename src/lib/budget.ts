@@ -355,6 +355,14 @@ export interface ShowFigures {
   settled: boolean             // income and rates come from the show's settlement
 }
 
+// The budget as it really went: real costs by bucket, and income that stays at the budgeted amount until a settlement supplies the real one.
+export function actualBudgetLines(budgetLines: BudgetLine[], byBucket: Partial<Record<BudgetBucket, number>>, settled: boolean): BudgetLine[] {
+  return [
+    ...(settled ? [] : budgetLines.filter(l => l.section === 'income')),
+    ...Object.entries(byBucket).map(([bucket, amount]) => newLine(bucket as BudgetBucket, bucket, amount ?? 0)),
+  ]
+}
+
 export function showFigures(client: Client, show: Show, budget: Budget | undefined, home: Currency, liveRates: FxRates): ShowFigures {
   const settlement = settlementForShow(client, show.id)
   const { convert } = makeConverter(settlement ? frozenRates(settlement) : liveRates)
@@ -374,11 +382,7 @@ export function showFigures(client: Client, show: Show, budget: Budget | undefin
   const now = computeBudget(budget.lines, budget.commissions)
   const actual = actualCostsForShow(client, show, cur, liveRates)
   // Once settled, the by-bucket totals already hold the real income; before that, income stays at Current.
-  const actualLines: BudgetLine[] = [
-    ...(settlement ? [] : budget.lines.filter(l => l.section === 'income')),
-    ...Object.entries(actual.byBucket).map(([bucket, amount]) => newLine(bucket as BudgetBucket, bucket, amount ?? 0)),
-  ]
-  const afterActual = computeBudget(actualLines, budget.commissions)
+  const afterActual = computeBudget(actualBudgetLines(budget.lines, actual.byBucket, !!settlement), budget.commissions)
   return {
     gross: convert(settlement ? afterActual.gross : now.gross, cur, home),
     budgetCosts: convert(now.soundLights + now.production, cur, home),
@@ -403,10 +407,7 @@ export function settledPnl(client: Client, show: Show, budget: Budget | undefine
   if (!budget) return null
   const cur = budget.currency
   const actual = actualCostsForShow(client, show, cur, liveRates)
-  const lines: BudgetLine[] = [
-    ...(actual.settlement ? [] : budget.lines.filter(l => l.section === 'income')),
-    ...Object.entries(actual.byBucket).map(([bucket, amount]) => newLine(bucket as BudgetBucket, bucket, amount ?? 0)),
-  ]
+  const lines = actualBudgetLines(budget.lines, actual.byBucket, !!actual.settlement)
   return {
     currency: cur,
     original: budget.original ? toColumn(computeBudget(budget.original.lines, budget.original.commissions)) : null,

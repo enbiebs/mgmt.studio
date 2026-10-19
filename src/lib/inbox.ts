@@ -10,7 +10,7 @@
 
 import type { Client, Currency, MainSection } from '@/types'
 import { latestSheet } from '@/lib/offer-sheet'
-import { paidSoFar } from '@/lib/settlement-math'
+import { balanceOf } from '@/lib/settlement-math'
 import { settlementForShow } from '@/lib/budget'
 import { localDateOf } from '@/lib/utils'
 import { buildForecast } from '@/lib/forecast'
@@ -90,7 +90,7 @@ export function buildInbox(client: Client, today: string, access: InboxAccess): 
 
     // Settlements that came in but haven't been paid in full.
     for (const s of settlements) {
-      const balance = s.balanceDue ?? s.totalDue - paidSoFar(s)
+      const balance = balanceOf(s)
       if (balance <= 0.005) continue
       const since = s.preparedOn ?? localDateOf(s.confirmedAt)
       const age = days(today, since)

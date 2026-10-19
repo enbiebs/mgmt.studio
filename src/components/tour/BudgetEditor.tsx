@@ -12,7 +12,7 @@ import { inputClass } from '@/components/ui/Modal'
 import { NumInput, TextInput } from './budget-inputs'
 import { BudgetAssumptionsPanel } from './BudgetAssumptions'
 import {
-  BUCKET_LABEL, BUCKET_SECTION, COMMISSION_BASE_LABEL, INCOME_BUCKETS, PRODUCTION_BUCKETS, actualCostsForShow, computeBudget,
+  BUCKET_LABEL, BUCKET_SECTION, COMMISSION_BASE_LABEL, INCOME_BUCKETS, PRODUCTION_BUCKETS, actualBudgetLines, actualCostsForShow, computeBudget,
   crewLineAmount, crewLineFor, crewPerDiem, newCommission, newLine, pctOfGross, type CrewDays,
 } from '@/lib/budget'
 import type { Budget, BudgetBucket, BudgetCommission, BudgetLine, BudgetSection, Client, CommissionBase, Currency } from '@/types'
@@ -72,13 +72,7 @@ export function BudgetEditor({ budget, client }: { budget: Budget; client: Clien
   // exchange rates frozen when it was confirmed are used throughout).
   const actual = show ? actualCostsForShow(client, show, cur, fxRates) : null
   const settlement = actual?.settlement
-  const actualLines: BudgetLine[] = actual
-    ? [
-        ...(settlement ? [] : budget.lines.filter(l => l.section === 'income')),
-        ...Object.entries(actual.byBucket).map(([bucket, amount]) => newLine(bucket as BudgetBucket, bucket, amount ?? 0)),
-      ]
-    : []
-  const act = actual ? computeBudget(actualLines, budget.commissions) : null
+  const act = actual ? computeBudget(actualBudgetLines(budget.lines, actual.byBucket, !!settlement), budget.commissions) : null
   const actualOf = (bucket: BudgetBucket) => {
     if (!actual) return null
     if (BUCKET_SECTION[bucket] === 'income') return settlement ? actual.byBucket[bucket] ?? 0 : null

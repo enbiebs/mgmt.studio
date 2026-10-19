@@ -9,7 +9,7 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { Modal, inputClass } from '@/components/ui/Modal'
 import { Checks, Fold, PayoutTable, PromoterCosts, TicketTable } from '@/components/tour/SettlementSections'
-import { checkSettlement, money2, paidSoFar } from '@/lib/settlement-math'
+import { balanceOf, checkSettlement, money2, paidSoFar } from '@/lib/settlement-math'
 import { settledPnl, settlementEarned, type PnlColumn } from '@/lib/budget'
 import { longDate } from '@/lib/offer-sheet'
 import type { Currency } from '@/types'
@@ -39,7 +39,7 @@ export function SettlementDetail({ settlementId, onClose }: { settlementId: stri
   const m = (n: number) => money2(n, cur)
   const shows = st.showIds.map(id => client.tour.shows.find(s => s.id === id)).filter((s): s is NonNullable<typeof s> => !!s)
   const paid = paidSoFar(st)
-  const balance = st.balanceDue ?? st.totalDue - paid
+  const balance = balanceOf(st)
   const earned = settlementEarned(st)
   const checks = checkSettlement(st, cur)
   const problems = checks.filter(c => !c.ok).length

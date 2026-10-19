@@ -168,6 +168,10 @@ function RunSummary({ run, client, home }: { run: Run; client: Client; home: Cur
   const budgets = client.finance.budgets ?? []
   const rows = shows.map(s => ({ show: s, f: showFigures(client, s, budgets.find(b => b.showId === s.id), home, fxRates) }))
   const sum = (pick: (f: ReturnType<typeof showFigures>) => number | null) => rows.reduce((a, r) => a + (pick(r.f) ?? 0), 0)
+  // A net is after commissions, which come from a show's budget. A show with no budget has no commissions to take off, so its
+  // "net" would be a different thing: it is left out of the net totals rather than added in as if it were comparable.
+  const withoutBudget = rows.filter(r => r.f.netCurrent === null).length
+  const sumNet = (pick: (f: ReturnType<typeof showFigures>) => number | null) => rows.reduce((a, r) => a + (r.f.netCurrent === null ? 0 : pick(r.f) ?? 0), 0)
   const th = 'text-right px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-400'
   const td = 'text-right px-3 py-2 text-sm tabular-nums'
 
@@ -199,7 +203,7 @@ function RunSummary({ run, client, home }: { run: Run; client: Client; home: Cur
                   <td className={td}>{f.budgetCosts === null ? <span className="text-gray-300">no budget</span> : money(f.budgetCosts, home)}</td>
                   <td className={td}>{money(f.actualCosts, home)}</td>
                   <td className={td}>{f.netCurrent === null ? <span className="text-gray-300">—</span> : money(f.netCurrent, home)}</td>
-                  <td className={`${td} font-semibold`}>{money(f.netActual, home)}</td>
+                  <td className={`${td} font-semibold`}>{f.netCurrent === null ? <span className="font-normal text-gray-300">no budget</span> : money(f.netActual, home)}</td>
                 </tr>
               ))}
             </tbody>
@@ -209,12 +213,17 @@ function RunSummary({ run, client, home }: { run: Run; client: Client; home: Cur
                 <td className={`${td} font-bold`}>{money(sum(f => f.gross), home)}</td>
                 <td className={`${td} font-bold`}>{money(sum(f => f.budgetCosts), home)}</td>
                 <td className={`${td} font-bold`}>{money(sum(f => f.actualCosts), home)}</td>
-                <td className={`${td} font-bold`}>{money(sum(f => f.netCurrent), home)}</td>
-                <td className={`${td} font-bold`}>{money(sum(f => f.netActual), home)}</td>
+                <td className={`${td} font-bold`}>{money(sumNet(f => f.netCurrent), home)}</td>
+                <td className={`${td} font-bold`}>{money(sumNet(f => f.netActual), home)}</td>
               </tr>
             </tfoot>
           </table>
         </div>
+      )}
+      {withoutBudget > 0 && (
+        <p className="text-[11px] text-amber-700 mt-3">
+          {withoutBudget} show{withoutBudget === 1 ? ' has' : 's have'} no budget yet, so {withoutBudget === 1 ? 'it is' : 'they are'} left out of the net totals (a net is after commissions, which come from the budget). {withoutBudget === 1 ? 'Its' : 'Their'} gross and actual costs are still counted.
+        </p>
       )}
       <p className="text-[11px] text-gray-400 mt-3">
         Costs shared across the run (like an international flight assigned to the whole run) are split evenly across its shows. For shows not yet settled, income in “Net (actual)” stays at the budgeted amount; once a settlement is recorded (SETTLED) it uses the real income, at the exchange rates frozen when the settlement was confirmed.
