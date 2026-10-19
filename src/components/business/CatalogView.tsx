@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { fmt } from '@/lib/utils'
+import { notify } from '@/lib/notify'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import type { RegStatus, Currency, BankTransaction, CatalogWork } from '@/types'
 
@@ -41,7 +42,10 @@ function TransactionLinker({ workId, currency }: { workId: string; currency: Cur
           <span key={t.id} className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-green-50 text-green-700">
             {t.merchantName ?? t.name} · {t.date}
             {editable && (
-              <button onClick={() => linkTransactionToCatalogWork(t.id, null)} className="text-green-400 hover:text-red-400">✕</button>
+              <button
+                onClick={() => { linkTransactionToCatalogWork(t.id, null); notify('Bank income unlinked from this work', { label: 'Undo', run: () => linkTransactionToCatalogWork(t.id, workId) }) }}
+                aria-label="Unlink this bank income" title="Unlink" className="text-green-400 hover:text-red-400"
+              >✕</button>
             )}
           </span>
         ))}
@@ -267,7 +271,7 @@ export function CatalogView() {
               {editable && (
                 <button
                   onClick={(e) => { e.stopPropagation(); if (confirm(`Delete "${w.title}"? This also unlinks any bank income confirmed against it.`)) deleteCatalogWork(w.id) }}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
+                  className="md:opacity-0 md:group-hover:opacity-100 focus-within:opacity-100 focus-visible:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
                 >
                   ✕
                 </button>

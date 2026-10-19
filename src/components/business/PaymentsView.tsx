@@ -18,6 +18,9 @@ import { CAT_LABELS } from '@/lib/expense-categories'
 import { VENDOR_FIELD_LABEL } from '@/lib/vendors'
 import { today, today as localToday } from '@/lib/utils'
 import { formatTotals, sumByCurrency } from '@/lib/money'
+import { RowMenu } from '@/components/ui/RowMenu'
+import { askConfirm } from '@/lib/confirm'
+import { billImpact } from '@/lib/delete-effects'
 import type { Expense, ExpenseCategory, Currency } from '@/types'
 
 const CAT_COLORS: Record<ExpenseCategory, string> = {
@@ -282,7 +285,14 @@ export function PaymentsView() {
                         <button onClick={() => setAssigning(e)} className="text-xs text-purple-500 hover:text-purple-600">Assign</button>
                         <ItemTodos link={{ type: 'expense', id: e.id }} suggest={`Pay ${e.vendor || e.description || 'this bill'}`} />
                         <ItemAccessButton itemType="expense" itemId={e.id} />
-                        <button onClick={() => deleteExpense(e.id)} className="text-xs text-red-400 hover:text-red-500">Delete</button>
+                        <RowMenu label={`More actions for ${e.vendor || 'this bill'}`} items={[{
+                          label: 'Delete bill…', danger: true,
+                          onSelect: async () => {
+                            const impact = billImpact(e)
+                            const ok = await askConfirm({ title: `Delete the bill from ${e.vendor || 'this vendor'}?`, items: impact.items, confirmLabel: 'Delete bill' })
+                            if (ok) deleteExpense(e.id)
+                          },
+                        }]} />
                       </span>
                     )}
                   </td>

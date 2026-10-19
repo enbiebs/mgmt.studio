@@ -15,6 +15,8 @@ import {
   BUCKET_LABEL, BUCKET_SECTION, COMMISSION_BASE_LABEL, INCOME_BUCKETS, PRODUCTION_BUCKETS, actualBudgetLines, actualCostsForShow, computeBudget,
   crewLineAmount, crewLineFor, crewPerDiem, newCommission, newLine, pctOfGross, type CrewDays,
 } from '@/lib/budget'
+import { notify } from '@/lib/notify'
+import { insertAt } from '@/lib/delete-effects'
 import type { Budget, BudgetBucket, BudgetCommission, BudgetLine, BudgetSection, Client, CommissionBase, Currency } from '@/types'
 
 const money = (n: number, currency: string) =>
@@ -81,7 +83,20 @@ export function BudgetEditor({ budget, client }: { budget: Budget; client: Clien
 
   const patchLine = (id: string, patch: Partial<BudgetLine>) =>
     updateBudget(budget.id, { lines: budget.lines.map(l => l.id === id ? { ...l, ...patch } : l) })
-  const removeLine = (id: string) => updateBudget(budget.id, { lines: budget.lines.filter(l => l.id !== id) })
+  // Removing a line (or a commission) can be undone from the message that appears; the undo reads the budget as it is by then.
+  const freshBudget = () => useStore.getState().getClient()?.finance.budgets?.find(b => b.id === budget.id)
+  const removeLine = (id: string) => {
+    const at = budget.lines.findIndex(l => l.id === id)
+    const line = budget.lines[at]
+    updateBudget(budget.id, { lines: budget.lines.filter(l => l.id !== id) })
+    if (line) notify(`"${line.label || 'Line'}" removed`, { label: 'Undo', run: () => { const b = freshBudget(); if (b && !b.lines.some(l => l.id === id)) updateBudget(b.id, { lines: insertAt(b.lines, line, at) }) } })
+  }
+  const removeCommission = (id: string) => {
+    const at = budget.commissions.findIndex(c => c.id === id)
+    const commission = budget.commissions[at]
+    updateBudget(budget.id, { commissions: budget.commissions.filter(c => c.id !== id) })
+    if (commission) notify(`"${commission.label || 'Commission'}" removed`, { label: 'Undo', run: () => { const b = freshBudget(); if (b && !b.commissions.some(c => c.id === id)) updateBudget(b.id, { commissions: insertAt(b.commissions, commission, at) }) } })
+  }
   const addLine = (bucket: BudgetBucket, label: string, extra: Partial<BudgetLine> = {}) =>
     updateBudget(budget.id, { lines: [...budget.lines, newLine(bucket, label, 0, extra)] })
   const patchCommission = (id: string, patch: Partial<BudgetCommission>) =>
@@ -296,7 +311,7 @@ export function BudgetEditor({ budget, client }: { budget: Budget; client: Clien
               <div className="text-right text-xs text-gray-400 tabular-nums flex items-center justify-end gap-1">
                 {now.gross > 0 ? `${pctOfGross(now.commissions[c.id], now.gross).toFixed(1)}%` : ''}
                 {editable && (
-                  <button onClick={() => updateBudget(budget.id, { commissions: budget.commissions.filter(x => x.id !== c.id) })} className="text-gray-300 hover:text-red-400" title="Remove commission">×</button>
+                  <button onClick={() => removeCommission(c.id)} className="text-gray-300 hover:text-red-400" title="Remove commission">×</button>
                 )}
               </div>
             </div>

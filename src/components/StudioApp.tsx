@@ -23,6 +23,7 @@ import { Rail }       from '@/components/layout/Rail'
 import { CommandBar } from '@/components/layout/CommandBar'
 import { ShowProgressBar } from '@/components/tour/ShowProgressBar'
 import { Toaster } from '@/components/ui/Toaster'
+import { ConfirmHost } from '@/components/ui/ConfirmHost'
 import { CalendarView } from '@/components/calendar/CalendarView'
 
 // Dashboard
@@ -248,6 +249,7 @@ export function StudioApp() {
       </div>
       {role !== 'artist' && <CommandBar />}
       <Toaster />
+      <ConfirmHost />
     </div>
   )
 }

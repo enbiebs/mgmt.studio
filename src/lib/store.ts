@@ -40,6 +40,7 @@ import { snapshotOf, newLine, frozenRates, makeConverter, settlementEarned, addM
 import { buildBudgetFromOffer, currencyFormatter, fillFromOffer, type FillResult } from '@/lib/budget-assumptions'
 import { balanceOf } from '@/lib/settlement-math'
 import { showNet } from '@/lib/money'
+import { afterOfferDeleted, afterShowDeleted } from '@/lib/delete-effects'
 import type { InboxChoice } from '@/lib/inbox'
 import { SHOW_UNFINISHED_KEY } from '@/lib/unfinished'
 import { buildOfferSheetSnapshot } from '@/lib/offer-sheet'
@@ -1688,6 +1689,7 @@ export const useStore = create<StudioState>((set, get) => ({
 
   deleteTravelItem: (itemId) => {
     const { data, clientId, workspaceId } = get()
+    const removed = data.clients.find(c => c.id === clientId)?.tour.travel?.find(t => t.id === itemId)
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId) return c
@@ -1697,6 +1699,15 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     if (workspaceId) dbDeleteTravelItem(itemId).catch(console.error)
+    if (removed && clientId) {
+      notify('Booking removed', { label: 'Undo', run: () => {
+        if (get().clientId !== clientId) { notify('Open this artist to undo that.'); return }
+        const now = get().data
+        const back = { clients: now.clients.map(c => (c.id === clientId ? { ...c, tour: { ...c.tour, travel: [...(c.tour.travel ?? []), removed] } } : c)) }
+        set({ data: back }); saveData(back)
+        if (get().workspaceId) upsertTravelItem(removed, clientId).catch(console.error)
+      } })
+    }
   },
 
   // ── Release stakeholders ──
@@ -2301,12 +2312,8 @@ export const useStore = create<StudioState>((set, get) => ({
 
   deleteShow: (showId) => {
     const { data, clientId } = get()
-    const updated = {
-      clients: data.clients.map(c => {
-        if (c.id !== clientId) return c
-        return { ...c, tour: { ...c.tour, shows: c.tour.shows.filter(s => s.id !== showId) } }
-      }),
-    }
+    // Everything that went with the show (its advance, guests, links) goes from the screen too, as it does in the database.
+    const updated = { clients: data.clients.map(c => (c.id === clientId ? afterShowDeleted(c, showId) : c)) }
     set({ data: updated, selectedShowId: null })
     saveData(updated)
     dbDeleteShow(showId).catch(console.error)
@@ -2442,19 +2449,22 @@ export const useStore = create<StudioState>((set, get) => ({
 
   deleteOffer: (offerId) => {
     const { data, clientId } = get()
-    const updated = {
-      clients: data.clients.map(c => {
-        if (c.id !== clientId || !c.agentData) return c
-        return {
-          ...c,
-          agentData: { ...c.agentData, offers: c.agentData.offers.filter(o => o.id !== offerId) },
-          tour: { ...c.tour, offerSheets: (c.tour.offerSheets ?? []).filter(sh => sh.offerId !== offerId) },
-        }
-      }),
-    }
+    const client = data.clients.find(c => c.id === clientId)
+    if (!client || !clientId) return
+    // The database removes an offer's budgets with it. A budget that has become a show's budget must outlive the offer, so it is
+    // detached from the offer first, and the offer is only removed once that has been saved.
+    const keep = (client.finance.budgets ?? []).filter(b => b.offerId === offerId && !!b.showId)
+    const updated = { clients: data.clients.map(c => (c.id === clientId ? afterOfferDeleted(c, offerId) : c)) }
     set({ data: updated })
     saveData(updated)
-    dbDeleteOffer(offerId).catch(console.error)
+    Promise.all(keep.map(b => upsertBudget({ ...b, offerId: undefined }, clientId)))
+      .then(() => dbDeleteOffer(offerId))
+      .catch(e => {
+        console.error(e)
+        set({ data })          // nothing was deleted, so the offer comes back
+        saveData(data)
+        notify("Couldn't remove that offer, so nothing was deleted. Its budget could not be detached first.")
+      })
   },
 
   sendOfferSheet: async (offerId, { detail, message }) => {
@@ -2752,7 +2762,16 @@ export const useStore = create<StudioState>((set, get) => ({
     if (!before) return
     set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, agenda: (c.agenda ?? []).filter(p => p.id !== pointId) } : c) } })
     if (!get().workspaceId) return
-    deleteAgendaPointRow(pointId).catch(e => {
+    deleteAgendaPointRow(pointId).then(() => {
+      notify('Point removed', { label: 'Undo', run: () => {
+        set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, agenda: [...(c.agenda ?? []), before] } : c) } })
+        insertAgendaPoints([before], clientId).catch(e => {
+          console.error(e)
+          set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, agenda: (c.agenda ?? []).filter(p => p.id !== before.id) } : c) } })
+          notify("Couldn't bring that point back.")
+        })
+      } })
+    }).catch(e => {
       console.error(e)
       set({ data: { clients: get().data.clients.map(c => c.id === clientId ? { ...c, agenda: [...(c.agenda ?? []), before] } : c) } })
       notify("Couldn't remove that point.")
@@ -3298,6 +3317,7 @@ export const useStore = create<StudioState>((set, get) => ({
 
   deleteProject: (projectId) => {
     const { data, clientId } = get()
+    const removed = data.clients.find(c => c.id === clientId)?.projects?.find(p => p.id === projectId)
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId) return c
@@ -3308,6 +3328,16 @@ export const useStore = create<StudioState>((set, get) => ({
     saveData(updated)
     dbDeleteProject(projectId).catch(console.error)
     if (clientId) pushDeleteToGoogleCalendar(clientId, 'project', projectId)
+    if (removed && clientId) {
+      notify(`"${removed.title}" removed`, { label: 'Undo', run: () => {
+        if (get().clientId !== clientId) { notify('Open this artist to undo that.'); return }
+        const now = get().data
+        const back = { clients: now.clients.map(c => (c.id === clientId ? { ...c, projects: [...(c.projects ?? []), removed] } : c)) }
+        set({ data: back }); saveData(back)
+        upsertProject(removed, clientId).catch(console.error)
+        pushToGoogleCalendar(clientId, 'project', removed)
+      } })
+    }
   },
 
   // ── Artist Todos ──
@@ -3347,6 +3377,7 @@ export const useStore = create<StudioState>((set, get) => ({
 
   deleteArtistTodo: (todoId) => {
     const { data, clientId } = get()
+    const removed = data.clients.find(c => c.id === clientId)?.artistTodos?.find(t => t.id === todoId)
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId) return c
@@ -3356,6 +3387,15 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     dbDeleteArtistTodo(todoId).catch(console.error)
+    if (removed && clientId) {
+      notify('To-do removed', { label: 'Undo', run: () => {
+        if (get().clientId !== clientId) { notify('Open this artist to undo that.'); return }
+        const now = get().data
+        const back = { clients: now.clients.map(c => (c.id === clientId ? { ...c, artistTodos: [...(c.artistTodos ?? []), removed] } : c)) }
+        set({ data: back }); saveData(back)
+        upsertArtistTodo(removed, clientId).catch(console.error)
+      } })
+    }
   },
 
   // ── Legal templates (workspace-wide) ──

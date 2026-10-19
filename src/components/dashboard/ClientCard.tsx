@@ -12,6 +12,8 @@ import type { CalendarEventDomain } from '@/lib/calendar'
 import { formatTotals, royaltiesOwed } from '@/lib/money'
 import type { Client, Currency } from '@/types'
 import { ArtistAvatar } from '@/components/ui/ArtistAvatar'
+import { askConfirm } from '@/lib/confirm'
+import { clientImpact } from '@/lib/delete-effects'
 
 export function ClientCard({ client: c }: { client: Client }) {
   // Client create/edit/delete is manager-only structurally (clients RLS
@@ -67,7 +69,7 @@ export function ClientCard({ client: c }: { client: Client }) {
       >
         <button
           onClick={() => setMenuOpen(v => !v)}
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-300 opacity-0 group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-500 transition-all text-base"
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-300 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 hover:bg-gray-100 hover:text-gray-500 transition-all text-base"
         >
           ⋯
         </button>
@@ -81,7 +83,12 @@ export function ClientCard({ client: c }: { client: Client }) {
             </button>
             <button
               className="block w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors"
-              onClick={() => { if (confirm(`Remove ${c.name}?`)) { deleteClient(c.id); setMenuOpen(false) } }}
+              onClick={async () => {
+                setMenuOpen(false)
+                const impact = clientImpact(c)
+                const ok = await askConfirm({ title: `Remove ${c.name}?`, body: 'Everything for this artist is deleted with them.', items: impact.items, confirmLabel: `Remove ${c.name}` })
+                if (ok) deleteClient(c.id)
+              }}
             >
               Remove client
             </button>

@@ -11,6 +11,8 @@ import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal
 import { MONTH_NAMES, MONTH_SHORT, fmt, today } from '@/lib/utils'
 import { isUpcomingShow, splitShows } from '@/lib/date-state'
 import { showNet } from '@/lib/money'
+import { askConfirm } from '@/lib/confirm'
+import { showImpact, staysLine } from '@/lib/delete-effects'
 import { STATUS_CONFIG as INVOICE_STATUS_CONFIG, isOverdue } from '@/components/business/InvoicesView'
 import type { Currency, Show } from '@/types'
 
@@ -342,10 +344,14 @@ export function TourView() {
             </div>
             {editable && (
               <button
-                onClick={() => deleteShow(selected.id)}
+                onClick={async () => {
+                  const impact = showImpact(client, selected)
+                  const ok = await askConfirm({ title: `Remove the show at ${selected.venue || selected.city}?`, body: staysLine(impact), items: impact.items, confirmLabel: 'Remove show' })
+                  if (ok) deleteShow(selected.id)
+                }}
                 className="text-sm text-red-400 hover:text-red-500 transition-colors"
               >
-                Remove show
+                Remove show…
               </button>
             )}
           </div>

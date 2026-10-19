@@ -10,6 +10,9 @@ import { useState, useEffect } from 'react'
 import { useStore } from '@/lib/store'
 import { uid, fromDateStr, today } from '@/lib/utils'
 import { defaultShow, orderShows } from '@/lib/date-state'
+import { RowMenu } from '@/components/ui/RowMenu'
+import { askConfirm } from '@/lib/confirm'
+import { travelImpact } from '@/lib/delete-effects'
 import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
 import type {
   Show, TravelItem, TravelFlight, TravelHotel, TravelGround,
@@ -234,12 +237,7 @@ function FlightCard({ item, onRemove, onLink, onLinkShows, onAddLeg }: {
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge status={item.status} />
-          {editable && (
-            <button
-              onClick={onRemove}
-              className="text-gray-300 hover:text-red-400 text-xs transition-colors"
-            >✕</button>
-          )}
+          {editable && <RowMenu label="More actions for this booking" items={[{ label: 'Delete booking…', danger: true, onSelect: onRemove }]} />}
         </div>
       </div>
 
@@ -384,12 +382,7 @@ function HotelCard({ item, onRemove, onLink, onLinkShows }: {
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge status={item.status} />
-          {editable && (
-            <button
-              onClick={onRemove}
-              className="text-gray-300 hover:text-red-400 text-xs transition-colors"
-            >✕</button>
-          )}
+          {editable && <RowMenu label="More actions for this booking" items={[{ label: 'Delete booking…', danger: true, onSelect: onRemove }]} />}
         </div>
       </div>
 
@@ -496,12 +489,7 @@ function GroundCard({ item, onRemove, onLink, onLinkShows }: {
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge status={item.status} />
-          {editable && (
-            <button
-              onClick={onRemove}
-              className="text-gray-300 hover:text-red-400 text-xs transition-colors"
-            >✕</button>
-          )}
+          {editable && <RowMenu label="More actions for this booking" items={[{ label: 'Delete booking…', danger: true, onSelect: onRemove }]} />}
         </div>
       </div>
 
@@ -674,7 +662,14 @@ export function TravelView() {
     setAddMode(null)
   }
 
-  function removeTravelItem(itemId: string) {
+  // A booking with a cost recorded on it asks first; any other can just be undone from the message that appears.
+  async function removeTravelItem(itemId: string) {
+    const item = allTravel.find(t => t.id === itemId)
+    const impact = item && travelImpact(item)
+    if (impact) {
+      const ok = await askConfirm({ title: 'Delete this booking?', items: impact.items, confirmLabel: 'Delete booking' })
+      if (!ok) return
+    }
     deleteTravel(itemId)
   }
 
