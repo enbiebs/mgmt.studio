@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 import { useStore } from '@/lib/store'
 import { fmt, today as localToday } from '@/lib/utils'
+import { splitDeposit } from '@/lib/money'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import type { Currency } from '@/types'
 
@@ -186,10 +187,7 @@ export function BankingView() {
           </div>
           <div className="flex flex-col gap-3 mb-8">
             {pending.map(d => {
-              const mgmt   = Math.round(d.amount * d.mgmt)
-              const lawyer = Math.round(d.amount * d.lawyer)
-              const taxes  = Math.round(d.amount * d.taxes)
-              const stays  = d.amount - mgmt - lawyer - taxes
+              const { mgmt, lawyer, taxes, stays } = splitDeposit(d.amount, d)
               return (
                 <div key={d.id} className="border border-gray-100 rounded-2xl p-4">
                   <div className="flex items-start justify-between mb-4">
