@@ -7,6 +7,7 @@
 //  on to choose a password. Their pages were set up when the invite was sent.
 // ──────────────────────────────────────────────────────────
 
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { parseAuthHash } from '@/lib/auth-hash'
@@ -50,12 +51,12 @@ export default function AcceptInvitePage() {
             Your invitation is still good. Go to the sign-in page, choose <strong>Forgot password?</strong>, enter the email the invitation was sent to,
             and we&apos;ll email you a fresh link to choose your password.
           </p>
-          <a
+          <Link
             href="/login"
             className="block w-full bg-gray-900 text-canvas py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-700 transition-colors"
           >
             Go to sign in
-          </a>
+          </Link>
         </div>
       )}
     </div>

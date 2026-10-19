@@ -24,6 +24,8 @@ import { CommandBar } from '@/components/layout/CommandBar'
 import { ShowProgressBar } from '@/components/tour/ShowProgressBar'
 import { Toaster } from '@/components/ui/Toaster'
 import { ConfirmHost } from '@/components/ui/ConfirmHost'
+import { UrlSync } from '@/components/layout/UrlSync'
+import { sectionLabel } from '@/components/layout/nav'
 import { CalendarView } from '@/components/calendar/CalendarView'
 
 // Dashboard
@@ -181,6 +183,10 @@ export function StudioApp() {
         {/* ── Studio: one near-solid frosted sheet holds the artist's pages (plain wrapper in the solid look) ── */}
         {view === 'studio' && (
           <div className="glass-sheet flex-1 min-h-0 flex flex-col">
+            {/* One page heading for screen readers on the pages that do not draw their own (the Profile page, the Today list and the portal do) */}
+            {role !== 'artist' && section !== 'profile' && (
+              <h1 className="sr-only">{sectionLabel(section)} · {data.clients.find(c => c.id === clientId)?.name}</h1>
+            )}
             {/* Artist portal */}
             {role === 'artist' && <ArtistView />}
 
@@ -250,6 +256,7 @@ export function StudioApp() {
       {role !== 'artist' && <CommandBar />}
       <Toaster />
       <ConfirmHost />
+      <UrlSync />
     </div>
   )
 }
