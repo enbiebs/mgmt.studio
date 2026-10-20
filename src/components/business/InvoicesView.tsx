@@ -256,7 +256,7 @@ function InvoiceDetail({ invoice: inv, onClose }: { invoice: Invoice; onClose: (
   const cfg   = STATUS_CONFIG[inv.status]
 
   function handleDelete() {
-    if (!confirm(`Delete draft invoice ${inv.number}? This can't be undone.`)) return
+    if (!confirm(`Delete draft invoice ${inv.number}? ${useStore.getState().trashNote('invoice')}`)) return
     deleteInvoice(inv.id)
     onClose()
   }

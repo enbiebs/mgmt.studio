@@ -7,6 +7,7 @@ export interface ConfirmRequest {
   body?: string               // one sentence of context
   items?: string[]            // what goes with it ("its fee and deposit", "2 guests on the list")
   confirmLabel?: string       // the button, default "Remove"
+  note?: string               // the last line; default "This cannot be undone." (say otherwise when it can, e.g. it goes to the trash)
 }
 
 type Handler = (request: ConfirmRequest, answer: (ok: boolean) => void) => void
@@ -23,7 +24,7 @@ export function onConfirm(h: Handler): () => void {
 export function askConfirm(request: ConfirmRequest): Promise<boolean> {
   return new Promise(resolve => {
     if (handler) return handler(request, resolve)
-    const text = [request.title, request.body, ...(request.items ?? []).map(i => `• ${i}`)].filter(Boolean).join('\n')
+    const text = [request.title, request.body, ...(request.items ?? []).map(i => `• ${i}`), request.note].filter(Boolean).join('\n')
     resolve(typeof window !== 'undefined' ? window.confirm(text) : false)
   })
 }

@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import { onNotice, type Notice } from '@/lib/notify'
 
 const SHOW_MS = 8000
+/** Long messages (a restore that has several things to say) stay up longer: about as long as it takes to read them. */
+const showFor = (text: string) => Math.min(30000, SHOW_MS + Math.max(0, text.length - 100) * 60)
 
 /** Where notify() messages appear: a small dark pill at the bottom of the screen. */
 export function Toaster() {
@@ -13,7 +15,7 @@ export function Toaster() {
     const live = timers.current
     const off = onNotice(n => {
       setNotices(list => [...list.slice(-2), n])
-      live.set(n.id, window.setTimeout(() => dismiss(n.id), SHOW_MS))
+      live.set(n.id, window.setTimeout(() => dismiss(n.id), showFor(n.text)))
     })
     function dismiss(id: number) {
       window.clearTimeout(live.get(id)); live.delete(id)

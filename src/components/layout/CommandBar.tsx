@@ -120,6 +120,14 @@ export function CommandBar() {
         run: () => jump(c.id, 'finance', st => { st.setBizSub('banking'); st.requestDepositAdd() }),
       })
     }
+    // "Open the trash for nimino": what was deleted lately, to put back
+    for (const c of actFor.filter(x => hasAccess('activity', x.id))) {          // (an artist's own login has no Activity page)
+      out.push({
+        id: `open-trash-${c.id}`, group: 'Actions', icon: 'activity', label: `Open the trash for ${c.name}`,
+        hint: 'Deleted lately? Put it back', keywords: 'trash deleted restore undo bin recover',
+        run: () => jump(c.id, 'activity', st => st.requestTrash()),
+      })
+    }
     if (roster.some(c => hasAccess('projects', c.id, true))) {
       out.push({
         id: 'add-todo', group: 'Actions', icon: 'plus', label: 'Add a to-do', hint: 'Type: to-do: call the promoter friday', keywords: 'task reminder note todo',

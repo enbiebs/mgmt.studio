@@ -10,6 +10,7 @@ import { useStore } from '@/lib/store'
 import { createClient } from '@/lib/supabase/client'
 import { ACTIVITY_GROUPS, actorName, describeEntry, type ActivityEntry } from '@/lib/activity'
 import { localDateOf, today, addDays, fromDateStr } from '@/lib/utils'
+import { TrashPanel } from './TrashPanel'
 
 const PAGE = 50
 
@@ -36,6 +37,9 @@ export function ActivityView() {
   const [error, setError] = useState<string | null>(null)
   const [group, setGroup] = useState('all')
   const [person, setPerson] = useState('all')
+  const [trashOpen, setTrashOpen] = useState(false)
+  const trashRequested = useStore(s => s.trashRequest)
+  const clearTrashRequest = useStore(s => s.clearTrashRequest)
 
   // First load, and again whenever another artist is opened.
   useEffect(() => {
@@ -81,7 +85,10 @@ export function ActivityView() {
             <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Accountability</div>
             <h2 className="text-xl font-semibold">{clientName} — Activity</h2>
           </div>
-          <button onClick={() => void load(0, true)} className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50">Refresh</button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setTrashOpen(true)} className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50">Trash</button>
+            <button onClick={() => void load(0, true)} className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50">Refresh</button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {[{ key: 'all', label: 'Everything' }, ...ACTIVITY_GROUPS].map(g => (
@@ -147,6 +154,7 @@ export function ActivityView() {
         )}
         <div className="mt-8 text-[11px] text-gray-300">Kept by the database, so it can&apos;t be edited. You only see changes to the sections you have access to.</div>
       </div>
+      {(trashOpen || trashRequested) && <TrashPanel onClose={() => { setTrashOpen(false); clearTrashRequest() }} />}
     </div>
   )
 }
