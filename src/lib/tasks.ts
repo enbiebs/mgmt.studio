@@ -13,6 +13,7 @@ import type { Client, MainSection, Project, Task, TaskLinkType, WorkspacePerson 
 import type { InboxItem } from '@/lib/inbox'
 import { addDays, fromDateStr, localDateOf, toDateStr } from '@/lib/utils'
 import { buildKeyDates, type KeyDate } from '@/lib/key-dates'
+import { invoiceStateWithDeposits } from '@/lib/money'
 
 export type Bucket = 'overdue' | 'today' | 'week' | 'later' | 'nodate' | 'info'
 export const BUCKET_ORDER: Bucket[] = ['overdue', 'today', 'week', 'later', 'nodate', 'info']
@@ -212,7 +213,7 @@ export function aboutOptions(client: Client, canEdit: (section: MainSection) => 
   }
   if (ok('invoice')) {
     add('Invoices', (client.finance?.invoices ?? [])
-      .filter(i => i.status !== 'paid' && i.status !== 'void')
+      .filter(i => i.status !== 'paid' && i.status !== 'void' && invoiceStateWithDeposits(i, today, client.business?.banking?.deposits ?? []) !== 'paid')
       .sort((a, b) => byDate(a.dueDate, b.dueDate)).slice(0, ABOUT_CAP)
       .map(i => ({ value: `invoice:${i.id}`, label: [i.number, i.to].filter(Boolean).join(' · ') || 'Invoice' })))
   }

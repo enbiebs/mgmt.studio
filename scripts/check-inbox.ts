@@ -157,4 +157,43 @@ assert.equal(isHidden({ state: 'snoozed', until: '2026-10-19' }, TODAY), false) 
 // worse is a new item: the key includes how urgent it is, so "done" does not hide it once it gets worse
 assert.notEqual(one({ invoices: [invoice({ dueDate: '2026-10-22' })] }, 'invoice').key, one({ invoices: [invoice()] }, 'invoice').key)
 
+// ── a part-paid invoice counts only what is still owed; the settlement balance is not listed a second time, and no money goes missing ──
+const paying = (amount: number) => ({ deposits: [{ id: 'd1', invoiceId: 'i1', amount, currency: 'USD' }] })
+assert.equal(one({ invoices: [invoice()], ...paying(1000) }, 'invoice').amount, 2000, 'the deposit that paid part of it comes off')
+assert.equal(run({ invoices: [invoice()], ...paying(3000) }, 'invoice').length, 0, 'paid off by deposits: nothing to chase')
+assert.equal(one({ invoices: [invoice()] }, 'invoice').amount, 3000, 'no deposits: the whole invoice')
+const linkedShow = show({ id: 's1', invoiceId: 'i1' })
+const owing = (balance: number, over: Partial<Settlement> = {}) => settlement({ showIds: ['s1'], totalDue: balance + 5000, ...over })   // 5,000 already paid on it
+const bothClaims = { shows: [linkedShow], invoices: [invoice()], settlements: [owing(2000)], ...paying(1000) }          // invoice 3,000 less 1,000 = 2,000 owed; balance 2,000
+assert.equal(run(bothClaims, 'invoice').length, 1); assert.equal(run(bothClaims, 'balance').length, 0, 'the invoice and the settlement balance are one claim, listed once')
+assert.equal(run({ ...bothClaims, invoices: [invoice({ status: 'paid' })] }, 'balance').length, 1, 'a paid invoice is not a claim, so a balance still owed is kept')
+assert.equal(run({ ...bothClaims, ...paying(3000) }, 'balance').length, 1, 'once deposits cover the invoice, the settlement balance is the only claim left')
+assert.equal(run({ shows: [show({ id: 's1' })], settlements: [owing(2000)], invoices: [invoice()] }, 'balance').length, 1, 'an invoice not tied to the show does not hide the balance')
+// money must never go missing: whatever the invoice does not cover still shows up
+const excess = { shows: [linkedShow], invoices: [invoice()], settlements: [owing(14000)] }                              // owes 14,000, the invoice only has 3,000
+assert.equal(one(excess, 'invoice').amount, 3000); assert.equal(one(excess, 'balance').amount, 11000, 'the balance beyond the invoice is kept')
+assert.match(one(excess, 'balance').detail ?? '', /an invoice on this list already lists part of it/)
+const twoShows = { shows: [linkedShow, show({ id: 's2', date: '2026-10-01' })], invoices: [invoice()], settlements: [owing(21000, { showIds: ['s1', 's2'] })] }
+assert.equal(one(twoShows, 'balance').amount, 18000, 'a settlement for two shows with one invoice keeps the other show\'s money')
+assert.equal(one({ ...excess, settlements: [owing(3500)] }, 'balance').amount, 500, 'a balance larger than the invoice by a little still shows the difference')
+assert.equal(run({ ...excess, settlements: [owing(2000)] }, 'balance').length, 0, 'an invoice bigger than the balance (a payment recorded on the settlement only) never invents or hides money: the invoice line stays')
+
+// Home only lists an invoice that is overdue or due within a week; one due later is NOT on screen, so it cannot stand in for the balance
+const notOnHome = { shows: [linkedShow], invoices: [invoice({ dueDate: '2026-11-09' })], settlements: [owing(20000)] }                  // due in 3 weeks: not listed
+assert.equal(run(notOnHome, 'invoice').length, 0); assert.equal(one(notOnHome, 'balance').amount, 20000, 'the balance is not hidden by an invoice Home does not show')
+const onHome = { ...notOnHome, invoices: [invoice({ dueDate: '2026-10-22', items: [{ description: 'x', quantity: 1, rate: 20000 }] })] }          // due in 3 days: listed
+assert.equal(one(onHome, 'invoice').amount, 20000); assert.equal(run(onHome, 'balance').length, 0, 'once the invoice is on Home, it speaks for the balance')
+// one invoice, two settlements: its amount is shared out once, so what is owed is neither doubled nor lost
+const shared = { shows: [show({ id: 's1', invoiceId: 'i1' }), show({ id: 's2', invoiceId: 'i1', date: '2026-10-02' })], invoices: [invoice({ items: [{ description: 'x', quantity: 1, rate: 20000 }] })],
+  settlements: [owing(10000, { id: 'A', showIds: ['s1'] }), owing(15000, { id: 'B', showIds: ['s2'] })] }
+const listedTotal = [...run(shared, 'invoice'), ...run(shared, 'balance')].reduce((a, i) => a + (i.amount ?? 0), 0)
+assert.equal(listedTotal, 25000, 'the invoice (20,000) plus what it does not cover (5,000) is exactly what is owed (25,000)')
+
+// the boundary: an invoice due in exactly 7 days is on Home and speaks for the balance; one due in 8 days is not and does not
+const dueIn = (days: number) => ({ shows: [linkedShow], invoices: [invoice({ dueDate: `2026-10-${19 + days}`, items: [{ description: 'x', quantity: 1, rate: 20000 }] })], settlements: [owing(20000)] })
+assert.equal(run(dueIn(7), 'invoice').length, 1); assert.equal(run(dueIn(7), 'balance').length, 0, 'due in 7 days: on Home, so the balance is not listed again')
+assert.equal(run(dueIn(8), 'invoice').length, 0); assert.equal(one(dueIn(8), 'balance').amount, 20000, 'due in 8 days: not on Home, so the balance is listed')
+assert.equal(run(dueIn(0), 'invoice').length, 1); assert.equal(run(dueIn(0), 'balance').length, 0, 'due today')
+assert.equal(run(dueIn(-1), 'invoice').length, 1)
+
 console.log('inbox checks passed')

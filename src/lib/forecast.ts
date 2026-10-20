@@ -4,8 +4,10 @@
 //  screen), so the Inbox, the Finance tab, Home and the daily email can all use the very same rules.
 //
 //  Money IN
-//    • a settlement that has not been paid in full  → the balance still owed
-//    • an invoice that was sent and not paid        → its total, on its due date
+//    • a settlement that has not been paid in full  → the balance still owed, less what a sent invoice for the same show
+//      already lists (so the same money is never listed twice, and none of it goes missing)
+//    • an invoice that was sent and not paid        → what is still owed on it (its total less the deposits that paid part of
+//      it), on its due date
 //    • a confirmed show with no invoice / settlement → its fee (less agency and management cuts when booked through an
 //      agency), on the dates the offer's payment schedule gives, else 30 days after the show; minus whatever has been
 //      recorded as received
@@ -17,7 +19,7 @@
 
 import type { Client, Currency, MainSection } from '@/types'
 import { balanceOf } from '@/lib/settlement-math'
-import { invoiceTotal, showNet } from '@/lib/money'
+import { invoiceOutstanding, invoiceTotal, settlementBalancesNotOnInvoices, showNet } from '@/lib/money'
 import { addDays, localDateOf } from '@/lib/utils'
 
 export type ForecastKind = 'installment' | 'show' | 'invoice' | 'settlement' | 'bill'
@@ -102,26 +104,35 @@ export function buildForecast(client: Client, today: string, opts: ForecastOptio
   const showById = new Map(shows.map(s => [s.id, s]))
   const invoiceById = new Map(client.finance.invoices.map(i => [i.id, i]))
   const settledShowIds = new Set(settlements.flatMap(s => s.showIds))
+  const deposits = client.business.banking.deposits
 
   // ── Money in: settlements still owing ──
+  const wholes = settlements.map(s => ({ id: s.id, showIds: s.showIds, currency: s.currency, balance: r2(balanceOf(s)) }))
+  const uncovered = settlementBalancesNotOnInvoices(wholes, shows, client.finance.invoices, deposits)      // the invoices below list the rest
   for (const s of settlements) {
-    const balance = r2(balanceOf(s))
+    const whole = wholes.find(w => w.id === s.id)!.balance
+    if (whole <= 0.005) continue
+    const balance = uncovered[s.id] ?? whole
     if (balance <= 0.005) continue
     const showDates = s.showIds.map(id => showById.get(id)?.date).filter((d): d is string => !!d).sort()
     const from = showDates[showDates.length - 1] ?? s.preparedOn ?? localDateOf(s.confirmedAt)
     add({
       id: `settlement:${s.id}`, kind: 'settlement', direction: 'in', date: addDays(from, DEFAULT_PAYMENT_DAYS), amount: balance, currency: s.currency,
       title: `${s.promoter ?? 'The promoter'} owes you the balance on ${s.venue ?? s.eventName ?? 'a settlement'}`,
-      detail: 'Settlement received, balance not paid yet', estimated: true, settlementId: s.id, go: { section: 'tour', sub: 'settlements' },
+      detail: balance < whole - 0.005 ? 'Settlement received; an invoice on this list already lists part of this balance' : 'Settlement received, balance not paid yet', estimated: true, settlementId: s.id,
+      go: { section: 'tour', sub: 'settlements' },
     })
   }
 
   // ── Money in: invoices that were sent and not paid ──
   for (const inv of client.finance.invoices) {
     if (inv.status !== 'sent' && inv.status !== 'overdue') continue
+    const owed = invoiceOutstanding(inv, deposits)               // after the deposits that paid part of it
+    if (owed <= 0.005) continue
+    const partPaid = r2(invoiceTotal(inv) - owed)
     add({
-      id: `invoice:${inv.id}`, kind: 'invoice', direction: 'in', date: inv.dueDate, amount: r2(invoiceTotal(inv)), currency: inv.currency,
-      title: `Invoice ${inv.number} to ${inv.to}`, detail: inv.status === 'overdue' ? 'Marked overdue' : undefined, estimated: false, invoiceId: inv.id,
+      id: `invoice:${inv.id}`, kind: 'invoice', direction: 'in', date: inv.dueDate, amount: owed, currency: inv.currency,
+      title: `Invoice ${inv.number} to ${inv.to}`, detail: partPaid > 0.005 ? `${fmtAmount(partPaid, inv.currency)} of it is already paid` : inv.status === 'overdue' ? 'Marked overdue' : undefined, estimated: false, invoiceId: inv.id,
       go: { section: 'finance', sub: 'invoices' },
     })
   }
