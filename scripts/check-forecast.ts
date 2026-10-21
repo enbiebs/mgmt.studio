@@ -6,13 +6,13 @@ import type { Client, Expense, Invoice, Settlement, Show, TourOffer } from '../s
 
 const TODAY = '2026-10-16'
 
-function client(over: { shows?: Show[]; invoices?: Invoice[]; expenses?: Expense[]; settlements?: Settlement[]; offers?: TourOffer[] } = {}): Client {
+function client(over: { shows?: Show[]; invoices?: Invoice[]; expenses?: Expense[]; settlements?: Settlement[]; offers?: TourOffer[]; deposits?: unknown[] } = {}): Client {
   return {
     id: 'c1', name: 'Artist',
     tour: { shows: over.shows ?? [] },
     finance: { invoices: over.invoices ?? [], expenses: over.expenses ?? [], settlements: over.settlements ?? [] },
     agentData: { offers: over.offers ?? [] },
-    business: { banking: { deposits: [] } },
+    business: { banking: { deposits: over.deposits ?? [] } },
   } as unknown as Client
 }
 const show = (o: Partial<Show> = {}): Show => ({ id: 's1', date: '2026-11-20', city: 'Lisbon', venue: 'LX', time: '20:00', status: 'confirmed', guarantee: 10000, currency: 'USD', ...o })
@@ -157,5 +157,36 @@ assert.equal(buildInbox(client({ shows: [show({ date: '2026-08-01' })] }), TODAY
 assert.equal(buildInbox(client({ shows: [show({ date: '2026-11-04', tourOfferId: 'o1' })], offers: [offer([{ when: '15 days out', pct: 100 }])] }), TODAY, access).filter(i => i.rule === 'receivable').length, 0)  // due today, not late
 inbox = buildInbox(client({ shows: [show({ date: '2026-10-20', tourOfferId: 'o1', received: 5000 })], offers: [offer([{ when: '30 days out', pct: 50 }, { when: 'Day of show', pct: 50 }])] }), TODAY, access).filter(i => i.rule === 'receivable')
 assert.equal(inbox.length, 0)                                                                                                         // recorded as received: gone
+
+// ── part-paid invoices: only what is still owed, the settlement balance is not counted a second time, and no money goes missing ──
+const deposit = (amount: number, invoiceId = 'i1') => ({ id: `d-${amount}`, invoiceId, amount, currency: 'USD' })
+f = buildForecast(client({ invoices: [invoice()], deposits: [deposit(1000)] }), TODAY)
+assert.equal(f.find(i => i.id === 'invoice:i1')?.amount, 2000, 'the deposit that paid part of the invoice comes off')
+assert.match(f.find(i => i.id === 'invoice:i1')?.detail ?? '', /\$1,000 of it is already paid/, 'and the line says so')
+assert.ok(!buildForecast(client({ invoices: [invoice()], deposits: [deposit(3000)] }), TODAY).some(i => i.kind === 'invoice'), 'paid off by deposits: no line')
+assert.equal(buildForecast(client({ invoices: [invoice()], deposits: [deposit(1000, 'other')] }), TODAY).find(i => i.id === 'invoice:i1')?.amount, 3000, 'a deposit for another invoice does not count')
+const owing = (balance: number, over: Partial<Settlement> = {}) => settlement({ totalDue: balance + 5000, ...over })            // 5,000 already paid on it
+// invoice 3,000 less 1,000 = 2,000 owed; settlement balance 2,000: the same money
+f = buildForecast(client({ shows: [show({ invoiceId: 'i1' })], invoices: [invoice()], settlements: [owing(2000)], deposits: [deposit(1000)] }), TODAY)
+assert.deepEqual(ids(f), ['invoice:i1'], 'the invoice and the settlement balance for the same show are one claim, listed once')
+assert.equal(totalsByCurrency(f).find(t => t.currency === 'USD')?.in, 2000, 'so the money expected in is counted once')
+f = buildForecast(client({ shows: [show({ invoiceId: 'i1' })], invoices: [invoice({ status: 'paid' })], settlements: [owing(7000)] }), TODAY)
+assert.deepEqual(ids(f), ['settlement:st1'], 'a paid invoice is not a claim, so a balance still owed is kept')
+f = buildForecast(client({ shows: [show({ invoiceId: 'i1' })], invoices: [invoice()], settlements: [owing(2000)], deposits: [deposit(3000)] }), TODAY)
+assert.deepEqual(ids(f), ['settlement:st1'], 'once deposits cover the invoice, the settlement balance is the only claim left')
+// money must never go missing
+f = buildForecast(client({ shows: [show({ invoiceId: 'i1' })], invoices: [invoice()], settlements: [owing(14000)] }), TODAY)
+assert.deepEqual(f.map(i => [i.kind, i.amount]).sort(), [['invoice', 3000], ['settlement', 11000]], 'a balance bigger than the invoice keeps the excess as its own line')
+assert.equal(totalsByCurrency(f).find(t => t.currency === 'USD')?.in, 14000, 'so the total expected in is the whole 14,000')
+assert.match(f.find(i => i.kind === 'settlement')?.detail ?? '', /an invoice on this list already lists part of this balance/)
+f = buildForecast(client({ shows: [show({ id: 's1', invoiceId: 'i1' }), show({ id: 's2', date: '2026-10-01' })], invoices: [invoice()], settlements: [owing(21000, { showIds: ['s1', 's2'] })] }), TODAY)
+assert.deepEqual(f.map(i => [i.kind, i.amount]).sort(), [['invoice', 3000], ['settlement', 18000]], 'a settlement for two shows with one invoice keeps the other show\'s money')
+assert.equal(totalsByCurrency(f).find(t => t.currency === 'USD')?.in, 21000)
+
+// one invoice, two settlements: its amount is shared out once, so the money expected in is neither doubled nor lost
+f = buildForecast(client({ shows: [show({ id: 's1', invoiceId: 'i1' }), show({ id: 's2', invoiceId: 'i1', date: '2026-10-02' })], invoices: [invoice({ items: [{ description: 'x', quantity: 1, rate: 20000 }] })],
+  settlements: [owing(10000, { id: 'A', showIds: ['s1'] }), owing(15000, { id: 'B', showIds: ['s2'] })] }), TODAY)
+assert.equal(totalsByCurrency(f).find(t => t.currency === 'USD')?.in, 25000, 'the invoice plus what it does not cover is exactly what is owed')
+assert.deepEqual(f.map(i => [i.kind, i.amount]).sort(), [['invoice', 20000], ['settlement', 5000]])
 
 console.log('forecast: all checks passed')

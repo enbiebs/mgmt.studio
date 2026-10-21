@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 import { useStore } from '@/lib/store'
 import { fmt, today as localToday } from '@/lib/utils'
-import { invoiceTotal, splitDeposit } from '@/lib/money'
+import { invoiceOutstanding, invoiceTotal, splitDeposit } from '@/lib/money'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import type { Currency, Invoice } from '@/types'
 
@@ -115,10 +115,15 @@ export function BankingView() {
   // The ⌘K bar's "Log a deposit" opens the form here.
   const depositRequested = useStore(s => s.depositAddRequest)
   const clearDepositRequest = useStore(s => s.clearDepositAddRequest)
+  const depositInvoiceId = useStore(s => s.depositAddInvoiceId)
 
   useEffect(() => {
     if (client?.id) loadBankData(client.id)
   }, [client?.id, loadBankData])
+
+  // A request for an invoice that is not this artist's (the artist was switched since) is dropped, not left to pop up later.
+  const hasRequestedInvoice = !depositInvoiceId || !!client?.finance?.invoices.some(i => i.id === depositInvoiceId)
+  useEffect(() => { if (client && !hasRequestedInvoice) clearDepositRequest() }, [client, hasRequestedInvoice, clearDepositRequest])
 
   if (!client) return null
 
@@ -252,22 +257,25 @@ export function BankingView() {
         </button>
       )}
 
-      {(addOpen || depositRequested) && <AddDepositModal onClose={() => { setAddOpen(false); clearDepositRequest() }} />}
+      {(addOpen || depositRequested) && <AddDepositModal initialInvoiceId={depositInvoiceId ?? undefined} onClose={() => { setAddOpen(false); clearDepositRequest() }} />}
     </div>
   )
 }
 
-function AddDepositModal({ onClose }: { onClose: () => void }) {
+function AddDepositModal({ onClose, initialInvoiceId }: { onClose: () => void; initialInvoiceId?: string }) {
   const { addDeposit } = useStore()
   const client = useStore(s => s.getClient())
-  // Invoices this money could be paying: sent or paid ones, and not one another deposit already points at.
-  const taken = new Set((client?.business.banking.deposits ?? []).map(d => d.invoiceId).filter(Boolean))
-  const payable: Invoice[] = (client?.finance?.invoices ?? []).filter(i => (i.status === 'sent' || i.status === 'overdue' || i.status === 'paid') && !taken.has(i.id))
-  const [invoiceId, setInvoiceId] = useState('')
-  const [name, setName] = useState('')
+  // Invoices this money could be paying: sent or paid ones that still have something left to collect (a part-paid invoice takes another deposit).
+  const logged = client?.business.banking.deposits ?? []
+  const stillDue = (i: Invoice) => invoiceOutstanding(i, logged)
+  const payable: Invoice[] = (client?.finance?.invoices ?? []).filter(i => (i.status === 'sent' || i.status === 'overdue' || i.status === 'paid') && stillDue(i) > 0.005)
+  // Opened from "X of it is not logged as a deposit yet": the invoice, the amount still to log and its currency start out filled in.
+  const first = payable.find(i => i.id === initialInvoiceId)
+  const [invoiceId, setInvoiceId] = useState(first?.id ?? '')
+  const [name, setName] = useState(first ? `Invoice ${first.number} · ${first.to}` : '')
   const [date, setDate] = useState(localToday())
-  const [amount, setAmount] = useState('')
-  const [currency, setCurrency] = useState<Currency>('USD')
+  const [amount, setAmount] = useState(first ? String(stillDue(first)) : '')
+  const [currency, setCurrency] = useState<Currency>(first?.currency ?? 'USD')
   const [mgmtPct, setMgmtPct] = useState('')
   const [lawyerPct, setLawyerPct] = useState('')
   const [taxesPct, setTaxesPct] = useState('')
@@ -286,14 +294,19 @@ function AddDepositModal({ onClose }: { onClose: () => void }) {
   }
 
   // Picking the invoice fills in what it already says, without overwriting anything typed.
+  const labelFor = (i: Invoice) => `Invoice ${i.number} · ${i.to}`
   function pickInvoice(id: string) {
+    const previous = payable.find(i => i.id === invoiceId)
     setInvoiceId(id)
     const inv = payable.find(i => i.id === id)
     if (!inv) return
-    if (!amount) setAmount(String(invoiceTotal(inv)))
+    // what was filled in for the invoice picked before is replaced; what the person typed is kept
+    if (!amount || (previous && amount === String(stillDue(previous)))) setAmount(String(stillDue(inv)))
     setCurrency(inv.currency)
-    if (!name.trim()) setName(`Invoice ${inv.number} · ${inv.to}`)
+    if (!name.trim() || (previous && name === labelFor(previous))) setName(labelFor(inv))
   }
+  const picked = payable.find(i => i.id === invoiceId)
+  const overpays = !!picked && Number(amount) > stillDue(picked) + 0.005
 
   return (
     <Modal title="Log a deposit" onClose={onClose} footer={
@@ -306,7 +319,7 @@ function AddDepositModal({ onClose }: { onClose: () => void }) {
         <FormField label="Which invoice does this pay? (optional)">
           <select className={selectClass} value={invoiceId} onChange={e => pickInvoice(e.target.value)}>
             <option value="">Not an invoice payment</option>
-            {payable.map(i => <option key={i.id} value={i.id}>{i.number} · {i.to} · {fmt(invoiceTotal(i), i.currency)}{i.status === 'paid' ? ' · paid' : ''}</option>)}
+            {payable.map(i => <option key={i.id} value={i.id}>{i.number} · {i.to} · {fmt(stillDue(i), i.currency)}{stillDue(i) < invoiceTotal(i) - 0.005 ? ' still due' : ''}{i.status === 'paid' ? ' · marked paid' : ''}</option>)}
           </select>
           <span className="mt-1 block text-[11px] text-gray-400">Pick one if this money is the payment for an invoice, so the profit &amp; loss counts it once, not twice.</span>
         </FormField>
@@ -320,10 +333,12 @@ function AddDepositModal({ onClose }: { onClose: () => void }) {
         </FormField>
         <FormField label="Amount">
           <input type="number" min="0" className={inputClass} value={amount} onChange={e => setAmount(e.target.value)} />
+          {overpays && picked && <span className="mt-1 block text-[11px] text-amber-600">That is more than the {fmt(stillDue(picked), picked.currency)} still due on this invoice. If it also pays another one, log it as two deposits.</span>}
         </FormField>
       </div>
       <FormField label="Currency">
-        <select className={selectClass} value={currency} onChange={e => setCurrency(e.target.value as Currency)}>
+        {/* A payment for an invoice is in that invoice's currency; otherwise it could not be taken off what is owed. */}
+        <select className={selectClass} value={currency} disabled={!!invoiceId} title={invoiceId ? 'This is the invoice\'s currency' : undefined} onChange={e => setCurrency(e.target.value as Currency)}>
           <option value="USD">USD</option>
           <option value="GBP">GBP</option>
           <option value="EUR">EUR</option>

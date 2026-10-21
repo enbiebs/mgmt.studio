@@ -65,9 +65,14 @@ const client = {
   songs: { albums: [{ id: 'al', title: 'EP', releaseDate: '2026-10-19', tracks: [] }] },
   content: { posts: [] },
   finance: {
-    invoices: [{ id: 'i1', number: 'INV-1', to: 'Promoter', status: 'sent', dueDate: '2026-09-02' }, { id: 'i2', number: 'INV-2', to: 'Other', status: 'paid', dueDate: '2026-09-02' }],
+    invoices: [
+      { id: 'i1', number: 'INV-1', to: 'Promoter', status: 'sent', dueDate: '2026-09-02' }, { id: 'i2', number: 'INV-2', to: 'Other', status: 'paid', dueDate: '2026-09-02' },
+      { id: 'i3', number: 'INV-3', to: 'Covered', status: 'sent', dueDate: '2026-09-02', currency: 'USD', items: [{ description: 'x', quantity: 1, rate: 500 }] },
+      { id: 'i4', number: 'INV-4', to: 'Part paid', status: 'sent', dueDate: '2026-09-02', currency: 'USD', items: [{ description: 'x', quantity: 1, rate: 500 }] },
+    ],
     expenses: [{ id: 'e1', vendor: 'Vans', amount: 100, currency: 'USD', paid: false, dueDate: '2026-10-21' }],
   },
+  business: { banking: { deposits: [{ invoiceId: 'i3', amount: 500, currency: 'USD' }, { invoiceId: 'i4', amount: 200, currency: 'USD' }] } },
   legal: { contracts: [{ id: 'c1', title: 'Pub deal', status: 'signed', expiryDate: '2026-10-01', counterparty: 'Kobalt' }] },
   projects: [{ id: 'p1', title: 'Artwork', status: 'in-progress', dueDate: '2026-12-31' }],
   agentData: { offers: [{ id: 'o1', venue: 'Old inquiry', city: 'D', status: 'inquiry', date: '2026-09-20' }] },
@@ -81,6 +86,8 @@ assert.equal(events.find(e => e.id === 'show-s3')?.cancelled, true)
 assert.equal(state('release-al'), 'soon')                                           // release day is today
 assert.equal(state('invoice-i1'), 'overdue')
 assert.equal(events.some(e => e.id === 'invoice-i2'), false)                        // paid invoices are not on the calendar
+assert.equal(events.some(e => e.id === 'invoice-i3'), false)                        // ...nor ones whose deposits add up to the invoice
+assert.equal(state('invoice-i4'), 'overdue')                                        // a part-paid one is still owed
 assert.equal(state('bill-e1'), 'soon')
 assert.equal(state('contract-c1'), 'overdue')
 assert.equal(state('project-p1'), 'upcoming')

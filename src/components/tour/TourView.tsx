@@ -10,10 +10,10 @@ import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/com
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { MONTH_NAMES, MONTH_SHORT, fmt, today } from '@/lib/utils'
 import { isUpcomingShow, splitShows } from '@/lib/date-state'
-import { showNet } from '@/lib/money'
+import { invoiceStateWithDeposits, showNet } from '@/lib/money'
 import { askConfirm } from '@/lib/confirm'
 import { showImpact, staysLine } from '@/lib/delete-effects'
-import { STATUS_CONFIG as INVOICE_STATUS_CONFIG, isOverdue } from '@/components/business/InvoicesView'
+import { STATUS_CONFIG as INVOICE_STATUS_CONFIG } from '@/components/business/InvoicesView'
 import type { Currency, Show } from '@/types'
 
 export function TourView() {
@@ -401,6 +401,7 @@ function ShowFinancials({ show, editable, onViewOffer }: { show: Show; editable:
   const updateShowFinancials = useStore(s => s.updateShowFinancials)
   const generateInvoiceFromShow = useStore(s => s.generateInvoiceFromShow)
   const invoices = useStore(s => s.getClient()?.finance?.invoices ?? [])
+  const deposits = useStore(s => s.getClient()?.business?.banking?.deposits ?? [])
   const setSection = useStore(s => s.setSection)
   const setBizSub = useStore(s => s.setBizSub)
   // An invoice is Finance and the fee behind it is Deals & fees: making one needs edit access to both.
@@ -431,6 +432,7 @@ function ShowFinancials({ show, editable, onViewOffer }: { show: Show; editable:
   if (!editable && !show.guarantee && !show.deposit) return null
 
   const linkedInvoice = show.invoiceId ? invoices.find(i => i.id === show.invoiceId) : undefined
+  const linkedState = linkedInvoice ? invoiceStateWithDeposits(linkedInvoice, today(), deposits) : undefined      // the date AND the deposits decide, as on Home and the progress bar
   const netExpected = show.guarantee != null ? showNet(show) : undefined
 
   function viewInvoice() {
@@ -515,8 +517,8 @@ function ShowFinancials({ show, editable, onViewOffer }: { show: Show; editable:
       {show.guarantee != null && (
         linkedInvoice && canSeeFinance ? (
           <button onClick={viewInvoice} className="flex items-center gap-1.5 text-xs text-accent hover:text-accent-hover mb-1">
-            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${INVOICE_STATUS_CONFIG[isOverdue(linkedInvoice) ? 'overdue' : linkedInvoice.status].bg} ${INVOICE_STATUS_CONFIG[isOverdue(linkedInvoice) ? 'overdue' : linkedInvoice.status].color}`}>
-              {INVOICE_STATUS_CONFIG[isOverdue(linkedInvoice) ? 'overdue' : linkedInvoice.status].label}
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${INVOICE_STATUS_CONFIG[linkedState ?? linkedInvoice.status].bg} ${INVOICE_STATUS_CONFIG[linkedState ?? linkedInvoice.status].color}`}>
+              {INVOICE_STATUS_CONFIG[linkedState ?? linkedInvoice.status].label}
             </span>
             View invoice →
           </button>

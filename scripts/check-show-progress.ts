@@ -5,11 +5,12 @@ import type { Client, Invoice, Settlement, Show, ShowAdvance, TravelItem } from 
 
 const TODAY = '2026-10-19'
 
-function client(over: { advances?: ShowAdvance[]; travel?: TravelItem[]; settlements?: Settlement[]; invoices?: Invoice[] } = {}): Client {
+function client(over: { advances?: ShowAdvance[]; travel?: TravelItem[]; settlements?: Settlement[]; invoices?: Invoice[]; deposits?: unknown[] } = {}): Client {
   return {
     id: 'c1', name: 'Artist',
     tour: { shows: [], advances: over.advances ?? [], travel: over.travel ?? [], guestList: [] },
     finance: { budgets: [], invoices: over.invoices ?? [], settlements: over.settlements ?? [] },
+    business: { banking: { deposits: over.deposits ?? [] } },
   } as unknown as Client
 }
 const show = (o: Partial<Show> = {}): Show => ({ id: 's1', date: '2026-11-20', city: 'Lisbon', venue: 'LX', time: '20:00', status: 'confirmed', ...o })
@@ -82,5 +83,27 @@ p = progressForShow(client(), show({ date: '2026-09-22', status: 'cancelled' }),
 assert.equal(p.cancelled, true)
 assert.equal(p.lapsed, false)
 assert.equal(p.next, null)
+
+// ── the invoice: its state comes from the due date AND from the deposits that paid it ──
+const inv = (o: Partial<Invoice> = {}): Invoice => ({ id: 'i1', number: 'INV-1', to: 'Promoter', category: 'touring', status: 'sent', issuedDate: '2026-09-01', dueDate: '2026-10-01', items: [{ description: 'x', quantity: 1, rate: 3000 }], currency: 'USD', ...o } as Invoice)
+const played = show({ date: '2026-10-05', invoiceId: 'i1' })
+const pay = (amount: number, currency = 'USD') => [{ invoiceId: 'i1', amount, currency }]
+p = progressForShow(client({ invoices: [inv()] }), played, TODAY)
+assert.deepEqual([fact(p, 'invoice').value, fact(p, 'invoice').tone], ['Overdue', 'todo'], 'a sent invoice past its due date is overdue')
+assert.notEqual(stateOf(p, 'paid'), 'done', 'and the show is not paid yet')
+p = progressForShow(client({ invoices: [inv()], deposits: pay(1000) }), played, TODAY)
+assert.equal(fact(p, 'invoice').value, 'Overdue', 'part paid is still overdue')
+p = progressForShow(client({ invoices: [inv()], deposits: pay(3000) }), played, TODAY)
+assert.deepEqual([fact(p, 'invoice').value, fact(p, 'invoice').tone], ['Paid', 'ok'], 'deposits that add up to the invoice make it paid, even though it is marked sent')
+assert.equal(stateOf(p, 'paid'), 'done', 'and the show is paid')
+p = progressForShow(client({ invoices: [inv()], deposits: pay(3000, 'GBP') }), played, TODAY)
+assert.equal(fact(p, 'invoice').value, 'Overdue', 'pounds do not pay a dollar invoice')
+assert.equal(fact(progressForShow(client({ invoices: [inv({ status: 'paid' })] }), played, TODAY), 'invoice').value, 'Paid', 'an invoice marked paid is paid, as before')
+
+// the invoice is paid but the settlement still shows a balance (nothing records a payment there on its own): the panel says so instead of contradicting itself
+p = progressForShow(client({ invoices: [inv()], deposits: pay(3000), settlements: [settlement(3000)] }), played, TODAY)
+assert.match(fact(p, 'settlement').value, /owed \(invoice paid\)$/, 'the settlement still shows what is owed, and that the invoice is paid')
+p = progressForShow(client({ invoices: [inv()], deposits: pay(1000), settlements: [settlement(3000)] }), played, TODAY)
+assert.doesNotMatch(fact(p, 'settlement').value, /invoice paid/, 'a part-paid invoice is not a paid invoice')
 
 console.log('show-progress checks passed')

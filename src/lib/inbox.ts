@@ -14,7 +14,7 @@ import { balanceOf } from '@/lib/settlement-math'
 import { settlementForShow } from '@/lib/budget'
 import { localDateOf } from '@/lib/utils'
 import { buildForecast } from '@/lib/forecast'
-import { invoiceTotal } from '@/lib/money'
+import { invoiceOutstanding, settlementBalancesNotOnInvoices } from '@/lib/money'
 import { daysToExpiry, effectiveStatus } from '@/lib/contract-status'
 
 export type InboxSeverity = 'urgent' | 'soon' | 'info'
@@ -65,14 +65,19 @@ export function buildInbox(client: Client, today: string, access: InboxAccess): 
   // ── Money ──────────────────────────────────────────────
   if (access.finance) {
     // Invoices you've sent that haven't been paid.
+    const listedInvoices = new Set<string>()          // the ones that made it onto Home (the rest are not on screen, so they cannot stand in for a balance)
     for (const inv of client.finance.invoices) {
       if (inv.status !== 'sent' && inv.status !== 'overdue') continue
       const late = days(today, inv.dueDate)
-      const total = invoiceTotal(inv)
+      const owed = invoiceOutstanding(inv, client.business.banking.deposits)   // what is still owed, after the deposits that paid part of it
+      if (owed <= 0.005) continue
+      // an invoice counts as "on Home" exactly when an item is added for it here, so the two can never drift apart (marking that item Done or snoozing it comes later, and does not bring the settlement line back)
       if (late > 0) {
-        add('invoice', inv.id, 'urgent', { title: `Invoice ${inv.number} to ${inv.to} is ${plural(late, 'day')} overdue`, amount: total, currency: inv.currency, date: inv.dueDate, go: { section: 'finance', sub: 'invoices' } })
+        listedInvoices.add(inv.id)
+        add('invoice', inv.id, 'urgent', { title: `Invoice ${inv.number} to ${inv.to} is ${plural(late, 'day')} overdue`, amount: owed, currency: inv.currency, date: inv.dueDate, go: { section: 'finance', sub: 'invoices' } })
       } else if (late >= -7) {
-        add('invoice', inv.id, 'soon', { title: `Invoice ${inv.number} to ${inv.to} is due ${when(-late)}`, amount: total, currency: inv.currency, date: inv.dueDate, go: { section: 'finance', sub: 'invoices' } })
+        listedInvoices.add(inv.id)
+        add('invoice', inv.id, 'soon', { title: `Invoice ${inv.number} to ${inv.to} is due ${when(-late)}`, amount: owed, currency: inv.currency, date: inv.dueDate, go: { section: 'finance', sub: 'invoices' } })
       }
     }
 
@@ -88,16 +93,19 @@ export function buildInbox(client: Client, today: string, access: InboxAccess): 
       }
     }
 
-    // Settlements that came in but haven't been paid in full.
+    // Settlements that came in but haven't been paid in full. Whatever a listed invoice for the same show already says is not repeated.
+    const wholes = settlements.map(s => ({ id: s.id, showIds: s.showIds, currency: s.currency, balance: balanceOf(s) }))
+    const uncovered = settlementBalancesNotOnInvoices(wholes, client.tour.shows, client.finance.invoices, client.business.banking.deposits, listedInvoices)
     for (const s of settlements) {
-      const balance = balanceOf(s)
+      const whole = wholes.find(w => w.id === s.id)!.balance
+      const balance = uncovered[s.id] ?? whole
       if (balance <= 0.005) continue
       const since = s.preparedOn ?? localDateOf(s.confirmedAt)
       const age = days(today, since)
       const severity: InboxSeverity = age > 30 ? 'urgent' : age > 7 ? 'soon' : 'info'
       add('balance', s.id, severity, {
         title: `${s.promoter ?? 'The promoter'} still owes you on ${s.venue ?? s.eventName ?? 'a settlement'}`,
-        detail: `Settlement ${age <= 0 ? 'received today' : `received ${plural(age, 'day')} ago`}`,
+        detail: `Settlement ${age <= 0 ? 'received today' : `received ${plural(age, 'day')} ago`}${balance < whole - 0.005 ? '; an invoice on this list already lists part of it' : ''}`,
         amount: balance, currency: s.currency, date: since, go: { section: 'tour', sub: 'settlements' },
       })
     }
