@@ -346,7 +346,7 @@ export function TourView() {
               <button
                 onClick={async () => {
                   const impact = showImpact(client, selected)
-                  const ok = await askConfirm({ title: `Remove the show at ${selected.venue || selected.city}?`, body: staysLine(impact), items: impact.items, confirmLabel: 'Remove show' })
+                  const ok = await askConfirm({ title: `Remove the show at ${selected.venue || selected.city}?`, body: staysLine(impact), items: impact.items, confirmLabel: 'Remove show', note: useStore.getState().trashNote('show') })
                   if (ok) deleteShow(selected.id)
                 }}
                 className="text-sm text-red-400 hover:text-red-500 transition-colors"

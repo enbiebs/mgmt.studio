@@ -289,7 +289,7 @@ export function PaymentsView() {
                           label: 'Delete bill…', danger: true,
                           onSelect: async () => {
                             const impact = billImpact(e)
-                            const ok = await askConfirm({ title: `Delete the bill from ${e.vendor || 'this vendor'}?`, items: impact.items, confirmLabel: 'Delete bill' })
+                            const ok = await askConfirm({ title: `Delete the bill from ${e.vendor || 'this vendor'}?`, items: impact.items, confirmLabel: 'Delete bill', note: useStore.getState().trashNote('bill') })
                             if (ok) deleteExpense(e.id)
                           },
                         }]} />

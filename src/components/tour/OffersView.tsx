@@ -203,7 +203,7 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
   async function handleDelete() {
     if (!initial || !client) return
     const impact = offerImpact(client, initial)
-    const ok = await askConfirm({ title: `Delete the offer for ${initial.venue || 'this show'}?`, body: staysLine(impact), items: impact.items, confirmLabel: 'Delete offer' })
+    const ok = await askConfirm({ title: `Delete the offer for ${initial.venue || 'this show'}?`, body: staysLine(impact), items: impact.items, confirmLabel: 'Delete offer', note: useStore.getState().trashNote('offer') })
     if (!ok) return
     deleteOffer(initial.id)
     onClose()

@@ -26,6 +26,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next({ request })
   }
 
+  // The daily clean-up of the trash is a Vercel Cron job too: same reasoning, and the route checks CRON_SECRET itself.
+  if (request.nextUrl.pathname === '/api/trash/purge') {
+    return NextResponse.next({ request })
+  }
+
   // Browsers post content-policy reports with no sign-in; the route is tiny, capped, and rate limited.
   if (request.nextUrl.pathname === '/api/csp-report') {
     return NextResponse.next({ request })

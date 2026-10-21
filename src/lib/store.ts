@@ -35,6 +35,9 @@ import { EMPTY_FINANCE } from '@/lib/finance-demo'
 import { EMPTY_TOUR } from '@/lib/advance-demo'
 import { notify } from '@/lib/notify'
 import { addOrReuse, applyPersonPatch, emailTakenMessage } from '@/lib/people-dedupe'
+import { kindNoun, restoreByFor, restoreNote, screenSectionOf, type RestoreBy, type TrashKind } from '@/lib/trash'
+import { trashAndDelete, type TrashDeps } from '@/lib/trash-flow'
+import { loadTrashItem, restoreTrash, trashDelete } from '@/lib/trash-db'
 import { nextPosition, pointsFor, MAX_AGENDA_POINTS } from '@/lib/agenda'
 import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE, today as localToday } from '@/lib/utils'
 import { snapshotOf, newLine, frozenRates, makeConverter, settlementEarned, addMissingCrewFees, withoutAddedCrewFees, BUCKET_LABEL, type FxRates } from '@/lib/budget'
@@ -128,6 +131,40 @@ function saveData(data: AppData) {
 // would silently drop any sibling field), so they get their own small
 // local-storage slot alongside the same persistence pattern.
 const LEGAL_TEMPLATES_KEY = 'studio-legal-templates-v1'
+
+const trashDeps: TrashDeps = { trashDelete }
+
+/**
+ * Deletes through the trash: the database keeps a copy and deletes in one step, and the message offers Undo (to someone who is allowed to
+ * see the copy; otherwise it says a manager can restore it). If the delete does not go through, the screen is read again from the
+ * database so it shows what is really there, and says so. Without a database (the local demo) there is no trash, so it is simply deleted.
+ */
+function deleteViaTrash(a: {
+  kind: TrashKind; id: string; clientId: string; label: string; detail?: string
+  /** How the data looked before the optimistic delete, to put back if it fails. */
+  before: AppData
+  /** The way it was deleted before the trash existed: only used if the database does not have the trash yet. */
+  run: () => Promise<unknown>
+  /** Runs once the delete is done, with or without a copy (the Google Calendar entry goes; a bill's file goes if nothing kept a copy). */
+  afterDeleted?: (keptCopy: boolean) => void
+}): void {
+  if (!useStore.getState().workspaceId) { a.run().catch(console.error); a.afterDeleted?.(false); return }
+  void trashAndDelete(trashDeps, { kind: a.kind, id: a.id, label: a.label, detail: a.detail, runLegacyDelete: a.run }).then(async res => {
+    if (!res.ok) {
+      // Read the artist again rather than putting back the picture from before: anything changed since (here or by a teammate) stays.
+      if (!(await useStore.getState().reloadClient(a.clientId))) { useStore.setState({ data: a.before }); saveData(a.before) }
+      notify(res.error)
+      return
+    }
+    a.afterDeleted?.(!!res.trashId)
+    const trashId = res.trashId
+    const by = useStore.getState().restoreBy(a.kind, a.clientId)
+    notify(
+      `${kindNoun(a.kind)} "${a.label}" deleted${!trashId ? '. This cannot be undone.' : by === 'manager' ? '. A manager can restore it.' : ''}`,
+      trashId && by === 'you' ? { label: 'Undo', run: () => { void useStore.getState().restoreFromTrash(trashId) } } : undefined,
+    )
+  })
+}
 
 /**
  * An invoice has just been marked paid (by hand, or by linking the bank payment that paid it). Nothing is invented: if deposits had
@@ -397,6 +434,18 @@ interface StudioState {
   /** Opens the deposit form. With an invoice it opens that artist's Banking screen with the form filled in for it (the artist may have been closed since). */
   requestDepositAdd: (invoiceId?: string, clientId?: string) => void
   depositAddInvoiceId: string | null
+  /** The Trash list is asked to open (from the command bar); the Activity screen reads this. */
+  trashRequest: boolean
+  requestTrash: () => void
+  clearTrashRequest: () => void
+  /** Puts something back from the trash; true when it is back. Says what happened. */
+  restoreFromTrash: (trashId: string) => Promise<boolean>
+  /** Reads one artist's data again (after a restore or a refused delete), leaving everything else as it is. True when it was read. */
+  reloadClient: (clientId: string) => Promise<boolean>
+  /** Who could put a deleted item of this kind back: this person ('you'), a manager, or nobody (no database, so no trash). */
+  restoreBy: (kind: TrashKind, clientId?: string) => RestoreBy
+  /** The sentence a delete box shows about the trash, for this person. */
+  trashNote: (kind: TrashKind, it?: 'it' | 'them') => string
   clearDepositAddRequest: () => void
   setSelectedAlbum: (id: string | null) => void
   setStudioConcept: (name: string) => void
@@ -668,6 +717,7 @@ export const useStore = create<StudioState>((set, get) => ({
   offerPasteRequest: false,
   offerAddRequest: false,
   depositAddRequest: false,
+  trashRequest: false,
   depositAddInvoiceId: null,
   selectedAlbumId: null,
   studioConcept: null,
@@ -940,6 +990,56 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ view: 'studio', section: 'finance', bizSub: 'banking', selectedShowId: null, depositAddRequest: true, depositAddInvoiceId: invoiceId })
   },
   clearDepositAddRequest: () => set({ depositAddRequest: false, depositAddInvoiceId: null }),
+  requestTrash: () => set({ trashRequest: true }),
+  clearTrashRequest: () => set({ trashRequest: false }),
+
+  reloadClient: async (clientId) => {
+    const { clientWorkspace, workspaceId, previewMemberId } = get()
+    const ws = clientWorkspace[clientId] ?? workspaceId
+    if (!ws || previewMemberId) return false              // while previewing as someone else the screen shows their view, not fresh rows
+    try {
+      const fresh = (await loadWorkspaceData(ws)).clients.find(c => c.id === clientId)
+      if (!fresh) return false
+      const updated = { clients: get().data.clients.map(c => (c.id === clientId ? fresh : c)) }
+      set({ data: updated })
+      saveData(updated)
+      return true
+    } catch (e) { console.error(e); return false }
+  },
+
+  restoreBy: (kind, clientId) => {
+    const s = get()
+    return restoreByFor(kind, !!s.workspaceId, {
+      // a real grant, not a single shared item
+      holds: sec => s.hasAccess(screenSectionOf(sec), clientId) && !s.isShareOnly(screenSectionOf(sec), clientId),
+      edits: sec => s.hasAccess(screenSectionOf(sec), clientId, true),
+    })
+  },
+  trashNote: (kind, it) => restoreNote(get().restoreBy(kind), it),
+
+  restoreFromTrash: async (trashId) => {
+    try {
+      const item = await loadTrashItem(trashId)
+      if (!item) { notify("That's no longer in the trash."); return false }
+      const outcome = await restoreTrash(trashId)
+      if (outcome.status === 'missing') { notify("That's no longer in the trash."); return false }
+      if (!(await get().reloadClient(item.clientId))) notify('Put back. Reload the page if it does not show up yet.')
+      if (item.kind === 'person') void get().refreshMyAccess()          // the person's login was linked back too
+      if (item.kind === 'show') {
+        const show = get().data.clients.find(c => c.id === item.clientId)?.tour.shows.find(sh => sh.id === item.itemId)
+        if (show) pushToGoogleCalendar(item.clientId, 'show', show)
+      }
+      notify(outcome.status === 'already'
+        ? `"${item.label}" is already back.`
+        : `${kindNoun(item.kind)} "${item.label}" is back.${outcome.notes.length ? ` ${outcome.notes.join(' ')}` : ''}`)
+      return true
+    } catch (e) {
+      console.error(e)
+      const forbidden = (e as { code?: string }).code === 'forbidden'
+      notify(forbidden ? "You don't have permission to put that back. It is still in the trash." : "Couldn't put that back. Nothing was lost: it is still in the trash.")
+      return false
+    }
+  },
   setSelectedAlbum: (id) => set({ selectedAlbumId: id }),
   setStudioConcept: (name) => set({ studioConcept: name }),
 
@@ -1814,6 +1914,7 @@ export const useStore = create<StudioState>((set, get) => ({
 
   deletePerson: (personId) => {
     const { data, clientId, workspaceId } = get()
+    const person = data.clients.find(c => c.id === clientId)?.people?.find(p => p.id === personId)
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId) return c
@@ -1832,7 +1933,8 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
-    if (workspaceId) dbDeletePerson(personId).catch(console.error)
+    if (!workspaceId || !clientId) { if (workspaceId) dbDeletePerson(personId).catch(console.error); return }
+    deleteViaTrash({ kind: 'person', id: personId, clientId, label: person?.name ?? 'Person', detail: person?.title || person?.email, before: data, run: () => dbDeletePerson(personId) })
   },
 
   loadBankData: async (clientId) => {
@@ -2049,15 +2151,17 @@ export const useStore = create<StudioState>((set, get) => ({
 
   deleteInvoice: (invoiceId) => {
     const { data, clientId } = get()
+    const inv = data.clients.find(c => c.id === clientId)?.finance?.invoices.find(i => i.id === invoiceId)
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId || !c.finance) return c
-        return { ...c, finance: { ...c.finance, invoices: c.finance.invoices.filter(inv => inv.id !== invoiceId) } }
+        return { ...c, finance: { ...c.finance, invoices: c.finance.invoices.filter(i => i.id !== invoiceId) } }
       }),
     }
     set({ data: updated })
     saveData(updated)
-    dbDeleteInvoice(invoiceId).catch(console.error)
+    if (!clientId) { dbDeleteInvoice(invoiceId).catch(console.error); return }
+    deleteViaTrash({ kind: 'invoice', id: invoiceId, clientId, label: inv?.number ?? 'Invoice', detail: inv?.to, before: data, run: () => dbDeleteInvoice(invoiceId) })
   },
 
   // ── Expenses ──
@@ -2110,14 +2214,20 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
-    dbDeleteExpense(expenseId).catch(console.error)
-    if (removed?.billFilePath && clientId) {
+    // The bill's PDF is kept with the copy in the trash until it expires. Only when no copy could be kept is the file removed now.
+    const removeFileNow = () => {
+      if (!removed?.billFilePath || !clientId) return
       fetch('/api/bills/file', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientId, path: removed.billFilePath }),
       }).catch(console.error)
     }
+    if (!clientId) { dbDeleteExpense(expenseId).catch(console.error); removeFileNow(); return }
+    deleteViaTrash({
+      kind: 'bill', id: expenseId, clientId, label: removed?.vendor || removed?.description || 'Bill', detail: removed ? fmtAmount(removed.amount, removed.currency) : undefined,
+      before: data, run: () => dbDeleteExpense(expenseId), afterDeleted: keptCopy => { if (!keptCopy) removeFileNow() },
+    })
   },
 
   addBill: ({ expense, vendor }) => {
@@ -2380,12 +2490,16 @@ export const useStore = create<StudioState>((set, get) => ({
 
   deleteShow: (showId) => {
     const { data, clientId } = get()
+    const show = data.clients.find(c => c.id === clientId)?.tour.shows.find(s => s.id === showId)
     // Everything that went with the show (its advance, guests, links) goes from the screen too, as it does in the database.
     const updated = { clients: data.clients.map(c => (c.id === clientId ? afterShowDeleted(c, showId) : c)) }
     set({ data: updated, selectedShowId: null })
     saveData(updated)
-    dbDeleteShow(showId).catch(console.error)
-    if (clientId) pushDeleteToGoogleCalendar(clientId, 'show', showId)
+    if (!clientId) { dbDeleteShow(showId).catch(console.error); return }
+    deleteViaTrash({
+      kind: 'show', id: showId, clientId, label: show?.venue ?? 'Show', detail: show ? [show.city, show.date].filter(Boolean).join(' · ') : undefined,
+      before: data, run: () => dbDeleteShow(showId), afterDeleted: () => pushDeleteToGoogleCalendar(clientId, 'show', showId),
+    })
   },
 
   // ── Tour offers ──
@@ -2522,17 +2636,16 @@ export const useStore = create<StudioState>((set, get) => ({
     // The database removes an offer's budgets with it. A budget that has become a show's budget must outlive the offer, so it is
     // detached from the offer first, and the offer is only removed once that has been saved.
     const keep = (client.finance.budgets ?? []).filter(b => b.offerId === offerId && !!b.showId)
+    const offer = client.agentData?.offers.find(o => o.id === offerId)
     const updated = { clients: data.clients.map(c => (c.id === clientId ? afterOfferDeleted(c, offerId) : c)) }
     set({ data: updated })
     saveData(updated)
-    Promise.all(keep.map(b => upsertBudget({ ...b, offerId: undefined }, clientId)))
-      .then(() => dbDeleteOffer(offerId))
-      .catch(e => {
-        console.error(e)
-        set({ data })          // nothing was deleted, so the offer comes back
-        saveData(data)
-        notify("Couldn't remove that offer, so nothing was deleted. Its budget could not be detached first.")
-      })
+    deleteViaTrash({
+      kind: 'offer', id: offerId, clientId, label: offer?.venue || 'Offer', detail: offer ? [offer.city, offer.date].filter(Boolean).join(' · ') : undefined,
+      before: data,
+      // the copy is taken first (budgets and all); then the show's budget is detached and saved, and only then is the offer removed
+      run: () => Promise.all(keep.map(b => upsertBudget({ ...b, offerId: undefined }, clientId))).then(() => dbDeleteOffer(offerId)),
+    })
   },
 
   sendOfferSheet: async (offerId, { detail, message }) => {
@@ -3300,6 +3413,7 @@ export const useStore = create<StudioState>((set, get) => ({
 
   dismissDeposit: (depositId) => {
     const { data, clientId } = get()
+    const dep = data.clients.find(c => c.id === clientId)?.business.banking.deposits.find(d => d.id === depositId)
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId) return c
@@ -3317,7 +3431,8 @@ export const useStore = create<StudioState>((set, get) => ({
     }
     set({ data: updated })
     saveData(updated)
-    dbDeleteDeposit(depositId).catch(console.error)
+    if (!clientId) { dbDeleteDeposit(depositId).catch(console.error); return }
+    deleteViaTrash({ kind: 'deposit', id: depositId, clientId, label: dep?.name ?? 'Deposit', detail: dep ? fmtAmount(dep.amount, dep.currency) : undefined, before: data, run: () => dbDeleteDeposit(depositId) })
   },
 
   // ── Projects ──

@@ -189,8 +189,8 @@ export function TeamView() {
                 {editable && (
                   <button
                     onClick={(e) => { e.stopPropagation(); if (confirm(card.login
-                      ? `Delete ${p.name}'s card? This removes them from anywhere they're linked (crew, stakeholders). Their login stays, and so does what they can open: use their role menu first if you want them off ${client.name}.`
-                      : `Delete ${p.name}? This also removes them from anywhere they're linked (crew, stakeholders).`)) deletePerson(p.id) }}
+                      ? `Delete ${p.name}'s card? This removes them from anywhere they're linked (crew, stakeholders). Their login stays, and so does what they can open: use their role menu first if you want them off ${client.name}. ${useStore.getState().trashNote('person', 'them')}`
+                      : `Delete ${p.name}? This also removes them from anywhere they're linked (crew, stakeholders). ${useStore.getState().trashNote('person', 'them')}`)) deletePerson(p.id) }}
                     className="md:opacity-0 md:group-hover:opacity-100 focus-within:opacity-100 focus-visible:opacity-100 transition-opacity text-gray-300 hover:text-red-400 text-xs flex-shrink-0"
                   >
                     ✕

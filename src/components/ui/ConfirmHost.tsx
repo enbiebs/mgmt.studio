@@ -43,7 +43,7 @@ export function ConfirmHost() {
           {request.items.map(i => <li key={i}>{i}</li>)}
         </ul>
       )}
-      <p className="text-xs text-gray-400">This cannot be undone.</p>
+      <p className="text-xs text-gray-400">{request.note ?? 'This cannot be undone.'}</p>
     </Modal>
   )
 }
