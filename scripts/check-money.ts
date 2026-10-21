@@ -1,6 +1,6 @@
 // Checks the small money sums every screen shares: invoice totals, per-currency totals, and how a deposit divides up.  Run with:  npx tsx scripts/check-money.ts
 import assert from 'node:assert/strict'
-import { formatTotals, invoiceState, invoiceTotal, r2, royaltiesOwed, showNet, splitDeposit, sumByCurrency } from '../src/lib/money'
+import { formatTotals, invoiceOutstanding, invoiceState, invoiceStateWithDeposits, invoiceTotal, owedByCurrency, r2, royaltiesOwed, settlementBalancesNotOnInvoices, showNet, splitDeposit, sumByCurrency, unloggedWhenPaid } from '../src/lib/money'
 import type { Invoice } from '../src/types'
 
 const items = (...rows: [number, number][]): Pick<Invoice, 'items'> => ({ items: rows.map(([quantity, rate], i) => ({ description: `line ${i}`, quantity, rate })) })
@@ -74,5 +74,99 @@ assert.equal(formatTotals({}), '')
 assert.equal(formatTotals({ USD: 0, GBP: 40000 }), '£40,000')                                 // a zero is left out
 assert.equal(formatTotals({ JPY: 5000, USD: 10 }), '$10 · ¥5,000')                           // other currencies follow
 assert.equal(formatTotals({ USD: 1200, GBP: 800 }, (n, c) => `${c} ${n}`), 'USD 1200 · GBP 800')   // a screen can write amounts its own way
+
+// ── what an invoice still has to collect ──
+const inv22 = { id: 'i1', currency: 'USD' as const, ...items([1, 22000]) }
+const dep = (amount: number, invoiceId: string | undefined, currency: 'USD' | 'GBP' | 'EUR' = 'USD') => ({ amount, invoiceId, currency })
+assert.equal(invoiceOutstanding(inv22, []), 22000, 'nothing paid: the whole invoice is owed')
+assert.equal(invoiceOutstanding(inv22, [dep(11000, 'i1'), dep(5000, 'i1')]), 6000, 'part paid: the deposits that pay it come off')
+assert.equal(invoiceOutstanding(inv22, [dep(22000, 'i1')]), 0, 'paid in full: nothing owed')
+assert.equal(invoiceOutstanding(inv22, [dep(30000, 'i1')]), 0, 'overpaid never goes below zero')
+assert.equal(invoiceOutstanding(inv22, [dep(11000, 'other-invoice'), dep(500, undefined)]), 22000, 'deposits for other invoices, or none, do not count')
+assert.equal(invoiceOutstanding(inv22, [dep(11000, 'i1', 'GBP')]), 22000, 'pounds are never taken off a dollar invoice')
+assert.equal(invoiceOutstanding({ id: 'i2', currency: 'USD', ...items([3, 0.1]) }, [dep(0.1, 'i2')]), 0.2, 'to the cent, no float noise')
+
+// ── an unpaid invoice and the settlement balance are one claim, but no money may go missing ──
+const showsList = [{ id: 's1', invoiceId: 'i1' }, { id: 's2', invoiceId: undefined }, { id: 's3', invoiceId: 'i3' }, { id: 's4', invoiceId: 'i1' }]
+const sent = { ...inv22, status: 'sent' as const }
+const paidInv = { id: 'i3', currency: 'USD' as const, status: 'paid' as const, ...items([1, 5000]) }
+const rest = (showIds: string[], balance: number, invoices: Parameters<typeof settlementBalancesNotOnInvoices>[2], deposits: Parameters<typeof settlementBalancesNotOnInvoices>[3] = [], currency: 'USD' | 'GBP' | 'EUR' = 'USD', listed?: Set<string>) =>
+  settlementBalancesNotOnInvoices([{ id: 'st', showIds, currency, balance }], showsList, invoices, deposits, listed).st
+assert.equal(rest(['s1'], 22000, [sent]), 0, 'a sent invoice for the whole balance says it all')
+assert.equal(rest(['s1'], 6000, [sent], [dep(16000, 'i1')]), 0, 'part paid: the invoice still has 6,000 to collect, which is the balance')
+assert.equal(rest(['s1'], 14000, [{ ...sent, ...items([1, 6000]) }]), 8000, 'a balance bigger than the invoice keeps the excess (a bonus or overage the invoice never billed)')
+assert.equal(rest(['s1', 's2'], 21000, [{ ...sent, ...items([1, 6000]) }]), 15000, 'a settlement for two shows, only one invoiced: the other show\'s money stays')
+assert.equal(rest(['s1', 's4'], 12000, [{ ...sent, ...items([1, 12000]) }]), 0, 'two shows pointing at the same invoice: it covers its own 12,000')
+assert.equal(rest(['s1', 's4'], 20000, [{ ...sent, ...items([1, 12000]) }]), 8000, 'and it is counted once, not once per show (counting it twice would hide the other 8,000)')
+assert.equal(rest(['s1'], 1000, [sent]), 0, 'an invoice bigger than the balance (a payment only recorded on the settlement) never invents money')
+assert.equal(rest(['s1'], 6000, [{ ...sent, status: 'overdue' }], [dep(16000, 'i1')]), 0, 'an overdue invoice stands for it too')
+assert.equal(rest(['s1'], 22000, [{ ...sent, status: 'draft' }]), 22000, 'a draft was never sent, so the whole balance stays')
+assert.equal(rest(['s1'], 6000, [sent], [dep(22000, 'i1')]), 6000, 'an invoice paid off by deposits no longer stands for anything')
+assert.equal(rest(['s3'], 7000, [paidInv]), 7000, 'a paid invoice is not a claim, so a balance still owed is kept')
+assert.equal(rest(['s1'], 6000, [sent], [], 'GBP'), 6000, 'an invoice in another currency is a different claim')
+assert.equal(rest(['s2'], 6000, [sent]), 6000, 'a show with no invoice has nothing standing for it')
+assert.equal(rest([], 6000, [sent]), 6000)
+assert.equal(rest(['s1'], 0, [sent]), 0, 'nothing owed stays nothing')
+// a screen that lists only some invoices: an invoice that is not on screen cannot stand in for a balance that is
+assert.equal(rest(['s1'], 22000, [sent], [], 'USD', new Set()), 22000, 'an invoice not listed covers nothing')
+assert.equal(rest(['s1'], 22000, [sent], [], 'USD', new Set(['i1'])), 0, 'one that is listed does')
+assert.equal(rest(['s1'], 22000, [sent], [], 'USD', new Set(['someone-else'])), 22000)
+// one invoice, several settlements: its amount is shared out ONCE (two settlements must not each be credited all of it)
+const twoSettlements = (a: number, b: number, invoiceRate: number) => settlementBalancesNotOnInvoices(
+  [{ id: 'A', showIds: ['s1'], currency: 'USD', balance: a }, { id: 'B', showIds: ['s4'], currency: 'USD', balance: b }], showsList, [{ ...sent, ...items([1, invoiceRate]) }], [])
+assert.deepEqual(twoSettlements(10000, 15000, 20000), { A: 0, B: 5000 }, 'the invoice covers A, then what is left of it covers part of B: 10,000 + 15,000 owed, 20,000 invoiced, 5,000 left over')
+assert.deepEqual(twoSettlements(10000, 15000, 5000), { A: 5000, B: 15000 }, 'a small invoice covers only the first it reaches')
+assert.deepEqual(twoSettlements(3000, 4000, 20000), { A: 0, B: 0 }, 'a big invoice covers both')
+assert.equal(Object.values(twoSettlements(10000, 15000, 20000)).reduce((a, b) => a + b, 0) + 20000, 25000, 'the invoice plus what is left over is exactly what is owed')
+// the same figures whichever order the settlements arrive in (the credit is handed out by id, not by list position)
+const twoReversed = (a: number, b: number, invoiceRate: number) => settlementBalancesNotOnInvoices(
+  [{ id: 'B', showIds: ['s4'], currency: 'USD', balance: b }, { id: 'A', showIds: ['s1'], currency: 'USD', balance: a }], showsList, [{ ...sent, ...items([1, invoiceRate]) }], [])
+assert.deepEqual(twoReversed(10000, 15000, 20000), { A: 0, B: 5000 }, 'listed the other way round: the same answer')
+assert.deepEqual(twoReversed(10000, 15000, 5000), { A: 5000, B: 15000 }, 'a small invoice still covers A first, even when B is listed first')
+// the figure must not depend on the order the settlements were loaded in, however the shows and invoices cross-link
+const cross = [{ id: 'i1', status: 'sent' as const, currency: 'USD' as const, ...items([1, 100]) }, { id: 'i2', status: 'sent' as const, currency: 'USD' as const, ...items([1, 100]) }]
+const crossShows = [{ id: 'A', invoiceId: 'i1' }, { id: 'B', invoiceId: 'i2' }, { id: 'C', invoiceId: 'i1' }]
+const S1 = { id: 'S1', showIds: ['A', 'B'], currency: 'USD' as const, balance: 100 }, S2 = { id: 'S2', showIds: ['C'], currency: 'USD' as const, balance: 100 }
+const shown = (list: typeof S1[], inv: typeof cross = cross) => { const r = settlementBalancesNotOnInvoices(list, crossShows, inv, []); return { r, total: inv.length * 100 + Object.values(r).reduce((a, b) => a + b, 0) } }
+for (const order of [[S1, S2], [S2, S1]]) assert.equal(shown(order).total, 200, 'invoices of 200 for settlements of 200: 200 is shown, in either order (not 300)')
+assert.deepEqual(shown([S1, S2]).r, shown([S2, S1]).r, 'and every settlement gets the same figure whichever order they come in')
+assert.equal(shown([{ ...S1, showIds: ['B', 'A'] }, S2]).total, 200, 'and whichever order a settlement lists its shows')
+const lopsided = [{ ...S1, balance: 300 }, S2]
+assert.equal(shown(lopsided).total, 400, 'owed 400 against invoices of 200: 200 from the invoices plus the 200 they do not cover')
+// an overpaid settlement (negative balance) neither invents nor eats anyone else's money
+const overpaid = [{ id: 'X', showIds: ['A'], currency: 'USD' as const, balance: -50 }, { id: 'Y', showIds: ['C'], currency: 'USD' as const, balance: 100 }, { id: 'Z', showIds: ['A'], currency: 'USD' as const, balance: 100 }]
+const op = settlementBalancesNotOnInvoices(overpaid, crossShows, [cross[0]], [])
+assert.equal(op.X, 0, 'nothing is owed on the overpaid one'); assert.equal(100 + op.X + op.Y + op.Z, 200, 'one $100 invoice, $200 owed on the others: $200 shown, not $150')
+// ...and an overpaid settlement does not shrink what a big enough invoice covers for the others
+const op2 = settlementBalancesNotOnInvoices(overpaid, crossShows, [{ ...cross[0], ...items([1, 200]) }], [])
+assert.deepEqual(op2, { X: 0, Y: 0, Z: 0 }, 'a $200 invoice covers the $200 owed on the other two in full, whatever the overpaid one says')
+
+// ── an invoice whose deposits cover it is paid, whatever it says ──
+const stateOf = (inv: Parameters<typeof invoiceStateWithDeposits>[0], deposits: Parameters<typeof invoiceStateWithDeposits>[2] = []) => invoiceStateWithDeposits(inv, '2026-10-19', deposits)
+const live = { ...inv22, status: 'sent' as const, dueDate: '2026-10-14' }
+assert.equal(stateOf(live), 'overdue', 'no deposits: the due date decides, as before')
+assert.equal(stateOf(live, [dep(16000, 'i1')]), 'overdue', 'part paid is still overdue')
+assert.equal(stateOf(live, [dep(22000, 'i1')]), 'paid', 'fully covered by deposits is paid')
+assert.equal(stateOf(live, [dep(30000, 'i1')]), 'paid', 'overpaid is paid')
+assert.equal(stateOf(live, [dep(22000, 'i1', 'GBP')]), 'overdue', 'pounds do not pay a dollar invoice')
+assert.equal(stateOf(live, [dep(22000, 'other')]), 'overdue', "someone else's deposit does not")
+assert.equal(stateOf({ ...live, status: 'draft' }, [dep(22000, 'i1')]), 'draft', 'a draft stays a draft')
+assert.equal(stateOf({ ...live, status: 'void' }, [dep(22000, 'i1')]), 'void', 'a void invoice stays void')
+assert.equal(stateOf({ id: 'z', currency: 'USD', status: 'sent', dueDate: '2026-11-30', ...items() }, [dep(0, 'z')]), 'sent', 'a zero-value invoice with a zero deposit is not "paid off by money"')
+
+// ── marking a part-paid invoice as paid: how much of it is not logged as a deposit yet (told to the person, never invented) ──
+assert.equal(unloggedWhenPaid(inv22, [dep(16000, 'i1')]), 6000, 'part paid: the rest is not logged')
+assert.equal(unloggedWhenPaid(inv22, [dep(11000, 'i1'), dep(5000, 'i1')]), 6000, 'across several deposits')
+assert.equal(unloggedWhenPaid(inv22, []), 0, 'no deposit points at it: the invoice itself stands for the money, nothing to say')
+assert.equal(unloggedWhenPaid(inv22, [dep(22000, 'i1')]), 0, 'already covered')
+assert.equal(unloggedWhenPaid(inv22, [dep(30000, 'i1')]), 0, 'overpaid')
+assert.equal(unloggedWhenPaid(inv22, [dep(5000, 'i1', 'GBP')]), 0, 'a deposit in another currency is not a part payment')
+assert.equal(unloggedWhenPaid(inv22, [dep(5000, 'other')]), 0, "someone else's deposit")
+
+// ── what is owed, per currency ──
+const gbp = { id: 'g1', currency: 'GBP' as const, ...items([1, 1000]) }
+assert.deepEqual(owedByCurrency([inv22, gbp], [dep(16000, 'i1'), dep(250, 'g1', 'GBP')]), { USD: 6000, GBP: 750 }, 'each invoice less its own deposits, never mixed across currencies')
+assert.deepEqual(owedByCurrency([], []), {})
+assert.deepEqual(owedByCurrency([inv22], [dep(22000, 'i1')]), { USD: 0 }, 'paid off: zero')
 
 console.log('money checks passed')

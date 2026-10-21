@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { fromDateStr, today } from '@/lib/utils'
+import { invoiceStateWithDeposits } from '@/lib/money'
 import { notify } from '@/lib/notify'
 import { dueLabel, parseQuickTodo, taskDestination, todoPrefix } from '@/lib/tasks'
 import { recallLastArtist, rememberLastArtist, useMe } from '@/lib/useToday'
@@ -181,7 +182,7 @@ export function CommandBar() {
       for (const inv of c.finance?.invoices ?? []) {
         out.push({
           id: `invoice-${inv.id}`, group: 'Invoices', icon: 'finance', label: `${inv.number} · ${inv.to}`,
-          hint: `${c.name} · ${cap(inv.status)}`, keywords: `${inv.category} ${inv.toEmail ?? ''}`,
+          hint: `${c.name} · ${cap(invoiceStateWithDeposits(inv, today(), c.business?.banking?.deposits ?? []))}`, keywords: `${inv.category} ${inv.toEmail ?? ''}`,
           run: () => jump(c.id, 'finance', st => st.setBizSub('invoices')),
         })
       }

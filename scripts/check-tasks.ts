@@ -150,9 +150,11 @@ const artist = {
       { id: 'i-early', number: 'INV-1', to: 'Fabric', status: 'overdue', dueDate: '2026-10-01' },
       { id: 'i-paid', number: 'INV-0', to: 'Old', status: 'paid', dueDate: '2026-09-01' },
       { id: 'i-void', number: 'INV-X', to: 'Nobody', status: 'void', dueDate: '2026-09-02' },
+      { id: 'i-covered', number: 'INV-C', to: 'Covered', status: 'sent', dueDate: '2026-09-30', currency: 'USD', items: [{ description: 'x', quantity: 1, rate: 500 }] },
     ],
     expenses: [{ id: 'e-open', vendor: 'Hertz', description: 'Van', paid: false, date: '2026-10-10' }, { id: 'e-paid', vendor: 'Done', description: '', paid: true, date: '2026-10-01' }],
   },
+  business: { banking: { deposits: [{ invoiceId: 'i-covered', amount: 500, currency: 'USD' }] } },
   legal: { contracts: [{ id: 'c-live', title: 'Label deal', status: 'signed' }, { id: 'c-old', title: 'Old deal', status: 'expired' }, { id: 'c-end', title: 'Ended', status: 'terminated' }] },
   projects: [{ id: 'p-open', title: 'Press photos', status: 'in-progress' }, { id: 'p-done', title: 'Done thing', status: 'done' }],
 } as unknown as Client
@@ -168,7 +170,7 @@ assert.deepEqual(labelsOf('Offers'), ['Sound · LA · 11-15', 'Razzmatazz · Bar
 // songs across every release, untitled ones named
 assert.deepEqual(labelsOf('Songs'), ['Golden Hour', 'Untitled', 'Long Time'])
 // invoices not yet paid, earliest due first; bills not yet paid; contracts that are still alive; projects not done
-assert.deepEqual(labelsOf('Invoices'), ['INV-1 · Fabric', 'INV-2 · Sound LA'])
+assert.deepEqual(labelsOf('Invoices'), ['INV-1 · Fabric', 'INV-2 · Sound LA'])   // INV-C is not here: its deposits cover it
 assert.deepEqual(labelsOf('Bills'), ['Hertz'])
 assert.deepEqual(labelsOf('Contracts'), ['Label deal'])
 assert.deepEqual(labelsOf('Projects'), ['Press photos'])

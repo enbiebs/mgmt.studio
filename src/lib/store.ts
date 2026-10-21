@@ -38,13 +38,13 @@ import { addOrReuse, applyPersonPatch, emailTakenMessage } from '@/lib/people-de
 import { kindNoun, restoreByFor, restoreNote, screenSectionOf, type RestoreBy, type TrashKind } from '@/lib/trash'
 import { trashAndDelete, type TrashDeps } from '@/lib/trash-flow'
 import { loadTrashItem, restoreTrash, trashDelete } from '@/lib/trash-db'
-import { fmtAmount } from '@/lib/forecast'
 import { nextPosition, pointsFor, MAX_AGENDA_POINTS } from '@/lib/agenda'
 import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE, today as localToday } from '@/lib/utils'
 import { snapshotOf, newLine, frozenRates, makeConverter, settlementEarned, addMissingCrewFees, withoutAddedCrewFees, BUCKET_LABEL, type FxRates } from '@/lib/budget'
 import { buildBudgetFromOffer, currencyFormatter, fillFromOffer, type FillResult } from '@/lib/budget-assumptions'
 import { balanceOf } from '@/lib/settlement-math'
-import { showNet } from '@/lib/money'
+import { invoiceOutstanding, r2, showNet, unloggedWhenPaid } from '@/lib/money'
+import { fmtAmount } from '@/lib/forecast'
 import { afterOfferDeleted, afterShowDeleted } from '@/lib/delete-effects'
 import type { InboxChoice } from '@/lib/inbox'
 import { SHOW_UNFINISHED_KEY } from '@/lib/unfinished'
@@ -164,6 +164,46 @@ function deleteViaTrash(a: {
       trashId && by === 'you' ? { label: 'Undo', run: () => { void useStore.getState().restoreFromTrash(trashId) } } : undefined,
     )
   })
+}
+
+/**
+ * An invoice has just been marked paid (by hand, or by linking the bank payment that paid it). Nothing is invented: if deposits had
+ * already part-paid it, the rest is said to have arrived but is not logged, so the message says how much, with a button that opens the
+ * deposit form already filled in (the person knows the real amount and date). And if a settlement for the same show still shows a
+ * balance, say so: nothing updates that on its own.
+ */
+function afterInvoiceMarkedPaid(invoiceId: string) {
+  const note = invoiceFollowUp(invoiceId, 'paid')
+  if (note) notify(note.text, note.action)
+}
+
+/**
+ * A deposit has just been logged against an invoice. Same idea as above: nothing is changed on its own. If the invoice is marked paid
+ * and still has money that no deposit accounts for, or a settlement for the same show still shows a balance, say so.
+ */
+function afterDepositLogged(invoiceId: string) {
+  const note = invoiceFollowUp(invoiceId, 'deposit')
+  if (note) notify(note.text, note.action)
+}
+
+/** What to tell the person about an invoice after its payment was recorded one way or another (null when there is nothing to say). */
+function invoiceFollowUp(invoiceId: string, because: 'paid' | 'deposit'): { text: string; action?: { label: string; run: () => void } } | null {
+  const st = useStore.getState()
+  const clientId = st.clientId
+  const client = st.data.clients.find(c => c.id === clientId)
+  const inv = client?.finance?.invoices.find(i => i.id === invoiceId)
+  if (!client || !clientId || !inv) return null
+  const unlogged = inv.status === 'paid' ? unloggedWhenPaid(inv, client.business.banking.deposits) : 0
+  const owing = r2((client.finance.settlements ?? [])
+    .filter(se => se.currency === inv.currency && se.showIds.some(id => client.tour.shows.find(sh => sh.id === id)?.invoiceId === inv.id))
+    .map(se => balanceOf(se)).filter(b => b > 0.005).reduce((a, b) => a + b, 0))
+  // After a deposit, a settlement is only worth a mention when it shows more than the invoice itself still has due (so it cannot already be counting this payment).
+  const mentionSettlement = because === 'paid' ? owing > 0.005 : owing > invoiceOutstanding(inv, client.business.banking.deposits) + 0.005
+  if (unlogged <= 0.005 && !mentionSettlement) return null
+  const parts = [because === 'paid' ? `Marked ${inv.number} as paid.` : `Logged the deposit for ${inv.number}.`]
+  if (unlogged > 0.005) parts.push(`${fmtAmount(unlogged, inv.currency)} of it is not logged as a deposit yet.`)
+  if (mentionSettlement) parts.push(`The settlement for it still shows ${fmtAmount(owing, inv.currency)} owed: record a payment there too if it was the same money.`)
+  return { text: parts.join(' '), action: unlogged > 0.005 ? { label: 'Log the deposit', run: () => useStore.getState().requestDepositAdd(inv.id, clientId) } : undefined }
 }
 
 /** A person who could not be saved says so, instead of looking saved on screen. */
@@ -390,7 +430,10 @@ interface StudioState {
   clearOfferPasteRequest: () => void
   requestOfferAdd: () => void
   clearOfferAddRequest: () => void
-  requestDepositAdd: () => void
+  /** Opens the deposit form (for one invoice, filled in, when an id is given). */
+  /** Opens the deposit form. With an invoice it opens that artist's Banking screen with the form filled in for it (the artist may have been closed since). */
+  requestDepositAdd: (invoiceId?: string, clientId?: string) => void
+  depositAddInvoiceId: string | null
   /** The Trash list is asked to open (from the command bar); the Activity screen reads this. */
   trashRequest: boolean
   requestTrash: () => void
@@ -675,6 +718,7 @@ export const useStore = create<StudioState>((set, get) => ({
   offerAddRequest: false,
   depositAddRequest: false,
   trashRequest: false,
+  depositAddInvoiceId: null,
   selectedAlbumId: null,
   studioConcept: null,
 
@@ -940,8 +984,12 @@ export const useStore = create<StudioState>((set, get) => ({
   clearOfferPasteRequest: () => set({ offerPasteRequest: false }),
   requestOfferAdd: () => set({ offerAddRequest: true }),
   clearOfferAddRequest: () => set({ offerAddRequest: false }),
-  requestDepositAdd: () => set({ depositAddRequest: true }),
-  clearDepositAddRequest: () => set({ depositAddRequest: false }),
+  requestDepositAdd: (invoiceId, clientId) => {
+    if (!invoiceId) { set({ depositAddRequest: true, depositAddInvoiceId: null }); return }
+    if (clientId && clientId !== get().clientId) get().openClient(clientId)
+    set({ view: 'studio', section: 'finance', bizSub: 'banking', selectedShowId: null, depositAddRequest: true, depositAddInvoiceId: invoiceId })
+  },
+  clearDepositAddRequest: () => set({ depositAddRequest: false, depositAddInvoiceId: null }),
   requestTrash: () => set({ trashRequest: true }),
   clearTrashRequest: () => set({ trashRequest: false }),
 
@@ -1983,6 +2031,7 @@ export const useStore = create<StudioState>((set, get) => ({
       const invoice = updated.clients.find(c => c.id === clientId)?.finance?.invoices.find(i => i.id === affectedInvoiceId)
       if (invoice) upsertInvoice(invoice, clientId!).catch(console.error)
     }
+    if (invoiceId) afterInvoiceMarkedPaid(invoiceId)          // linking the payment marks the invoice paid, so the same follow-up applies
   },
 
   addCatalogWork: (patch) => {
@@ -2097,6 +2146,7 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     if (workspaceId && clientId && updatedInvoice) upsertInvoice(updatedInvoice, clientId).catch(console.error)
+    if (status === 'paid') afterInvoiceMarkedPaid(invoiceId)
   },
 
   deleteInvoice: (invoiceId) => {
@@ -3331,6 +3381,7 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     if (workspaceId && clientId) upsertDeposit(newDeposit, clientId).catch(console.error)
+    if (invoiceId) afterDepositLogged(invoiceId)
   },
 
   markDepositDone: (depositId) => {

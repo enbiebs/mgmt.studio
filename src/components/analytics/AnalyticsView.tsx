@@ -27,7 +27,7 @@ export function AnalyticsView() {
       {client.isDemo && (
         <div className="px-4 py-1.5 bg-amber-50 border-b border-amber-100 text-[11px] text-amber-800">
           <span className="font-semibold uppercase tracking-wide mr-2">Sample data</span>
-          These numbers are made up for the demo. A real artist&apos;s analytics are connected to their accounts.
+          These numbers are made up for the demo.
         </div>
       )}
       {/* Panel */}

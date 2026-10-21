@@ -12,6 +12,7 @@ import type { Client, MainSection, UserRole } from '@/types'
 import { dueState, eventState, type DateState } from '@/lib/date-state'
 import { effectiveStatus } from '@/lib/contract-status'
 import { today as todayStr } from '@/lib/utils'
+import { invoiceStateWithDeposits } from '@/lib/money'
 
 export type CalendarEventDomain = 'show' | 'release' | 'post' | 'invoice' | 'contract' | 'project' | 'bill' | 'offer'
 
@@ -82,8 +83,10 @@ export function getCalendarEvents(
   }
 
   if (canSee('invoice')) {
+    const deposits = client.business?.banking?.deposits ?? []
     for (const i of client.finance.invoices) {
       if (i.status !== 'sent' && i.status !== 'overdue') continue
+      if (invoiceStateWithDeposits(i, today, deposits) === 'paid') continue        // its deposits cover it: nothing is due
       events.push({ id: `invoice-${i.id}`, date: i.dueDate, domain: 'invoice', title: `Invoice due — ${i.to}`, subtitle: i.number, state: dueState(i.dueDate, today) })
     }
   }

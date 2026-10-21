@@ -3,10 +3,11 @@
 import assert from 'node:assert/strict'
 import { assembleWorkspace } from '../src/lib/db'
 import { DEMO_CLIENT_ID, buildDemoRows, type DemoContext } from '../src/lib/demo-seed'
-import { INSERT_ORDER, TABLES, demoSql, toWorkspaceRows, validateRows } from '../src/lib/demo-sql'
+import { CASCADE_FROM, INSERT_ORDER, PARENTS, REMOVE_FIRST, TABLES, demoSql, toWorkspaceRows, validateRows } from '../src/lib/demo-sql'
 import { STEPS, progressForShow } from '../src/lib/show-progress'
 import { buildInbox } from '../src/lib/inbox'
 import { buildForecast } from '../src/lib/forecast'
+import { latestSheet } from '../src/lib/offer-sheet'
 import { buildPL, totalExpenses, totalRevenue } from '../src/lib/ledger'
 import { balanceOf, checkSettlement, paidSoFar } from '../src/lib/settlement-math'
 import { contractAlerts, effectiveStatus } from '../src/lib/contract-status'
@@ -19,7 +20,7 @@ import { duplicateGroups } from '../src/lib/people-dedupe'
 import type { Client } from '../src/types'
 
 const OWNER = 'f7303cf1-f728-46a2-a861-dc7787c00d9c'
-const ctxFor = (anchor: string): DemoContext => ({ anchor, clientId: DEMO_CLIENT_ID, workspaceId: '873c4c0d-be6a-4ce3-9013-4755a5596299', ownerUserId: OWNER })
+const ctxFor = (anchor: string): DemoContext => ({ anchor, clientId: DEMO_CLIENT_ID, ownerUserId: OWNER })
 const ACCESS = { finance: true, tour: true, deals: true, legal: true, projects: true }
 const LIVE_RATES = { EUR: 1.08, GBP: 1.27 }
 
@@ -31,6 +32,12 @@ function load(anchor: string) {
 }
 const byVenue = (c: Client, text: string) => c.tour.shows.find(s => s.venue.includes(text))!
 const ruleSet = (c: Client, anchor: string) => buildInbox(c, anchor, ACCESS)
+
+/** From the first month with any figures to the last month of records, no month is empty. */
+function plIsContinuous(months: { month: string; source: string }[]): boolean {
+  const first = months.findIndex(m => m.source !== 'none'), last = months.map(m => m.source).lastIndexOf('records')
+  return first >= 0 && months.slice(first, last + 1).every(m => m.source !== 'none')
+}
 
 function checkStory(anchor: string) {
   const { rows, client: c } = load(anchor)
@@ -117,6 +124,29 @@ function checkStory(anchor: string) {
     const failed = checkSettlement(st, st.currency).filter(x => !x.ok)
     assert.deepEqual(failed, [], say(`${st.venue}: every sum on the settlement adds up`))
   }
+  // one currency per show (its fee, invoice, settlement and every deposit), and "received" is exactly the deposits recorded for the show
+  const deposits = c.business.banking.deposits
+  for (const show of c.tour.shows) {
+    const forShow = deposits.filter(d => d.id.startsWith(`dn-dep-${show.id.replace('dn-show-', '')}-`))
+    const cur = show.currency ?? 'USD'
+    assert.equal(forShow.reduce((a, d) => a + d.amount, 0), show.received ?? 0, say(`${show.venue}: "received" is exactly the deposits recorded for it`))
+    assert.ok(forShow.every(d => d.currency === cur), say(`${show.venue}: its deposits are in the show's currency`))
+    const invoice = show.invoiceId ? c.finance.invoices.find(i => i.id === show.invoiceId) : undefined
+    if (invoice) assert.equal(invoice.currency, cur, say(`${show.venue}: the invoice is in the show's currency`))
+    for (const st of c.finance.settlements!.filter(x => x.showIds.includes(show.id))) assert.equal(st.currency, cur, say(`${show.venue}: the settlement is in the show's currency`))
+  }
+  for (const d of deposits.filter(x => x.invoiceId)) assert.equal(d.currency, c.finance.invoices.find(i => i.id === d.invoiceId)!.currency, say(`${d.name}: a deposit pays an invoice in the invoice's own currency`))
+
+  // offer sheets: what the artist approved is built from the same offer, so it cannot disagree with it
+  const sheets = c.tour.offerSheets ?? []
+  assert.equal(sheets.length, 2, say('two offer sheets'))
+  for (const sheet of sheets) {
+    const offer = offers.find(o => o.id === sheet.offerId)!
+    assert.equal(sheet.status, 'approved'); assert.equal(latestSheet(sheets, offer.id)?.id, sheet.id)
+    assert.deepEqual([sheet.snapshot.offer.venue, sheet.snapshot.offer.date, sheet.snapshot.offer.guarantee, sheet.snapshot.offer.promoter], [offer.venue, offer.date, offer.guarantee, offer.promoter], say(`${offer.venue}: the sheet says what the offer says`))
+    assert.ok(sheet.sentAt.slice(0, 10) < offer.date && sheet.snapshot.sentOn! < offer.date, say(`${offer.venue}: the sheet went out before the show`))
+  }
+
   // the settled P&L and the budget tell the same story (within a sensible margin on each cost)
   for (const show of past) {
     const budget = c.finance.budgets.find(b => b.showId === show.id)!
@@ -142,8 +172,9 @@ function checkStory(anchor: string) {
   const inbox = ruleSet(c, anchor)
   const by = (rule: string) => inbox.filter(i => i.rule === rule)
   assert.equal(by('invoice').length, 1); assert.equal(by('invoice')[0].severity, 'urgent'); assert.match(by('invoice')[0].title, /INV-1002 .* 5 days overdue/)
+  assert.equal(by('invoice')[0].amount, 6000, say('Home chases what is still owed on INV-1002 ($22,000 less the $16,000 already paid), not the whole invoice'))
   assert.deepEqual(by('bill').map(b => b.severity).sort(), ['soon', 'urgent'])
-  assert.equal(by('balance').length, 1); assert.equal(by('balance')[0].amount, 6000)
+  assert.equal(by('balance').length, 0, say('the Printworks balance is the invoice above, so it is not listed a second time'))
   assert.equal(by('receivable').length, 1); assert.match(by('receivable')[0].title, /Tresor/)                       // the Tresor deposit is late
   assert.deepEqual(by('contract').map(i => i.severity).sort(), ['soon', 'urgent'])
   assert.equal(by('offer_reply').length, 1); assert.match(by('offer_reply')[0].title, /Berghain/)
@@ -158,6 +189,7 @@ function checkStory(anchor: string) {
   const fc = buildForecast(c, anchor)
   assert.equal(fc.filter(f => f.kind === 'installment' && f.late).length, 1, say('one deposit expected and not recorded'))
   assert.ok(fc.some(f => f.kind === 'invoice' && f.date === T(12)), say('the next brand instalment is on the forecast'))
+  assert.deepEqual(fc.filter(f => /Printworks/i.test(f.title)).map(f => [f.kind, f.amount]), [['invoice', 6000]], say('Printworks owes $6,000 once: one line, not an invoice plus a settlement balance'))
 
   // ── the P&L comes from these records: through this month, counted once, in the right currencies ──
   const pl = buildPL(c, anchor)
@@ -168,10 +200,12 @@ function checkStory(anchor: string) {
   const recordMonthsUsd = usd.filter(m => m.source === 'records')
   assert.equal(usd.filter(m => m.source === 'typed').length, 6, say('six typed months of history'))
   assert.ok(usd.findIndex(m => m.source === 'records') > usd.map(m => m.source).lastIndexOf('typed'), say('typed history ends before the records begin'))
-  assert.equal(recordMonthsUsd.reduce((a, m) => a + totalRevenue(m), 0), 146490, say('revenue is each deposit once (invoices a deposit paid are not counted again)'))
+  assert.equal(recordMonthsUsd.reduce((a, m) => a + totalRevenue(m), 0), 153990, say('revenue is each deposit once (invoices a deposit paid are not counted again)'))
   assert.equal(recordMonthsUsd.reduce((a, m) => a + totalExpenses(m), 0), 17900, say('paid dollar bills only'))
   assert.equal(gbp.filter(m => m.source === 'records').reduce((a, m) => a + totalExpenses(m), 0), 2490, say('paid pound bills, never added into dollars'))
   assert.equal(gbp.reduce((a, m) => a + totalRevenue(m), 0), 0)
+  assert.ok(plIsContinuous(usd) && plIsContinuous(gbp), say('no empty month between the first month with figures and the last record, in dollars or pounds'))
+  assert.ok(usd.at(-1)!.source === 'records' && totalRevenue(usd.at(-1)!) + totalExpenses(usd.at(-1)!) > 0, say('the current month has figures in it, not an empty row'))
   assert.ok(usd.slice(-4).every(m => m.source !== 'none' || m.month >= T(0).slice(0, 7)), say('no quiet gaps in the last months'))
 
   // ── a person can find things ──
@@ -202,6 +236,17 @@ checkStory('2027-01-31')                                    // a month end
 checkStory('2028-02-29')                                    // a leap day
 checkStory('2026-12-30')                                    // across a year end
 
+// ── on every day of a year (and across a leap day) the rows are valid and the P&L has no empty month ──
+for (let i = 0; i < 400; i++) {
+  const anchor = new Date(Date.UTC(2027, 11, 20) + i * 86400000).toISOString().slice(0, 10)
+  const { rows, client } = load(anchor)
+  assert.deepEqual(validateRows(rows), [], `rows are valid on ${anchor}`)
+  const pl = buildPL(client, anchor)
+  assert.ok(plIsContinuous(pl.months.USD) && plIsContinuous(pl.months.GBP), `no empty P&L month between the first figures and the last record on ${anchor}`)
+  const thisMonth = pl.months.USD.at(-1)!
+  assert.ok(thisMonth.month === anchor.slice(0, 7) && totalRevenue(thisMonth) + totalExpenses(thisMonth) > 0, `the current month has figures on ${anchor}`)
+}
+
 // ── every date is counted from the anchor: seeding a week later moves the whole story a week, nothing else changes ──
 const normalise = (anchor: string, rows: ReturnType<typeof buildDemoRows>) => {
   const { pl_months: _p, ...rest } = rows
@@ -220,8 +265,28 @@ for (const [table, list] of Object.entries(rowsToday)) {
 // ── the SQL ──
 const sql = demoSql(ctxFor(A), rowsToday)
 assert.ok(sql.startsWith('do $demo$') && sql.trimEnd().endsWith('$demo$;'))
-assert.ok(!sql.includes('raise exception'), 'the real run does not roll itself back')
+assert.ok(!sql.includes('DEMO SEED DRY RUN'), 'the real run does not roll itself back (only the guards can stop it)')
 assert.ok(demoSql(ctxFor(A), rowsToday, { dryRun: true }).includes("raise exception 'DEMO SEED DRY RUN OK (rolled back)'"))
+// every delete is scoped to the demo artist (or to the demo artist's own dismissed-alert keys), and nothing else can be deleted
+const deleteLines = sql.split('\n').filter(l => /^\s*delete from/.test(l))
+assert.equal(deleteLines.length, REMOVE_FIRST.length + 2, 'one delete per table, plus the activity history and dismissed alerts')
+for (const l of deleteLines) assert.match(l, /^delete from public\.[a-z_]+ where (client_id = 'demo-nova-lane'|item_key like '%:demo-nova-lane:%');$/, `scoped to the demo artist: ${l}`)
+assert.ok(!/\bdelete from public\.[a-z_]+;/.test(sql) && !/\btruncate\b/i.test(sql) && !/\bdrop\b/i.test(sql.replace(/'[^']*'/g, '')), 'nothing deletes without a where, truncates or drops')
+// every table the seed writes is cleared first: directly, or by a cascade from a table that is
+const clearedBy = (t: string, seen: string[] = []): boolean => REMOVE_FIRST.includes(t) || (!!CASCADE_FROM[t] && !seen.includes(t) && clearedBy(CASCADE_FROM[t], [...seen, t]))
+for (const t of INSERT_ORDER) assert.ok(clearedBy(t), `${t} is cleared before it is written again`)
+for (const t of REMOVE_FIRST) assert.ok(TABLES[t]?.columns.includes('client_id') || ['tasks', 'agenda_points', 'item_access'].includes(t), `${t} can be cleared by artist`)
+// parents are written before their children
+for (const [child, parents] of Object.entries(PARENTS)) for (const parent of parents) assert.ok(INSERT_ORDER.indexOf(parent) >= 0 && INSERT_ORDER.indexOf(parent) < INSERT_ORDER.indexOf(child), `${parent} is written before ${child}`)
+// it stops before changing anything unless this is the owner's demo artist and no login or invitation is tied to a demo person
+assert.ok(sql.indexOf('Stopped: ') > 0 && sql.indexOf('Stopped: ') < sql.indexOf('delete from'), 'the guards come before the first delete')
+assert.match(sql, /demo_owner = 'f7303cf1-f728-46a2-a861-dc7787c00d9c'::uuid/); assert.match(sql, /workspace_members m join public\.people p/); assert.match(sql, /pending_invites i join public\.people p/)
+assert.match(sql, /delete from public\.inbox_state where item_key like '%:demo-nova-lane:%';/, 'alerts marked done are forgotten, so the demo starts fresh')
+// bad input is refused before any SQL exists
+assert.throws(() => demoSql(ctxFor('2026-02-31'), rowsToday), /real day/)
+assert.throws(() => demoSql(ctxFor('26-10-19'), rowsToday), /real day/)
+assert.throws(() => demoSql({ ...ctxFor(A), ownerUserId: 'abc$demo$; drop table shows; --' }, rowsToday), /uuid/)
+assert.throws(() => demoSql({ ...ctxFor(A), clientId: "x'; drop table shows; --" }, rowsToday), /lower-case letters/)
 assert.match(sql, /delete from public\.deposits where client_id = 'demo-nova-lane';/)
 assert.match(sql, /delete from public\.activity_log where client_id = 'demo-nova-lane';/)
 assert.match(sql, /delete from public\.item_access where client_id = 'demo-nova-lane';/)

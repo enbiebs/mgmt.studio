@@ -10,7 +10,7 @@ import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { ItemTodos } from '@/components/dashboard/ItemTodos'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { addDays, today as localToday } from '@/lib/utils'
-import { formatTotals, invoiceState, invoiceTotal as invTotal, sumByCurrency } from '@/lib/money'
+import { formatTotals, invoiceOutstanding, invoiceStateWithDeposits, invoiceTotal as invTotal, owedByCurrency, sumByCurrency, unloggedWhenPaid } from '@/lib/money'
 import type { Invoice, InvoiceStatus, Currency, RevenueStream, BankTransaction } from '@/types'
 
 export const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string; bg: string }> = {
@@ -33,10 +33,6 @@ function fmtDate(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-export function isOverdue(inv: Invoice) {
-  return invoiceState(inv, localToday()) === 'overdue'
-}
-
 type InvFilter = 'all' | InvoiceStatus
 
 export function InvoicesView() {
@@ -47,17 +43,19 @@ export function InvoicesView() {
   const [addOpen, setAddOpen] = useState(false)
 
   if (!client) return null
-  // The due date decides what is overdue, the same way it does on Home, in the forecast and on the show's progress bar.
+  // The due date decides what is overdue, and deposits that add up to the whole invoice make it paid, the same way as on Home, in the
+  // forecast and on the show's progress bar.
   const day = localToday()
-  const invoices = (client.finance?.invoices ?? []).map(inv => ({ ...inv, status: invoiceState(inv, day) }))
+  const deposits = client.business?.banking?.deposits ?? []
+  const invoices = (client.finance?.invoices ?? []).map(inv => ({ ...inv, status: invoiceStateWithDeposits(inv, day, deposits) }))
+  const stillDue = (inv: Invoice) => invoiceOutstanding(inv, deposits)          // the invoice's total less the deposits that paid part of it
 
   const outstanding = invoices.filter(i => i.status === 'sent' || i.status === 'overdue')
   const overdue     = invoices.filter(i => i.status === 'overdue')
   // Totals are kept per currency: pounds and euros are never added into a dollar figure.
-  const totalOf = (list: Invoice[]) => formatTotals(sumByCurrency(list, invTotal, i => i.currency)) || fmt(0)
-  const totalPaid   = totalOf(invoices.filter(i => i.status === 'paid'))
-  const totalOut    = totalOf(outstanding)
-  const totalOverdue= totalOf(overdue)
+  const totalPaid   = formatTotals(sumByCurrency(invoices.filter(i => i.status === 'paid'), invTotal, i => i.currency)) || fmt(0)
+  const totalOut    = formatTotals(owedByCurrency(outstanding, deposits)) || fmt(0)
+  const totalOverdue= formatTotals(owedByCurrency(overdue, deposits)) || fmt(0)
 
   const filtered = filter === 'all' ? invoices : invoices.filter(i => i.status === filter)
   const sorted   = [...filtered].sort((a, b) => b.issuedDate.localeCompare(a.issuedDate))
@@ -144,7 +142,16 @@ export function InvoicesView() {
                     {fmtDate(inv.dueDate)}
                     {inv.status === 'overdue' && <div className="text-[10px]">OVERDUE</div>}
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold">{fmt(total, inv.currency)}</td>
+                  <td className="px-4 py-3 text-right font-semibold">
+                    {fmt(total, inv.currency)}
+                    {(inv.status === 'sent' || inv.status === 'overdue') && stillDue(inv) < total - 0.005 && (
+                      <div className="text-[10px] font-normal text-gray-500">{fmt(stillDue(inv), inv.currency)} still due</div>
+                    )}
+                    {/* Marked paid, but deposits only account for part of it: the profit & loss counts the deposits, so say what is missing. */}
+                    {inv.status === 'paid' && unloggedWhenPaid(inv, deposits) > 0.005 && (
+                      <div className="text-[10px] font-normal text-amber-600">{fmt(unloggedWhenPaid(inv, deposits), inv.currency)} not logged as a deposit</div>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${cfg.bg} ${cfg.color}`}>
                       {cfg.label}

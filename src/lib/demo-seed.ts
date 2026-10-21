@@ -12,24 +12,23 @@
 // ──────────────────────────────────────────────────────────
 
 import { addDays } from '@/lib/utils'
+import { r2 } from '@/lib/money'
+import { buildOfferSheetSnapshot } from '@/lib/offer-sheet'
 import { defaultChecklist } from '@/lib/utils'
 import { BUCKET_LABEL, DEFAULT_COMMISSIONS, crewLineAmount, crewPerDiem, snapshotOf } from '@/lib/budget'
 import { TRAVEL_BUCKET, computeTravelLines, promoterCovers, type PromoterCovers } from '@/lib/budget-assumptions'
-import type { Budget, BudgetAssumptions, BudgetBucket, BudgetCommission, BudgetLine, CrewRate, OfferTerms } from '@/types'
+import type { Budget, BudgetAssumptions, BudgetBucket, BudgetCommission, BudgetLine, Client, CrewRate, OfferTerms, TourOffer } from '@/types'
 
 export const DEMO_CLIENT_ID = 'demo-nova-lane'
 
 export interface DemoContext {
   anchor: string          // "today" for the demo, YYYY-MM-DD
   clientId: string
-  workspaceId: string
   ownerUserId: string     // the demo's owner: projects given to "me" go to them
 }
 
 export type Row = Record<string, unknown>
 export type DemoRows = Record<string, Row[]>
-
-const money = (n: number) => Math.round(n * 100) / 100
 
 export function buildDemoRows(ctx: DemoContext): DemoRows {
   const { anchor, clientId: cid, ownerUserId } = ctx
@@ -37,7 +36,6 @@ export function buildDemoRows(ctx: DemoContext): DemoRows {
   const TS = (n: number, hhmm = '12:00') => `${D(n)}T${hhmm}:00Z`          // a moment, counted from the anchor
   const AT = (n: number, hhmm: string) => `${D(n)}T${hhmm}`                // a local time (flights)
   const id = (...parts: (string | number)[]) => ['dn', ...parts].join('-')
-  const year = anchor.slice(0, 4)
 
   // ── People, crew ─────────────────────────────────────────
   const P = { nova: id('p', 'nova'), marco: id('p', 'marco'), sam: id('p', 'sam'), priya: id('p', 'priya'), dana: id('p', 'dana'), jo: id('p', 'jo') }
@@ -143,7 +141,7 @@ export function buildDemoRows(ctx: DemoContext): DemoRows {
       seats: '3', person_ids: party, notes: null,
     })),
     ...HOTELS.map(h => ({
-      id: h.id, client_id: cid, show_id: null, kind: 'hotel', status: h.status, confirmation_code: h.stay.code || null, cost: h.status === 'needed' ? null : money(stayCost(h.stay)), currency: h.stay.currency,
+      id: h.id, client_id: cid, show_id: null, kind: 'hotel', status: h.status, confirmation_code: h.stay.code || null, cost: h.status === 'needed' ? null : r2(stayCost(h.stay)), currency: h.stay.currency,
       hotel_name: h.stay.name, address: h.stay.address, phone: h.stay.phone, check_in: D(h.checkIn), check_out: D(h.checkIn + h.stay.nights), room_count: h.stay.rooms, room_type: 'King', person_ids: party, notes: null,
     })),
     ...GROUND.map(g => ({
@@ -238,10 +236,12 @@ export function buildDemoRows(ctx: DemoContext): DemoRows {
     id: id('dep', key), client_id: cid, name, date: D(day), amount, currency: 'USD', mgmt: 0.15, lawyer: o.lawyer ?? 0, taxes: 0.2, done: o.done ?? true, invoice_id: o.invoice ?? null,
   })
   // The same split on every deposit (15% management, 20% taxes, and 5% to the lawyer on sync and brand deals), so there is a rule behind each one.
+  // A deposit for a show is named dn-dep-<show>-... so a check can prove the show's "received" figure is exactly the deposits recorded for it.
   const deposits: Row[] = [
     dep('pioneer-q3', 'Pioneer DJ brand instalment', -94, 11250, { invoice: INV.pioneerQ3, lawyer: 0.05 }),
     dep('hbo', 'HBO sync fee', -80, 42000, { invoice: INV.hbo, lawyer: 0.05 }),
     dep('brooklyn-deposit', 'Avant Gardner deposit', -75, 12500, { invoice: INV.brooklyn }),
+    dep('fabric-deposit', 'Fabric show deposit', -22, 7500),
     dep('bmi-1', 'BMI ROYALTY DIST', -62, 18900),
     dep('printworks-deposit', 'Printworks London deposit', -58, 11000, { invoice: INV.printworks }),
     dep('brooklyn-balance', 'Avant Gardner balance', -40, 12500, { invoice: INV.brooklyn }),
@@ -269,7 +269,7 @@ export function buildDemoRows(ctx: DemoContext): DemoRows {
     exp('van-printworks', 'Vans Ltd', 'vans', 'Sprinter van hire, Printworks London', 640, 'GBP', 'travel', -29, true, { due: -22, no: 'V-1029' }),
     exp('marketing-1', 'Atlas Digital', 'atlas', 'Marketing retainer', 4500, 'USD', 'marketing', -61, true, { due: -54, no: 'AD-0914' }),
     exp('marketing-2', 'Atlas Digital', 'atlas', 'Marketing retainer', 4500, 'USD', 'marketing', -31, true, { due: -24, no: 'AD-1015' }),
-    exp('marketing-3', 'Atlas Digital', 'atlas', 'Marketing retainer', 4500, 'USD', 'marketing', -2, true, { due: 5, no: 'AD-1116' }),
+    exp('marketing-3', 'Atlas Digital', 'atlas', 'Marketing retainer', 4500, 'USD', 'marketing', 0, true, { due: 5, no: 'AD-1116' }),   // paid today, so the current month of the P&L is never empty
     exp('studio', 'Studio 4A', 'studio', 'Studio time for the Night Shift mix', 3200, 'USD', 'recording', -12, true, { due: -5, no: 'S4-5530' }),
     exp('van-europe', 'Vans Ltd', 'vans', 'Sprinter van hire, Fabric and Tresor', 720, 'GBP', 'travel', -1, false, { due: 3, no: 'V-1090', run: RUN }),
     exp('legal', 'Hartley & Co', 'hartley', 'Contract review for the agency renewal', 2500, 'USD', 'legal', -26, false, { due: -6, no: 'HC-3317' }),
@@ -290,9 +290,11 @@ export function buildDemoRows(ctx: DemoContext): DemoRows {
   ]
   const line = (key: string, bucket: BudgetBucket, label: string, amount: number, section: BudgetLine['section'] = 'production'): BudgetLine => ({ id: id('bl', key, bucket), section, bucket, label, amount })
   const budgets: Row[] = []
+  const budgetObjs: Record<string, Budget> = {}
   const addBudget = (key: string, showKey: keyof typeof S, offerKey: keyof typeof O, name: string, status: Budget['status'], lines: BudgetLine[], assumptions?: BudgetAssumptions) => {
     const comms = commissions(key)
     const b: Budget = { id: id('b', key), offerId: O[offerKey], showId: S[showKey], name, currency: 'USD', status, version: status === 'locked' ? 2 : 1, lines, commissions: comms }
+    budgetObjs[key] = b
     budgets.push({
       id: b.id, client_id: cid, offer_id: b.offerId, show_id: b.showId, run_id: null, name, currency: 'USD', status, version: b.version, lines, commissions: comms, notes: null,
       original: status === 'locked' ? snapshotOf({ ...b, version: 1 }) : null, locked_at: status === 'locked' ? TS(-70) : null, assumptions: assumptions ?? null,
@@ -323,11 +325,23 @@ export function buildDemoRows(ctx: DemoContext): DemoRows {
     ...withAssumptions('tresor', aTresor, promoterCovers(offerTerms[O.tresor], (n, from, to) => (from === to ? n : n), 'USD')), line('tresor', 'insurance', BUCKET_LABEL.insurance, 150),
   ], aTresor)
 
+  // ── Offer sheets: what was sent to the artist for approval, built by the app's own sheet builder from the same offer and budget ──
+  const sheetOf = (key: 'fabric' | 'tresor', detail: 'full' | 'summary', sentDay: number, note: string): Row => {
+    const row = tour_offers.find(o => o.id === O[key])!
+    const offer = { venue: row.venue, city: row.city, country: row.country, date: row.date, promoter: row.promoter, guarantee: row.guarantee, terms: row.terms } as unknown as TourOffer
+    const snapshot = { ...buildOfferSheetSnapshot({ client: { name: 'Nova Lane (Demo)' } as Client, offer, budget: budgetObjs[key], detail }), sentOn: D(sentDay) }
+    return { id: id('os', key), client_id: cid, offer_id: O[key], version: 1, status: 'approved', detail, message: note, snapshot, sent_at: TS(sentDay), responded_at: TS(sentDay + 1), response_note: 'Approved. Looking forward to it.' }
+  }
+  const offer_sheets: Row[] = [
+    sheetOf('fabric', 'full', -26, 'Fabric London for the Europe run. The full breakdown is attached.'),
+    sheetOf('tresor', 'summary', -15, 'Tresor Berlin, straight after Fabric. A summary is attached.'),
+  ]
+
   // ── Music: releases, songs, checklist, credits, posts ────
   const A = { ep: id('a', 'night-shift'), single: id('a', 'reverie') }
   const albums: Row[] = [
-    { id: A.ep, client_id: cid, title: 'Night Shift EP', type: 'ep', release_date: D(35), upc: '196871234567', label: 'Defected Records', primary_artist: 'Nova Lane', genre: 'Electronic / House', copyright_p: `℗ ${year} Defected Records`, copyright_c: `© ${year} Nova Lane` },
-    { id: A.single, client_id: cid, title: 'Reverie', type: 'single', release_date: D(-120), upc: '196871233317', label: 'Defected Records', primary_artist: 'Nova Lane', genre: 'Electronic / House', copyright_p: `℗ ${year} Defected Records`, copyright_c: `© ${year} Nova Lane` },
+    { id: A.ep, client_id: cid, title: 'Night Shift EP', type: 'ep', release_date: D(35), upc: '196871234567', label: 'Defected Records', primary_artist: 'Nova Lane', genre: 'Electronic / House', copyright_p: `℗ ${D(35).slice(0, 4)} Defected Records`, copyright_c: `© ${D(35).slice(0, 4)} Nova Lane` },
+    { id: A.single, client_id: cid, title: 'Reverie', type: 'single', release_date: D(-120), upc: '196871233317', label: 'Defected Records', primary_artist: 'Nova Lane', genre: 'Electronic / House', copyright_p: `℗ ${D(-120).slice(0, 4)} Defected Records`, copyright_c: `© ${D(-120).slice(0, 4)} Nova Lane` },
   ]
   const T = { longTime: id('t', 'long-time'), nightShift: id('t', 'night-shift'), afterglow: id('t', 'afterglow'), static: id('t', 'static'), interlude: id('t', 'interlude'), reverie: id('t', 'reverie') }
   const track = (tid: string, album: string, num: number, title: string, stage: string, version: number, touched: string, o: Row): Row => ({
@@ -397,9 +411,14 @@ export function buildDemoRows(ctx: DemoContext): DemoRows {
   ]
   const client_finance_settings: Row[] = [{ client_id: cid, home_currency: 'USD', default_commissions: DEFAULT_COMMISSIONS }]
 
-  // Six typed months of history, all BEFORE the first record above, so the P&L never counts a month twice. (The management commission is the
+  // Six typed months of history, ending the month before the first record above, so the P&L never counts a month twice and has no gap. (The management commission is the
   // manager's income, not an expense on the artist's books, so it is zero here.)
-  const firstRecordMonth = addDays(anchor, -100).slice(0, 7)
+  const firstRecordDate = [
+    ...deposits.map(d => String(d.date)),
+    ...expenses.filter(e => e.paid).map(e => String(e.date)),
+    ...invoices.filter(i => i.status === 'paid').map(i => String(i.paid_date)),
+  ].sort()[0]
+  const firstRecordMonth = firstRecordDate.slice(0, 7)
   const monthsBefore = (month: string, n: number) => Array.from({ length: n }, (_, i) => {
     let [y, m] = month.split('-').map(Number); m -= n - i; while (m <= 0) { m += 12; y -= 1 }
     return `${y}-${String(m).padStart(2, '0')}`
@@ -434,7 +453,7 @@ export function buildDemoRows(ctx: DemoContext): DemoRows {
 
   return {
     vendors, runs, people, crew_members, crew_rates, albums, tracks, track_credits, checklist_items, release_stakeholders, posts, contracts,
-    invoices, invoice_line_items, tour_offers, shows, show_deals, budgets, settlements, settlement_shows, expenses, expense_shows, deposits,
+    invoices, invoice_line_items, tour_offers, shows, show_deals, budgets, offer_sheets, settlements, settlement_shows, expenses, expense_shows, deposits,
     royalty_streams, catalog_works, pl_months, client_finance_settings, show_advances, advance_contacts, guest_list_entries,
     travel_items, flight_legs, travel_item_shows, projects, artist_todos,
   }

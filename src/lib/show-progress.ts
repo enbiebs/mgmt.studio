@@ -12,7 +12,7 @@ import type { Client, Show, TourSub } from '@/types'
 import { dayDiff } from '@/lib/intelligence'
 import { balanceOf, money2 } from '@/lib/settlement-math'
 import { settlementForShow } from '@/lib/budget'
-import { invoiceState } from '@/lib/money'
+import { invoiceStateWithDeposits } from '@/lib/money'
 
 export const STEPS = [
   { key: 'offer',      label: 'Offer' },
@@ -64,6 +64,8 @@ export function progressForShow(client: Client, show: Show, today: string): Show
   const budget = (client.finance.budgets ?? []).find(b => b.showId === show.id)
   const settlement = settlementForShow(client, show.id)
   const invoice = show.invoiceId ? client.finance.invoices.find(i => i.id === show.invoiceId) : undefined
+  const deposits = client.business?.banking?.deposits ?? []
+  const invoiceStateOf = (inv: NonNullable<typeof invoice>) => invoiceStateWithDeposits(inv, today, deposits)   // deposits that add up to the invoice make it paid
   const away = dayDiff(show.date, today)             // days until the show; negative once it has happened
   const past = away < 0
   const lapsed = past && show.status === 'hold'      // a hold that was never confirmed before its date
@@ -77,7 +79,7 @@ export function progressForShow(client: Client, show: Show, today: string): Show
     travel: past || (travel.length > 0 && travelPending.length === 0),
     showday: past,
     settlement: !!settlement,
-    paid: invoice?.status === 'paid' || (!!settlement && owed <= 0.005),
+    paid: (!!invoice && invoiceStateOf(invoice) === 'paid') || (!!settlement && owed <= 0.005),
   }
   const open = (key: StepKey) => key === 'travel' && travel.length === 0 && !past
 
@@ -149,14 +151,14 @@ export function progressForShow(client: Client, show: Show, today: string): Show
     {
       key: 'settlement', label: 'Settlement', money: true, go: { section: 'tour', sub: 'settlements' },
       ...(!settlement ? (past ? { value: 'Not entered', tone: 'todo' as const } : { value: 'After the show', tone: 'quiet' as const })
-        : owed > 0.005 ? { value: `${money2(owed, settlement.currency)} owed`, tone: 'todo' as const }
+        : owed > 0.005 ? { value: `${money2(owed, settlement.currency)} owed${invoice && invoiceStateOf(invoice) === 'paid' ? ' (invoice paid)' : ''}`, tone: 'todo' as const }
         : { value: 'Paid in full', tone: 'ok' as const }),
     },
     {
       key: 'invoice', label: 'Invoice', money: true, go: { section: 'finance', sub: 'invoices' },
       ...(!invoice ? { value: 'None', tone: 'quiet' as const }
-        : invoiceState(invoice, today) === 'paid' ? { value: 'Paid', tone: 'ok' as const }
-        : { value: invoiceState(invoice, today).charAt(0).toUpperCase() + invoiceState(invoice, today).slice(1), tone: invoiceState(invoice, today) === 'overdue' ? 'todo' as const : 'quiet' as const }),
+        : invoiceStateOf(invoice) === 'paid' ? { value: 'Paid', tone: 'ok' as const }
+        : { value: invoiceStateOf(invoice).charAt(0).toUpperCase() + invoiceStateOf(invoice).slice(1), tone: invoiceStateOf(invoice) === 'overdue' ? 'todo' as const : 'quiet' as const }),
     },
   ]
 
