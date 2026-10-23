@@ -387,6 +387,8 @@ interface StudioState {
   // client, edit limited to 'projects' (the todo/request list). Agent/
   // lawyer/team: driven by resolved access_grants.
   hasAccess: (section: MainSection, clientId?: string, requireEdit?: boolean) => boolean
+  /** The person's role for this artist's company (a login can be a manager in one company and an artist in another). */
+  roleFor: (clientId: string) => UserRole
   // True when the person has no grant for the section but can load items in it
   // (they were shared) - they get a trimmed set of tabs and view-only access.
   isShareOnly: (section: MainSection, clientId?: string) => boolean
@@ -745,6 +747,7 @@ export const useStore = create<StudioState>((set, get) => ({
     return data.clients.find(c => c.id === (id ?? clientId))
   },
 
+  roleFor: (clientId) => accessFor(get(), clientId).role,
   hasAccess: (section, clientId, requireEdit = false) => {
     const s = get()
     const cid = clientId ?? s.clientId

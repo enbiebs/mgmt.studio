@@ -61,9 +61,8 @@ assert.deepEqual(ids(artistsForPage('finance', roster, dealsOnly)), [])
 
 // ── rows that must not show a number ──
 const none = () => false
-assert.equal(pickerNote('finance', 'a', { has: team, shareOnly: grants({ a: ['finance'] }) }), 'Shared with you', 'only sent one item')
-assert.equal(pickerNote('tour', 'a', { has: dealsOnly, shareOnly: none }), 'Offers only', 'Deals & fees without Tour gets no shows')
-assert.equal(pickerNote('tour', 'a', { has: team, shareOnly: none }), null, 'a real Tour grant shows the number')
-assert.equal(pickerNote('finance', 'a', { has: dealsOnly, shareOnly: none }), null, 'the deals fallback is for Tour only')
+assert.equal(pickerNote('finance', 'a', { shareOnly: grants({ a: ['finance'] }) }), 'Shared with you', 'only sent one item')
+assert.equal(pickerNote('finance', 'a', { shareOnly: none }), null, 'a real Finance grant shows the number')
+assert.equal(pickerNote('music', 'a', { shareOnly: grants({ a: ['finance'] }) }), null, 'a shared invoice says nothing about Music')
 
 console.log('nav-map checks passed')

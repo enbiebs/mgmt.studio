@@ -1,17 +1,17 @@
 // ──────────────────────────────────────────────────────────
-//  The one line each artist gets on the "All artists" Tour, Music, Finance and Legal pages (the pick-an-artist pages):
-//    Tour -> the next show, Music -> the next release, Finance -> money owed, Legal -> contracts needing attention.
+//  The one line each artist gets on the "All artists" Music, Finance and Legal pages (the pick-an-artist pages):
+//    Music -> the next release, Finance -> money owed, Legal -> contracts needing attention.
 //  Every number reuses the same helper the artist's own page uses, so the line can never disagree with the page it opens.
 //  Pure logic (no store, no screen), covered by scripts/check-roster-summary.ts.
 // ──────────────────────────────────────────────────────────
 
 import type { Album, Contract, Deposit, Invoice, Show } from '@/types'
-import { daysUntil, isUpcomingShow, nextShow } from '@/lib/date-state'
+import { daysUntil } from '@/lib/date-state'
 import { contractAlerts, expiryLine } from '@/lib/contract-status'
 import { formatTotals, invoiceStateWithDeposits, owedByCurrency } from '@/lib/money'
 import { MONTH_SHORT } from '@/lib/utils'
 
-export type SummaryPage = 'tour' | 'music' | 'finance' | 'legal'
+export type SummaryPage = 'music' | 'finance' | 'legal'
 
 /** ok = nothing to do, todo = something to do, late = needs attention now, quiet = nothing there yet. */
 export type SummaryTone = 'ok' | 'todo' | 'late' | 'quiet'
@@ -34,16 +34,6 @@ export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n ==
 export function whenWord(date: string, today: string): string {
   const d = daysUntil(date, today)
   return d <= 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`
-}
-
-function tourSummary(c: SummaryClient, today: string): ArtistSummary {
-  const next = nextShow(c.tour.shows, today)
-  if (!next) return { headline: 'No shows ahead', tone: 'quiet' }
-  const more = c.tour.shows.filter(s => isUpcomingShow(s, today)).length - 1
-  const place = next.city || next.venue
-  const parts = [`${dayWord(next.date)} · ${whenWord(next.date, today)}`, next.status === 'hold' ? 'on hold' : '']
-  if (more > 0) parts.push(`${more} more after`)
-  return { headline: `Next: ${place}`, detail: parts.filter(Boolean).join(' · '), tone: next.status === 'hold' ? 'todo' : 'ok' }
 }
 
 /** The next release still ahead (releasing today counts), soonest first, or undefined. */
@@ -95,7 +85,6 @@ function legalSummary(c: SummaryClient, today: string): ArtistSummary {
 
 export function summarize(page: SummaryPage, client: SummaryClient, today: string): ArtistSummary {
   switch (page) {
-    case 'tour': return tourSummary(client, today)
     case 'music': return musicSummary(client, today)
     case 'finance': return financeSummary(client, today)
     case 'legal': return legalSummary(client, today)

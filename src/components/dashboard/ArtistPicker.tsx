@@ -1,6 +1,6 @@
 'use client'
 // ──────────────────────────────────────────────────────────
-//  ArtistPicker — the "All artists" Tour, Music, Finance and Legal pages (for now): one row per artist with
+//  ArtistPicker — the "All artists" Music, Finance and Legal pages (for now): one row per artist with
 //  the one number that matters on that page, and a click to open that artist's own page. (The numbers come
 //  from lib/roster-summary.ts, so they always agree with the artist's page they open.)
 // ──────────────────────────────────────────────────────────
@@ -13,7 +13,6 @@ import { ArtistAvatar } from '@/components/ui/ArtistAvatar'
 import { useArtistsFor } from '@/components/layout/nav'
 
 const COPY: Record<SummaryPage, { title: string; blurb: string; empty: string }> = {
-  tour:    { title: 'Tour',    blurb: 'The next show for each artist. Pick an artist to open their tour.',        empty: 'No artists with a tour page you can open yet.' },
   music:   { title: 'Music',   blurb: 'The next release for each artist. Pick an artist to open their music.',     empty: 'No artists with a music page you can open yet.' },
   finance: { title: 'Finance', blurb: 'What each artist is still owed. Pick an artist to open their finances.',    empty: 'No artists with a finance page you can open yet.' },
   legal:   { title: 'Legal',   blurb: 'Contracts that need a look. Pick an artist to open their contracts.',       empty: 'No artists with a legal page you can open yet.' },
@@ -26,7 +25,6 @@ export function ArtistPicker({ page }: { page: SummaryPage }) {
   const artists = useArtistsFor(page)
   const switchScope = useStore(s => s.switchScope)
   const isShareOnly = useStore(s => s.isShareOnly)
-  const hasAccess = useStore(s => s.hasAccess)
   const copy = COPY[page]
   const t = today()
 
@@ -39,7 +37,7 @@ export function ArtistPicker({ page }: { page: SummaryPage }) {
 
       <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(340px,100%),1fr))] gap-3">
         {artists.map(c => {
-          const note = pickerNote(page, c.id, { has: (sec, id) => hasAccess(sec, id), shareOnly: (sec, id) => isShareOnly(sec, id) })
+          const note = pickerNote(page, c.id, { shareOnly: (sec, id) => isShareOnly(sec, id) })
           const s: ArtistSummary = note ? { headline: note, tone: 'quiet' } : summarize(page, c, t)
           return (
             <li key={c.id}>

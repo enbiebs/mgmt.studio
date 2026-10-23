@@ -30,6 +30,7 @@ import { OverviewView } from '@/components/overview/OverviewView'
 import { DashboardModals } from '@/components/dashboard/Modals'
 import { RosterToday }     from '@/components/dashboard/RosterToday'
 import { ArtistPicker }    from '@/components/dashboard/ArtistPicker'
+import { RosterTour }      from '@/components/tour/RosterTour'
 
 // Manager views
 import { SongsView }    from '@/components/songs/SongsView'
@@ -109,8 +110,8 @@ export function StudioApp() {
             </div>
           ) : (
             <main className="flex-1 overflow-auto p-4 md:p-8">
-              {rosterPage === 'today'
-                ? <RosterToday />
+              {rosterPage === 'today' ? <RosterToday />
+                : rosterPage === 'tour' ? <RosterTour />
                 : <ArtistPicker page={rosterPage} />}
             </main>
           )

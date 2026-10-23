@@ -5,6 +5,7 @@ import { useStore } from '../src/lib/store'
 import { startUrlSync, type BrowserLike } from '../src/lib/url-sync'
 import { PRODUCT_NAME } from '../src/lib/brand'
 import { artistsForPage, pickerNote, type RosterPage } from '../src/lib/nav-map'
+import { tourAccessFor } from '../src/lib/roster-tour'
 import { overviewAccessFor } from '../src/lib/artist-overview'
 import { inboxAccessFor } from '../src/lib/inbox'
 import type { Client } from '../src/types'
@@ -47,7 +48,7 @@ const artist = (id: string, name: string): Client => ({
 
 const fresh = (over: Record<string, unknown> = {}) => useStore.setState({
   data: { clients: [artist('c1', 'Alpha'), artist('c2', 'Beta')] },
-  role: 'manager', grants: [], authClientId: null,
+  role: 'manager', grants: [], authClientId: null, workspaceId: null, contexts: {}, clientWorkspace: {}, homeWorkspaceId: null,
   view: 'dashboard', rosterPage: 'today', clientId: null, section: 'calendar',
   songsSub: 'tracks', contentSub: 'manage', bizSub: 'royalties', tourSub: 'tour', analyticsSub: 'overview', legalSub: 'pipeline',
   selectedShowId: null, selectedAlbumId: null, selectedBudgetId: null,
@@ -182,6 +183,24 @@ assert.deepEqual(p.overview, NO); assert.deepEqual(p.inbox, { finance: false, to
 p = forPerson({ role: 'team', grants: [], ...sharedShow })                                            // one show sent to them
 assert.deepEqual(p.overview, NO)
 
+// ── the All-artists Tour page: what each person gets for an artist, from the real access rules ──
+const tourFlags = (over: Record<string, unknown>, id = 'c1') => {
+  fresh(over)
+  const st = useStore.getState()
+  return tourAccessFor((s, i) => st.hasAccess(s, i), (s, i) => st.isShareOnly(s, i), id, st.roleFor(id))
+}
+const ALLOWED = { shows: true, showsFully: true, deals: true, dealsFully: true, finance: true }
+assert.deepEqual(tourFlags({}), ALLOWED)                                                                              // a manager
+assert.deepEqual(tourFlags({ role: 'team', grants: [{ section: 'admin', clientId: 'c1', canEdit: true }] }), ALLOWED)  // a Point Person for the artist
+assert.deepEqual(tourFlags({ role: 'team', grants: [{ section: 'deals', clientId: 'c1', canEdit: false }] }), { shows: false, showsFully: false, deals: true, dealsFully: true, finance: false })   // Deals & fees: offers, no shows
+assert.deepEqual(tourFlags({ role: 'team', grants: [{ section: 'tour', clientId: 'c1', canEdit: false }] }), { shows: true, showsFully: true, deals: false, dealsFully: false, finance: false })    // Tour: shows, no fees or offers
+assert.deepEqual(tourFlags({ role: 'team', grants: [], ...sharedShow }), { shows: true, showsFully: false, deals: false, dealsFully: false, finance: false })                                         // one show sent to them
+assert.deepEqual(tourFlags({ role: 'team', grants: [{ section: 'tour', clientId: 'c1', canEdit: false }], ...sharedInvoice }), { shows: true, showsFully: true, deals: false, dealsFully: false, finance: false })   // one invoice sent is not Finance
+// a login that manages one company and is an artist in another: the artist's schedule, and nothing management works out from it
+const twoCompanies = { role: 'manager', workspaceId: 'w1', clientWorkspace: { c1: 'w1', c2: 'w2' }, contexts: { w1: { role: 'manager', authClientId: null, grants: [] }, w2: { role: 'artist', authClientId: 'c2', grants: [] } } }
+assert.deepEqual(tourFlags(twoCompanies, 'c1'), ALLOWED)
+assert.deepEqual(tourFlags(twoCompanies, 'c2'), { shows: true, showsFully: false, deals: false, dealsFully: false, finance: false })
+
 // ── an artist's own login keeps landing where it did (their portal ignores the page, but the address does not change) ──
 fresh({ role: 'artist', authClientId: 'c1' }); useStore.getState().openClient('c1'); assert.equal(useStore.getState().section, 'calendar')
 
@@ -201,11 +220,10 @@ assert.deepEqual(listed('finance'), ['c1', 'c2'])                               
 fresh({ role: 'team', grants: [{ section: 'tour', clientId: 'c1', canEdit: false }, { section: 'finance', clientId: 'c2', canEdit: false }] })
 assert.deepEqual(listed('tour'), ['c1']); assert.deepEqual(listed('finance'), ['c2']); assert.deepEqual(listed('legal'), [])
 fresh({ role: 'team', grants: [{ section: 'deals', clientId: 'c1', canEdit: false }] })
-assert.deepEqual(listed('tour'), ['c1'])                                                      // Deals & fees opens the Tour page ...
-{ const st = useStore.getState(); assert.equal(pickerNote('tour', 'c1', { has: (s, i) => st.hasAccess(s, i), shareOnly: (s, i) => st.isShareOnly(s, i) }), 'Offers only') }   // ... but shows no shows
+assert.deepEqual(listed('tour'), ['c1'])                                                      // Deals & fees opens the Tour page
 fresh({ role: 'team', grants: [], data: { clients: [{ ...artist('c1', 'Alpha'), itemSections: ['finance'] }, artist('c2', 'Beta')] } })
 assert.deepEqual(listed('finance'), ['c1'])                                                   // one shared invoice opens Finance for viewing ...
-{ const st = useStore.getState(); assert.equal(pickerNote('finance', 'c1', { has: (s, i) => st.hasAccess(s, i), shareOnly: (s, i) => st.isShareOnly(s, i) }), 'Shared with you') }   // ... but no totals
+{ const st = useStore.getState(); assert.equal(pickerNote('finance', 'c1', { shareOnly: (s, i) => st.isShareOnly(s, i) }), 'Shared with you') }   // ... but no totals
 
 // ── things that must fall back, never break ──
 fresh(); win = browser('/artists/nobody/tour'); stop = startUrlSync(win)     // an artist that does not exist

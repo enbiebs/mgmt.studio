@@ -1,12 +1,11 @@
-// Checks the one line each artist gets on the "All artists" Tour, Music, Finance and Legal pages.
+// Checks the one line each artist gets on the "All artists" Music, Finance and Legal pages.
 // Run with:  npx tsx scripts/check-roster-summary.ts
 import assert from 'node:assert/strict'
 import { summarize, type SummaryClient } from '../src/lib/roster-summary'
-import type { Album, Contract, Deposit, Invoice, Show, Track } from '../src/types'
+import type { Album, Contract, Deposit, Invoice, Track } from '../src/types'
 
 const TODAY = '2026-10-21'
 
-const show = (o: Partial<Show> & { id: string; date: string }): Show => ({ city: 'Berlin', venue: 'Tresor', time: '20:00', status: 'confirmed', ...o })
 const track = (id: string, stage: Track['stage']): Track => ({ id, num: 1, title: id, stage, version: 1, touched: 'now' })
 const album = (o: Partial<Album> & { id: string }): Album => ({ title: 'Night Shift EP', tracks: [], ...o })
 const invoice = (o: Partial<Invoice> & { id: string }): Invoice => ({
@@ -16,25 +15,10 @@ const invoice = (o: Partial<Invoice> & { id: string }): Invoice => ({
 const contract = (o: Partial<Contract> & { id: string }): Contract => ({
   title: 'Deal', type: 'management' as Contract['type'], status: 'signed', counterparty: 'WME', createdAt: '2026-01-01', ...o,
 })
-const client = (o: { shows?: Show[]; albums?: Album[]; invoices?: Invoice[]; deposits?: Deposit[]; contracts?: Contract[] } = {}): SummaryClient => ({
-  tour: { shows: o.shows ?? [] }, songs: { albums: o.albums ?? [] }, finance: { invoices: o.invoices ?? [] },
+const client = (o: { albums?: Album[]; invoices?: Invoice[]; deposits?: Deposit[]; contracts?: Contract[] } = {}): SummaryClient => ({
+  tour: { shows: [] }, songs: { albums: o.albums ?? [] }, finance: { invoices: o.invoices ?? [] },
   business: { banking: { deposits: o.deposits ?? [] } }, legal: { contracts: o.contracts ?? [] },
 })
-
-// ── Tour: the next show that is really going to happen ──
-assert.deepEqual(summarize('tour', client(), TODAY), { headline: 'No shows ahead', tone: 'quiet' })
-const t1 = summarize('tour', client({ shows: [show({ id: 'a', date: '2026-11-02', city: 'Paris' }), show({ id: 'b', date: '2026-10-28', city: 'Berlin' }), show({ id: 'c', date: '2026-12-01', city: 'Rome' })] }), TODAY)
-assert.equal(t1.headline, 'Next: Berlin', 'the soonest show, not the first in the list')
-assert.equal(t1.detail, 'Oct 28 · in 7 days · 2 more after')
-assert.equal(t1.tone, 'ok')
-assert.equal(summarize('tour', client({ shows: [show({ id: 'a', date: TODAY })] }), TODAY).detail, 'Oct 21 · today')
-assert.equal(summarize('tour', client({ shows: [show({ id: 'a', date: '2026-10-22' })] }), TODAY).detail, 'Oct 22 · tomorrow')
-assert.deepEqual(summarize('tour', client({ shows: [show({ id: 'a', date: '2026-09-01' })] }), TODAY), { headline: 'No shows ahead', tone: 'quiet' }, 'a played show is not ahead')
-assert.equal(summarize('tour', client({ shows: [show({ id: 'a', date: '2026-10-25', status: 'cancelled' }), show({ id: 'b', date: '2026-11-05', city: 'Lyon' })] }), TODAY).headline, 'Next: Lyon', 'a cancelled show is skipped')
-assert.equal(summarize('tour', client({ shows: [show({ id: 'a', date: '2026-10-25', historyOnly: true })] }), TODAY).headline, 'No shows ahead', 'history-only shows are not ahead')
-const hold = summarize('tour', client({ shows: [show({ id: 'a', date: '2026-10-25', status: 'hold' })] }), TODAY)
-assert.equal(hold.tone, 'todo'); assert.match(hold.detail!, /on hold/)
-assert.equal(summarize('tour', client({ shows: [show({ id: 'a', date: '2026-10-25', city: '', venue: 'Fabric' })] }), TODAY).headline, 'Next: Fabric', 'no city: use the venue')
 
 // ── Music: the next release, and what is not finished ──
 assert.deepEqual(summarize('music', client(), TODAY), { headline: 'No music yet', tone: 'quiet' })
