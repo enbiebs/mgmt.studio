@@ -14,6 +14,7 @@ import { balanceOf } from '@/lib/settlement-math'
 import { settlementForShow } from '@/lib/budget'
 import { localDateOf } from '@/lib/utils'
 import { buildForecast } from '@/lib/forecast'
+import { mayOpenFully } from '@/lib/section-access'
 import { invoiceOutstanding, settlementBalancesNotOnInvoices } from '@/lib/money'
 import { daysToExpiry, effectiveStatus } from '@/lib/contract-status'
 
@@ -42,6 +43,16 @@ export interface InboxItem {
 // offer items need Deals & fees, contract items need Legal, project items need Projects.
 // (The artist's own login never gets an inbox at all.)
 export interface InboxAccess { finance: boolean; tour: boolean; deals: boolean; legal: boolean; projects: boolean }
+
+/** The alerts a person gets, from what they may open in full (not just single items sent to them): an alert is a figure worked out from many rows. */
+export const inboxAccessFor = (
+  has: (section: MainSection, clientId: string) => boolean,
+  shareOnly: (section: MainSection, clientId: string) => boolean,
+  clientId: string,
+): InboxAccess => {
+  const may = mayOpenFully(has, shareOnly, clientId)
+  return { finance: may('finance'), tour: may('tour'), deals: may('deals'), legal: may('legal'), projects: may('projects') }
+}
 
 const DAY = 86_400_000
 const days = (a: string, b: string) => Math.round((Date.parse(a + 'T00:00:00Z') - Date.parse(b + 'T00:00:00Z')) / DAY)

@@ -27,11 +27,11 @@ export interface SummaryClient {
   legal: { contracts: Contract[] }
 }
 
-const dayWord = (iso: string) => `${MONTH_SHORT[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+export const dayWord = (iso: string) => `${MONTH_SHORT[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`
+export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
-/** "Today", "Tomorrow", "in 12 days". */
-function whenWord(date: string, today: string): string {
+/** "today", "tomorrow", "in 12 days". */
+export function whenWord(date: string, today: string): string {
   const d = daysUntil(date, today)
   return d <= 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`
 }
@@ -46,26 +46,41 @@ function tourSummary(c: SummaryClient, today: string): ArtistSummary {
   return { headline: `Next: ${place}`, detail: parts.filter(Boolean).join(' · '), tone: next.status === 'hold' ? 'todo' : 'ok' }
 }
 
+/** The next release still ahead (releasing today counts), soonest first, or undefined. */
+export function nextRelease(albums: readonly Album[], today: string): Album | undefined {
+  return albums.filter(a => a.releaseDate && a.releaseDate >= today).sort((a, b) => a.releaseDate!.localeCompare(b.releaseDate!))[0]
+}
+
+/** Songs across every release that are not finished yet. */
+export const unfinishedSongs = (albums: readonly Album[]): number => albums.reduce((n, a) => n + a.tracks.filter(t => t.stage !== 'done').length, 0)
+
 function musicSummary(c: SummaryClient, today: string): ArtistSummary {
-  const releases = c.songs.albums.filter(a => a.releaseDate && a.releaseDate >= today).sort((a, b) => a.releaseDate!.localeCompare(b.releaseDate!))
-  const unfinished = c.songs.albums.reduce((n, a) => n + a.tracks.filter(t => t.stage !== 'done').length, 0)
+  const unfinished = unfinishedSongs(c.songs.albums)
   const inProgress = unfinished > 0 ? `${plural(unfinished, 'song')} not finished` : undefined
-  const next = releases[0]
+  const next = nextRelease(c.songs.albums, today)
   if (next) return { headline: `${next.title || 'Untitled'} · ${dayWord(next.releaseDate!)}`, detail: [whenWord(next.releaseDate!, today), inProgress].filter(Boolean).join(' · '), tone: unfinished > 0 ? 'todo' : 'ok' }
   if (unfinished > 0) return { headline: 'No release date set', detail: inProgress, tone: 'todo' }
   return { headline: c.songs.albums.length > 0 ? 'Nothing in progress' : 'No music yet', tone: 'quiet' }
 }
 
-function financeSummary(c: SummaryClient, today: string): ArtistSummary {
+/** What is still owed on an artist's invoices (per currency, as one line), how many invoices are open and how many are late. */
+export function owedFigures(c: Pick<SummaryClient, 'finance' | 'business'>, today: string): { owed: string; open: number; overdue: number } {
   const deposits = c.business.banking.deposits
   const open = c.finance.invoices.filter(i => {
     const state = invoiceStateWithDeposits(i, today, deposits)
     return state === 'sent' || state === 'overdue'
   })
-  const owed = formatTotals(owedByCurrency(open, deposits))
+  return {
+    owed: formatTotals(owedByCurrency(open, deposits)),
+    open: open.length,
+    overdue: open.filter(i => invoiceStateWithDeposits(i, today, deposits) === 'overdue').length,
+  }
+}
+
+function financeSummary(c: SummaryClient, today: string): ArtistSummary {
+  const { owed, open, overdue } = owedFigures(c, today)
   if (!owed) return { headline: 'Nothing owed', tone: c.finance.invoices.length > 0 ? 'ok' : 'quiet' }
-  const overdue = open.filter(i => invoiceStateWithDeposits(i, today, deposits) === 'overdue').length
-  return { headline: `${owed} owed`, detail: overdue > 0 ? `${plural(overdue, 'invoice')} overdue` : `${plural(open.length, 'open invoice')}`, tone: overdue > 0 ? 'late' : 'todo' }
+  return { headline: `${owed} owed`, detail: overdue > 0 ? `${plural(overdue, 'invoice')} overdue` : `${plural(open, 'open invoice')}`, tone: overdue > 0 ? 'late' : 'todo' }
 }
 
 function legalSummary(c: SummaryClient, today: string): ArtistSummary {

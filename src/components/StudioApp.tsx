@@ -24,6 +24,7 @@ import { ConfirmHost } from '@/components/ui/ConfirmHost'
 import { UrlSync } from '@/components/layout/UrlSync'
 import { sectionLabel } from '@/components/layout/nav'
 import { CalendarView } from '@/components/calendar/CalendarView'
+import { OverviewView } from '@/components/overview/OverviewView'
 
 // Dashboard
 import { DashboardModals } from '@/components/dashboard/Modals'
@@ -127,8 +128,8 @@ export function StudioApp() {
         {view === 'studio' && (
           // Keyed by artist, so moving to another artist never carries a half-typed edit or a selected show across to them
           <div key={clientId ?? 'none'} className="glass-sheet flex-1 min-h-0 flex flex-col">
-            {/* One page heading for screen readers on the pages that do not draw their own (the Profile page, the Today list and the portal do) */}
-            {role !== 'artist' && section !== 'profile' && section !== 'today' && (
+            {/* One page heading for screen readers on the pages that do not draw their own (the Profile page, the Overview, the Today list and the portal do) */}
+            {role !== 'artist' && section !== 'profile' && section !== 'today' && section !== 'overview' && (
               <h1 className="sr-only">{sectionLabel(section)} · {data.clients.find(c => c.id === clientId)?.name}</h1>
             )}
             {/* Artist portal */}
@@ -172,6 +173,7 @@ export function StudioApp() {
                       bizSub === 'forecast' ? <ForecastView />  :
                       <RoyaltiesView />
                     )}
+                    {section === 'overview'   && <OverviewView />}
                     {section === 'today'      && <main className="flex-1 overflow-auto p-4 md:p-8"><TodayList clientId={clientId ?? undefined} /></main>}
                     {section === 'calendar'   && <CalendarView />}
                     {section === 'projects'   && <ProjectsView />}
