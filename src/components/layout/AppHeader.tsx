@@ -7,7 +7,8 @@ import { BrandMark, Icon } from '@/components/ui/Icon'
 import { ClientSwitcher } from './ClientSwitcher'
 import { OPEN_COMMAND_BAR } from './CommandBar'
 import { UserMenu } from './UserMenu'
-import { sectionLabel, useVisibleNav } from './nav'
+import { ROSTER_PAGE_LABEL } from '@/lib/nav-map'
+import { sectionLabel, useVisibleNav, useVisibleRosterPages } from './nav'
 
 const ROLE_LABEL: Record<string, string> = { manager: 'Manager', artist: 'Artist', agent: 'Agent', lawyer: 'Lawyer', team: 'Team' }
 
@@ -18,12 +19,13 @@ const onMac = () => /Mac|iPhone|iPad/.test(navigator.platform)
 /** The slim bar across the top: where you are, search, the few actions that belong everywhere, and your account. */
 export function AppHeader() {
   const {
-    view, section, role, authRole, previewMemberId, previewMembers,
-    goToDashboard, setSection, previewAs, setShowUnfinished,
+    view, section, rosterPage, role, authRole, previewMemberId, previewMembers,
+    switchScope, goToRoster, setSection, previewAs, setShowUnfinished,
   } = useStore()
   const client = useStore(s => s.getClient())
   const showUnfinished = useStore(s => s.showUnfinished)
   const groups = useVisibleNav()
+  const rosterPages = useVisibleRosterPages()
   const mac = useSyncExternalStore(noSubscribe, onMac, () => true)
   const analyticsVisible = showUnfinished || analyticsHasData(client)
   const isArtist = role === 'artist'
@@ -56,11 +58,11 @@ export function AppHeader() {
       )}
 
       <header className="glass glass-strong glass-bar flex-shrink-0 flex flex-wrap items-center min-h-[52px] px-3 md:px-6 gap-x-3 border-b border-gray-100 md:flex-nowrap">
-        {/* Phone: a way back to the roster when inside an artist */}
+        {/* Phone: a way back to all artists (same page) when inside an artist */}
         {inStudio && (
           <button
-            onClick={goToDashboard}
-            aria-label="All clients"
+            onClick={() => switchScope('all')}
+            aria-label="All artists"
             className="md:hidden flex items-center text-gray-500 hover:text-gray-900 hover:bg-gray-50 px-2 py-1 rounded-lg transition-colors"
           >
             ←
@@ -79,7 +81,7 @@ export function AppHeader() {
           <nav aria-label="Breadcrumb" className="hidden md:flex items-center gap-2 text-sm text-gray-400 min-w-0">
             {inStudio && client ? (
               <>
-                <button onClick={goToDashboard} className="hover:text-gray-700 transition-colors">Home</button>
+                <button onClick={() => switchScope('all')} className="hover:text-gray-700 transition-colors">All artists</button>
                 <span>/</span>
                 <span className="truncate">{client.name}</span>
                 <span>/</span>
@@ -87,12 +89,16 @@ export function AppHeader() {
               </>
             ) : view === 'company' ? (
               <>
-                <button onClick={goToDashboard} className="hover:text-gray-700 transition-colors">Home</button>
+                <button onClick={() => goToRoster('today')} className="hover:text-gray-700 transition-colors">All artists</button>
                 <span>/</span>
                 <span className="text-gray-900 font-medium">Company</span>
               </>
             ) : (
-              <span className="text-gray-900 font-medium">Home</span>
+              <>
+                <span>All artists</span>
+                <span>/</span>
+                <span className="text-gray-900 font-medium">{ROSTER_PAGE_LABEL[rosterPage]}</span>
+              </>
             )}
           </nav>
         )}
@@ -116,7 +122,7 @@ export function AppHeader() {
             </span>
           )}
 
-          {inStudio && client && <div className="md:hidden"><ClientSwitcher variant="compact" /></div>}
+          {!isArtist && <div className="md:hidden"><ClientSwitcher variant="compact" /></div>}
 
           {view === 'dashboard' && role === 'manager' && (
             <button
@@ -130,16 +136,19 @@ export function AppHeader() {
           <UserMenu />
         </div>
 
-        {/* Phone: the sections, as a scrolling strip (the side rail is not shown on small screens) */}
-        {inStudio && (
-          <nav aria-label="Sections" className="md:hidden flex gap-0.5 order-last basis-full pb-1.5 overflow-x-auto no-scrollbar">
-            {groups.flatMap(g => g.items).map(i => (
+        {/* Phone: the pages, as a scrolling strip (the sidebar is not shown on small screens) */}
+        {!isArtist && view !== 'company' && (
+          <nav aria-label="Pages" className="md:hidden flex gap-0.5 order-last basis-full pb-1.5 overflow-x-auto no-scrollbar">
+            {(inStudio
+              ? groups.flatMap(g => g.items).map(i => ({ key: i.key as string, label: i.label, on: section === i.key, go: () => setSection(i.key) }))
+              : rosterPages.map(p => ({ key: p as string, label: ROSTER_PAGE_LABEL[p], on: rosterPage === p, go: () => goToRoster(p) }))
+            ).map(i => (
               <button
                 key={i.key}
-                onClick={() => setSection(i.key)}
-                aria-current={section === i.key ? 'page' : undefined}
+                onClick={i.go}
+                aria-current={i.on ? 'page' : undefined}
                 className={`px-2.5 py-1 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                  section === i.key ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                  i.on ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
                 }`}
               >
                 {i.label}

@@ -17,7 +17,8 @@ export function useMe(): string | null {
   return people.find(p => p.memberId === previewMemberId)?.userId ?? null
 }
 
-export function useToday(scope: 'mine' | 'everyone'): { list: TodayList; hiddenAuto: ReturnType<typeof useInbox>['hidden']; me: string | null } {
+/** `onlyClient` narrows the list to one artist (Today inside an artist); without it, every artist this person can open. */
+export function useToday(scope: 'mine' | 'everyone', onlyClient?: string): { list: TodayList; hiddenAuto: ReturnType<typeof useInbox>['hidden']; me: string | null } {
   const data = useStore(s => s.data)
   const accessibleClientIds = useStore(s => s.accessibleClientIds)
   const grants = useStore(s => s.grants)
@@ -28,11 +29,14 @@ export function useToday(scope: 'mine' | 'everyone'): { list: TodayList; hiddenA
   const list = useMemo(() => {
     void grants   // a change in what this person may open re-runs this
     const ids = accessibleClientIds()
-    const clients = ids === 'all' ? data.clients : data.clients.filter(c => ids.includes(c.id))
-    return buildToday({ clients, inbox: inbox.visible, me, scope, today: today(), canTour: id => hasAccess('tour', id) })
-  }, [data, accessibleClientIds, grants, hasAccess, inbox.visible, me, scope])
+    const open = ids === 'all' ? data.clients : data.clients.filter(c => ids.includes(c.id))
+    const clients = onlyClient ? open.filter(c => c.id === onlyClient) : open
+    const visible = onlyClient ? inbox.visible.filter(i => i.clientId === onlyClient) : inbox.visible
+    return buildToday({ clients, inbox: visible, me, scope, today: today(), canTour: id => hasAccess('tour', id) })
+  }, [data, accessibleClientIds, grants, hasAccess, inbox.visible, me, scope, onlyClient])
 
-  return { list, hiddenAuto: inbox.hidden, me }
+  const hiddenAuto = useMemo(() => (onlyClient ? inbox.hidden.filter(i => i.clientId === onlyClient) : inbox.hidden), [inbox.hidden, onlyClient])
+  return { list, hiddenAuto, me }
 }
 
 // The artist last used to add a to-do is remembered in this browser (a convenience only).

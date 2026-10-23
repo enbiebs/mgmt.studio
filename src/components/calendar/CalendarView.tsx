@@ -5,6 +5,7 @@
 //  business (shows, releases, posts, invoices, contracts, projects),
 //  instead of six separate section-only calendars. Visually mirrors
 //  Content's ManageView grid; the aggregation is new, the grid isn't.
+//  With `roster`, the same grid shows every artist this person can open, each date named for its artist ("All artists" → Calendar).
 // ──────────────────────────────────────────────────────────
 
 import { useEffect, useRef, useState } from 'react'
@@ -18,6 +19,7 @@ import { PostModal } from '@/components/content/ManageView'
 import { AddProjectModal } from '@/components/manager/ProjectsView'
 import { SetupChecklist } from '@/components/calendar/SetupChecklist'
 import { PRODUCT_NAME } from '@/lib/brand'
+import { useRosterClients } from '@/components/layout/nav'
 
 // How an event looks from its date state: played or finished things fade, a cancelled show is struck through,
 // and a deadline that has passed unfinished is outlined in red. The same wording is used everywhere ("Overdue", "Cancelled").
@@ -40,15 +42,19 @@ const QUICK_ADD_CONFIG: Record<QuickAddType, { label: string; section: MainSecti
 }
 const QUICK_ADD_TYPES: QuickAddType[] = ['show', 'post', 'project']
 
-export function CalendarView() {
-  const client = useStore(s => s.getClient())
+/** A date on the calendar; in the all-artists view it also says whose it is. */
+type RosterEvent = CalendarEvent & { clientId?: string; clientName?: string }
+
+export function CalendarView({ roster = false }: { roster?: boolean } = {}) {
+  const ownClient = useStore(s => s.getClient())
+  const everyone = useRosterClients()
   const hasAccess = useStore(s => s.hasAccess)
   const role = useStore(s => s.role)
   const canEdit = useStore(s => s.canEdit)
   const canEditAny = canEdit('tour') || canEdit('content') || canEdit('projects')
   const { calYear, calMonth, calPrev, calNext, calToday } = useStore()
   const {
-    setSection, setTourSub, setContentSub, setBizSub,
+    openClient, setSection, setTourSub, setContentSub, setBizSub,
     setSelectedShow, setSelectedAlbum,
   } = useStore()
   const [activeDomains, setActiveDomains] = useState<Set<CalendarEventDomain>>(new Set(ALL_DOMAINS))
@@ -65,11 +71,21 @@ export function CalendarView() {
     return () => document.removeEventListener('mousedown', handler)
   }, [quickAddDay])
 
-  if (!client) return null
+  const client = roster ? null : ownClient
+  const shown = roster ? everyone : ownClient ? [ownClient] : []
+  if (shown.length === 0) {
+    return roster ? <div className="flex-1 flex items-center justify-center text-sm text-gray-400">No artists you can open yet.</div> : null
+  }
 
-  const canSee = (domain: CalendarEventDomain) => canSeeCalendarDomain(domain, client.id, role, hasAccess)
-  const creatableTypes = QUICK_ADD_TYPES.filter(t => canEdit(QUICK_ADD_CONFIG[t].section))
-  const events = getCalendarEvents(client, canSee).filter(e => activeDomains.has(e.domain))
+  // A kind of date has a filter button when at least one artist shown lets this person see it.
+  const canSee = (domain: CalendarEventDomain) => shown.some(c => canSeeCalendarDomain(domain, c.id, role, hasAccess))
+  // Quick-add needs one artist to add to, so the all-artists view has none.
+  const creatableTypes = roster ? [] : QUICK_ADD_TYPES.filter(t => canEdit(QUICK_ADD_CONFIG[t].section))
+  const events: RosterEvent[] = shown
+    .flatMap(c => getCalendarEvents(c, d => canSeeCalendarDomain(d, c.id, role, hasAccess))
+      .map(e => (roster ? { ...e, id: `${c.id}:${e.id}`, clientId: c.id, clientName: c.name } : e)))
+    .filter(e => activeDomains.has(e.domain))
+  const eventTitle = (e: RosterEvent) => (e.clientName ? `${e.clientName} · ${e.title}` : e.title)
   const days = calendarDays(calYear, calMonth)
   const todayStr = today()
   // On a phone the month grid is too small to read, so the same events are shown day by day.
@@ -89,7 +105,8 @@ export function CalendarView() {
 
   // setSection() resets selectedShowId, so it must run before the
   // selection setters below, not after.
-  function openEvent(e: CalendarEvent) {
+  function openEvent(e: RosterEvent) {
+    if (e.clientId) openClient(e.clientId)
     if (e.domain === 'show' && e.showId) {
       setSection('tour'); setSelectedShow(e.showId); setTourSub('advance')
     } else if (e.domain === 'release' && e.albumId) {
@@ -134,10 +151,10 @@ export function CalendarView() {
             )
           })}
         </div>
-        {canEditAny && <GoogleCalendarPanel clientId={client.id} />}
+        {client && canEditAny && <GoogleCalendarPanel clientId={client.id} />}
       </div>
 
-      <SetupChecklist client={client} />
+      {client && <SetupChecklist client={client} />}
 
       {/* Phone: the month as a day-by-day list */}
       <div className="md:hidden flex-1 overflow-auto px-3 py-3">
@@ -156,7 +173,7 @@ export function CalendarView() {
                   onClick={() => openEvent(e)}
                   className={`w-full text-left border-l-[3px] rounded-r-lg px-3 py-2 ${CALENDAR_DOMAIN_STYLE[e.domain]} ${stateClass(e)}`}
                 >
-                  <div className="text-sm font-semibold leading-snug">{e.title}</div>
+                  <div className="text-sm font-semibold leading-snug">{eventTitle(e)}</div>
                   <div className="text-[11px] opacity-75">{CALENDAR_DOMAIN_LABEL[e.domain]}{e.subtitle ? ` · ${e.subtitle}` : ''}{stateWord(e) ? ` · ${stateWord(e)}` : ''}</div>
                 </button>
               ))}
@@ -201,9 +218,9 @@ export function CalendarView() {
                     key={e.id}
                     onClick={() => openEvent(e)}
                     className={`border-l-2 px-1.5 py-0.5 rounded-r text-[10px] font-semibold mb-0.5 cursor-pointer hover:brightness-95 transition-all truncate ${CALENDAR_DOMAIN_STYLE[e.domain]} ${stateClass(e)}`}
-                    title={`${CALENDAR_DOMAIN_LABEL[e.domain]} — ${e.title}${stateWord(e) ? ` (${stateWord(e)})` : ''}`}
+                    title={`${CALENDAR_DOMAIN_LABEL[e.domain]} — ${eventTitle(e)}${stateWord(e) ? ` (${stateWord(e)})` : ''}`}
                   >
-                    {e.title}
+                    {eventTitle(e)}
                   </div>
                 ))}
                 {creatableTypes.length > 0 && (

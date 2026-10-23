@@ -35,6 +35,8 @@ import { EMPTY_FINANCE } from '@/lib/finance-demo'
 import { EMPTY_TOUR } from '@/lib/advance-demo'
 import { notify } from '@/lib/notify'
 import { addOrReuse, applyPersonPatch, emailTakenMessage } from '@/lib/people-dedupe'
+import { scopeTarget, type RosterPage } from '@/lib/nav-map'
+import { canOpenSection } from '@/lib/tour-tabs'
 import { kindNoun, restoreByFor, restoreNote, screenSectionOf, type RestoreBy, type TrashKind } from '@/lib/trash'
 import { trashAndDelete, type TrashDeps } from '@/lib/trash-flow'
 import { loadTrashItem, restoreTrash, trashDelete } from '@/lib/trash-db'
@@ -348,6 +350,8 @@ interface StudioState {
 
   // Navigation
   view: 'dashboard' | 'studio' | 'company'
+  /** Which "All artists" page is open (Today, Calendar, Tour, Music, Finance or Legal) when no artist is. */
+  rosterPage: RosterPage
   clientId: string | null
   section: MainSection
   songsSub: SongsSub
@@ -413,7 +417,12 @@ interface StudioState {
   afterAccessChange: (memberId?: string) => Promise<void>
 
   // ── Navigation actions ──
+  /** Home: the "All artists" Today page. */
   goToDashboard: () => void
+  /** One of the "All artists" pages. */
+  goToRoster: (page: RosterPage) => void
+  /** The artist switcher: 'all' or an artist id. Stays on the same page (Tour stays Tour) where that page exists on the other side. */
+  switchScope: (to: 'all' | string) => void
   /** Opens the Company page for a company the person manages (the open one by default). */
   goToCompany: (workspaceId?: string) => void
   setCompanyName: (name: string) => void
@@ -705,6 +714,7 @@ export const useStore = create<StudioState>((set, get) => ({
   fxRates: {},
 
   view:          'dashboard',
+  rosterPage:    'today',
   clientId:      null,
   section:       'songs',
   songsSub:      'tracks',
@@ -743,6 +753,8 @@ export const useStore = create<StudioState>((set, get) => ({
     // it; what it actually shows is filtered per-event by each event's real
     // section access (see src/lib/calendar.ts), not gated here.
     if (section === 'calendar') return true
+    // Today is the same for viewing, but it is a list to read and act on, never a page to edit.
+    if (section === 'today') return !requireEdit
     // Activity has no grant of its own either: the database decides which entries a person may read.
     const a = accessFor(s, cid)
     if (section === 'activity') return a.role !== 'artist'
@@ -764,7 +776,7 @@ export const useStore = create<StudioState>((set, get) => ({
   isShareOnly: (section, clientId) => {
     const s = get()
     const cid = clientId ?? s.clientId
-    if (!cid || section === 'calendar') return false
+    if (!cid || section === 'calendar' || section === 'today') return false
     const a = accessFor(s, cid)
     if (a.role === 'manager' || a.role === 'artist') return false
     const key = SECTION_TO_GRANT_KEY[section]
@@ -945,11 +957,22 @@ export const useStore = create<StudioState>((set, get) => ({
   },
 
   // ── Navigation ──
-  goToDashboard: () => {
+  goToDashboard: () => get().goToRoster('today'),
+  goToRoster: (page) => {
     const s = get()
     // Home belongs to the person's home company; coming back from a company they only work in restores it.
     const home = !s.previewMemberId && s.homeWorkspaceId && s.homeWorkspaceId !== s.workspaceId ? s.contexts[s.homeWorkspaceId] : undefined
-    set({ view: 'dashboard', clientId: null, selectedShowId: null, selectedAlbumId: null, ...(home ? contextFields(home) : {}) })
+    set({ view: 'dashboard', rosterPage: page, clientId: null, selectedShowId: null, selectedAlbumId: null, ...(home ? contextFields(home) : {}) })
+  },
+  switchScope: (to) => {
+    const s = get()
+    const target = scopeTarget(to, { view: s.view, section: s.section, rosterPage: s.rosterPage })
+    if (target.kind === 'all') { get().goToRoster(target.page); return }
+    if (s.view === 'studio' && s.clientId === target.clientId) return   // already there: keep the open show or release
+    get().openClient(target.clientId)
+    // Keep the page you were on when this artist can open it; otherwise the artist's own landing page (openClient chose it) stays.
+    const opened = get()
+    if (canOpenSection(target.section, sec => opened.hasAccess(sec))) set({ section: target.section })   // (openClient already cleared any selected show, release or budget)
   },
   goToCompany: (workspaceId) => {
     const s = get()
@@ -970,7 +993,7 @@ export const useStore = create<StudioState>((set, get) => ({
     // Opening an artist that belongs to another company switches the app to that company (its role, pages and people).
     const ws = s.clientWorkspace[id]
     const ctx = ws && ws !== s.workspaceId && !s.previewMemberId ? s.contexts[ws] : undefined
-    set({ view: 'studio', clientId: id, section: firstSection, selectedShowId: null, selectedAlbumId: null, ...(ctx ? contextFields(ctx) : {}) })
+    set({ view: 'studio', clientId: id, section: firstSection, selectedShowId: null, selectedAlbumId: null, selectedBudgetId: null, ...(ctx ? contextFields(ctx) : {}) })
   },
   setSection:    (section) => set({ section, selectedShowId: null }),
   setSongsSub:   (sub) => set({ songsSub: sub }),

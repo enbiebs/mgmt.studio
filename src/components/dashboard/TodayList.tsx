@@ -25,13 +25,15 @@ const DOT: Record<InboxSeverity, string> = { urgent: 'bg-red-500', soon: 'bg-amb
 const SHOW_FIRST = 8
 const HEAD: Partial<Record<Bucket, string>> = { overdue: 'text-red-600' }
 
-export function TodayList() {
+/** Every artist this person can open, or just one (`clientId`: Today inside an artist, where there is nothing to pick). */
+export function TodayList({ clientId }: { clientId?: string } = {}) {
   const [scope, setScope] = useState<'mine' | 'everyone'>(recallScope)
   const [showDone, setShowDone] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const people = useStore(s => s.workspacePeople)
-  const { list, hiddenAuto, me } = useToday(scope)
+  const { list, hiddenAuto, me } = useToday(scope, clientId)
+  const artistName = useStore(s => (clientId ? s.data.clients.find(c => c.id === clientId)?.name : undefined))
 
   const pick = (next: 'mine' | 'everyone') => { setScope(next); rememberScope(next) }
 
@@ -44,7 +46,7 @@ export function TodayList() {
         <div>
           <h1 className="font-serif text-[26px] font-medium leading-tight">Today</h1>
           <p className="text-sm text-gray-400 mt-0.5">
-            {day} · {list.needCount === 0 ? 'nothing needs you right now' : `${list.needCount} need${list.needCount === 1 ? 's' : ''} you`}
+            {artistName ? `${artistName} · ` : ''}{day} · {list.needCount === 0 ? 'nothing needs you right now' : `${list.needCount} need${list.needCount === 1 ? 's' : ''} you`}
           </p>
         </div>
         {people.length > 1 && (
@@ -61,7 +63,7 @@ export function TodayList() {
         )}
       </div>
 
-      <AddTodo />
+      <AddTodo forClient={clientId} />
 
       <section className="glass mb-8 bg-canvas border border-gray-100 rounded-2xl p-4 md:p-5">
         {empty && (
