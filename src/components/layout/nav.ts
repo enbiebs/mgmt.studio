@@ -58,7 +58,7 @@ export function useRosterClients(): Client[] {
   return ids === 'all' ? data.clients : data.clients.filter(c => ids.includes(c.id))
 }
 
-/** The artists a roster page can open (Tour, Music, Finance and Legal depend on what each artist has shared with this person). */
+/** The artists a roster page can open (what each artist has shared with this person decides it). */
 export function useArtistsFor(page: RosterPage): Client[] {
   const hasAccess = useStore(s => s.hasAccess)
   const roster = useRosterClients()

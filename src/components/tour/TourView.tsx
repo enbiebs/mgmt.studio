@@ -28,7 +28,7 @@ export function TourView() {
   } = useStore()
   const [addOpen, setAddOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
-  const pane = useMobilePane()
+  const pane = useMobilePane(!!selectedShowId)   // arriving with a show already chosen (from All artists, the calendar or ⌘K) opens the show on a phone
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
