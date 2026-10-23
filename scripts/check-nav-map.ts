@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { ROSTER_PAGES, ROSTER_PAGE_LABEL, SECTION_OF_PAGE, artistsForPage, isRosterPage, pageForSection, pickerNote, scopeTarget, visibleRosterPages, type RosterPage } from '../src/lib/nav-map'
 import type { MainSection } from '../src/types'
 
-const SECTIONS: MainSection[] = ['today', 'calendar', 'profile', 'songs', 'tour', 'deals', 'content', 'finance', 'projects', 'analytics', 'team', 'legal', 'activity']
+const SECTIONS: MainSection[] = ['overview', 'today', 'calendar', 'profile', 'songs', 'tour', 'deals', 'content', 'finance', 'projects', 'analytics', 'team', 'legal', 'activity']
 
 // ── the pages, and what they are called (Eli's names: Tour, Music, Finance, Legal) ──
 assert.deepEqual(ROSTER_PAGES, ['today', 'calendar', 'tour', 'music', 'finance', 'legal'])
@@ -17,7 +17,7 @@ for (const p of ROSTER_PAGES) assert.equal(pageForSection(SECTION_OF_PAGE[p]), p
 
 // ── sections that only exist inside an artist fall back to Today when you go to "All artists"; none is lost or unmapped ──
 for (const s of SECTIONS) assert.ok(isRosterPage(pageForSection(s)), `${s} maps to a page`)
-for (const s of ['profile', 'content', 'projects', 'analytics', 'team', 'activity'] as MainSection[]) assert.equal(pageForSection(s), 'today', `${s} has no all-artists page`)
+for (const s of ['overview', 'profile', 'content', 'projects', 'analytics', 'team', 'activity'] as MainSection[]) assert.equal(pageForSection(s), 'today', `${s} has no all-artists page`)
 assert.equal(pageForSection('deals'), 'tour', 'Deals & fees lives on the Tour page')
 
 // ── the switcher ──
@@ -31,6 +31,8 @@ assert.deepEqual(scopeTarget('all', inArtist('songs')), { kind: 'all', page: 'mu
 assert.deepEqual(scopeTarget('all', inArtist('finance')), { kind: 'all', page: 'finance' })
 assert.deepEqual(scopeTarget('all', inArtist('deals')), { kind: 'all', page: 'tour' })
 assert.deepEqual(scopeTarget('all', inArtist('content')), { kind: 'all', page: 'today' }, 'Content only exists inside an artist')
+assert.deepEqual(scopeTarget('all', inArtist('overview')), { kind: 'all', page: 'today' }, 'the Overview is one artist')
+assert.deepEqual(scopeTarget('other', inArtist('overview')), { kind: 'artist', clientId: 'other', section: 'overview' }, 'moving between artists keeps you on the Overview')
 assert.deepEqual(scopeTarget('all', inArtist('team')), { kind: 'all', page: 'today' })
 // from one artist to another: the section stays
 assert.deepEqual(scopeTarget('other', inArtist('finance')), { kind: 'artist', clientId: 'other', section: 'finance' })

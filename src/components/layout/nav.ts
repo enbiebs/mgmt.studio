@@ -2,7 +2,7 @@
 // The app's pages, in the order and grouping they appear in the sidebar
 // (and, on a phone, in the strip under the top bar).
 //   - "All artists": the roster pages (see lib/nav-map.ts), each shown when at least one artist can be opened there.
-//   - One artist picked: the same pages narrowed to that artist, then "More" (what only exists inside an artist), then Company.
+//   - One artist picked: Overview and Profile, then the same pages narrowed to that artist, then "More" (what only exists inside an artist), then Company.
 
 import { useStore } from '@/lib/store'
 import { analyticsHasData } from '@/lib/unfinished'
@@ -21,6 +21,10 @@ export const ROSTER_PAGE_ICON: Record<RosterPage, IconName> = {
 
 export const NAV_GROUPS: NavGroup[] = [
   { label: '', items: [
+    { key: 'overview', label: 'Overview', icon: 'home' },
+    { key: 'profile',  label: 'Profile',  icon: 'profile' },
+  ] },
+  { label: '', items: [
     { key: 'today',    label: 'Today',    icon: 'check' },
     { key: 'calendar', label: 'Calendar', icon: 'calendar' },
     { key: 'tour',     label: 'Tour',     icon: 'tour' },
@@ -29,7 +33,6 @@ export const NAV_GROUPS: NavGroup[] = [
     { key: 'legal',    label: 'Legal',    icon: 'legal' },
   ] },
   { label: 'More', items: [
-    { key: 'profile',   label: 'Profile',   icon: 'profile' },
     { key: 'content',   label: 'Content',   icon: 'content' },
     { key: 'projects',  label: 'Projects',  icon: 'projects' },
     { key: 'analytics', label: 'Analytics', icon: 'analytics' },

@@ -44,11 +44,11 @@ assert.equal(applied('/artists/nimino-x7k2/money').section, 'finance')
 assert.equal(pathFor(applied('/artists/nimino-x7k2/money/invoices')), '/artists/nimino-x7k2/finance/invoices', 'and the address bar is tidied to the new one')
 
 // ── sections without tabs ──
-for (const [section, slug] of [['calendar', 'calendar'], ['profile', 'profile'], ['projects', 'projects'], ['team', 'team'], ['activity', 'activity']] as const) {
+for (const [section, slug] of [['overview', 'overview'], ['calendar', 'calendar'], ['profile', 'profile'], ['projects', 'projects'], ['team', 'team'], ['activity', 'activity']] as const) {
   assert.equal(pathFor(nav({ section })), `/artists/nimino-x7k2/${slug}`)
   assert.equal(applied(`/artists/nimino-x7k2/${slug}`).section, section)
 }
-assert.equal(parsePath('/artists/nimino-x7k2')?.view === 'studio' && (parsePath('/artists/nimino-x7k2') as { section: string }).section, 'calendar')   // an artist's own address opens their calendar
+assert.equal(parsePath('/artists/nimino-x7k2')?.view === 'studio' && (parsePath('/artists/nimino-x7k2') as { section: string }).section, 'overview')   // an artist's own address opens their Overview
 
 // ── a real example from the brief: a show's advance ──
 assert.equal(pathFor(nav({ section: 'tour', tourSub: 'advance', selectedShowId: 'show-123' })), '/artists/nimino-x7k2/tour/advance/show-123')
@@ -103,7 +103,7 @@ for (const id of ['plain', 'with space', 'a/b', 'ünï-cødé', 'x?y#z', '100%']
 }
 
 // ── addresses that are not ours, or are damaged, are not guessed at ──
-for (const bad of ['/login', '/auth/callback', '/api/fx', '/artists', '/artists/x/nonsense', '/artists/x/tour/nonsense', '/artists/x/finance/nonsense', '/artists/x/money/nonsense', '/artists/x/calendar/extra', '/artists/x/today/extra', '/calendar/x', '/music/x',
+for (const bad of ['/login', '/auth/callback', '/api/fx', '/artists', '/artists/x/nonsense', '/artists/x/tour/nonsense', '/artists/x/finance/nonsense', '/artists/x/money/nonsense', '/artists/x/calendar/extra', '/artists/x/overview/extra', '/artists/x/constructor', '/artists/x/toString', '/artists/x/__proto__', '/artists/x/tour/constructor', '/artists/x/music/toString', '/artists/x/hasOwnProperty', '/artists/x/today/extra', '/calendar/x', '/music/x',
   '/artists/x/tour/advance/s1/extra', '/other', '/company/x', '/today/x', '/artists/%E0%A4%A']) {
   assert.equal(parsePath(bad), null, `${bad} should not be read as one of ours`)
 }
@@ -112,6 +112,7 @@ assert.deepEqual(parsePath('/artists/x/tour/advance')?.view, 'studio')
 
 // ── page titles ──
 const t = (view: Nav['view'], section: MainSection, rosterPage: Nav['rosterPage'] = 'today') => ({ view, section, rosterPage })
+assert.equal(titleFor(t('studio', 'overview'), 'nimino'), 'Overview · nimino')
 assert.equal(titleFor(t('dashboard', 'calendar')), 'Today')
 assert.equal(titleFor(t('dashboard', 'calendar', 'finance')), 'Finance')
 assert.equal(titleFor(t('dashboard', 'calendar', 'music')), 'Music')

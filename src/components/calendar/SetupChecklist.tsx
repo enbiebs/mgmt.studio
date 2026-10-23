@@ -10,7 +10,8 @@ import { useStore } from '@/lib/store'
 import { useSetup } from '@/lib/useSetup'
 import type { Client } from '@/types'
 
-export function SetupChecklist({ client }: { client: Client }) {
+/** `className` sets the card's outer spacing: the Calendar's gutters by default, the Overview's own. */
+export function SetupChecklist({ client, className = 'mx-3 md:mx-5 mt-3' }: { client: Client; className?: string }) {
   const setup = useSetup(client)
   const { setSection, setTourSub, setSetupSkipped } = useStore()
   const [open, setOpen] = useState(true)
@@ -20,7 +21,7 @@ export function SetupChecklist({ client }: { client: Client }) {
   const pct = Math.round((setup.done / setup.total) * 100)
 
   return (
-    <div className="flex-shrink-0 mx-3 md:mx-5 mt-3 border border-gray-100 rounded-2xl bg-canvas overflow-hidden">
+    <div className={`flex-shrink-0 ${className} border border-gray-100 rounded-2xl bg-canvas overflow-hidden`}>
       <button
         onClick={() => setOpen(v => !v)}
         className="w-full flex items-center gap-3 px-4 py-3 text-left"

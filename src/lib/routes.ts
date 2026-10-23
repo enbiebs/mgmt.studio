@@ -5,6 +5,7 @@
 //
 //    /today  /calendar  /tour  /music  /finance  /legal      the "All artists" pages
 //    /company                                 the company page
+//    /artists/{artist}                        an artist's Overview (also /artists/{artist}/overview)
 //    /artists/{artist}/today                  an artist's Today
 //    /artists/{artist}/calendar               an artist's calendar
 //    /artists/{artist}/tour/advance/{show}    a show's advance
@@ -43,7 +44,7 @@ export type Route =
 
 // Section names as they appear in a web address.
 const SECTION_SLUG: Record<MainSection, string> = {
-  today: 'today', calendar: 'calendar', profile: 'profile', songs: 'music', tour: 'tour', deals: 'tour', content: 'content', finance: 'finance',
+  overview: 'overview', today: 'today', calendar: 'calendar', profile: 'profile', songs: 'music', tour: 'tour', deals: 'tour', content: 'content', finance: 'finance',
   projects: 'projects', analytics: 'analytics', team: 'team', legal: 'legal', activity: 'activity',
 }
 const SLUG_SECTION: Record<string, MainSection> = {
@@ -58,6 +59,8 @@ const TOUR_SLUG: Record<TourSub, string> = {
 }
 const SONGS_SLUG: Record<SongsSub, string> = { tracks: 'tracks', labelcopy: 'label-copy', checklist: 'checklist', status: 'status' }
 const reverse = <T extends string>(m: Record<T, string>) => Object.fromEntries((Object.entries(m) as [T, string][]).filter(([k]) => k !== 'stage-plot').map(([k, v]) => [v, k])) as Record<string, T>
+/** A lookup that only finds the table's own entries, so an address word like "constructor" or "toString" is just not a page. */
+const own = <T>(table: Record<string, T>, key: string): T | undefined => (Object.hasOwn(table, key) ? table[key] : undefined)
 const SLUG_TOUR = reverse(TOUR_SLUG)
 const SLUG_SONGS = reverse(SONGS_SLUG)
 const BIZ: BizSub[] = ['royalties', 'banking', 'catalog', 'pl', 'invoices', 'payments', 'forecast']
@@ -102,19 +105,19 @@ export function parsePath(pathname: string): Route | null {
   if (parts[0] !== 'artists' || parts.length < 2 || parts.length > 5) return null
 
   const [, clientId, sectionSlug, subSlug, record] = parts
-  const section = sectionSlug ? SLUG_SECTION[sectionSlug] : 'calendar'
+  const section = sectionSlug ? own(SLUG_SECTION, sectionSlug) : 'overview'
   if (!section) return null
   const route: Extract<Route, { view: 'studio' }> = { view: 'studio', clientId, section, subs: {} }
   switch (section) {
     case 'tour': {
-      const sub = subSlug ? SLUG_TOUR[subSlug] : 'tour'
+      const sub = subSlug ? own(SLUG_TOUR, subSlug) : 'tour'
       if (!sub) return null
       route.subs.tourSub = sub
       if (record) { if (SHOW_TABS.includes(sub)) route.selectedShowId = record; else if (sub === 'budget') route.selectedBudgetId = record }
       break
     }
     case 'songs': {
-      const sub = subSlug ? SLUG_SONGS[subSlug] : 'tracks'
+      const sub = subSlug ? own(SLUG_SONGS, subSlug) : 'tracks'
       if (!sub) return null
       route.subs.songsSub = sub
       if (record) route.selectedAlbumId = record
@@ -130,7 +133,7 @@ export function parsePath(pathname: string): Route | null {
 }
 
 const SECTION_TITLE: Record<MainSection, string> = {
-  today: 'Today', calendar: 'Calendar', profile: 'Profile', songs: 'Music', tour: 'Tour', deals: 'Tour', content: 'Content', finance: 'Finance',
+  overview: 'Overview', today: 'Today', calendar: 'Calendar', profile: 'Profile', songs: 'Music', tour: 'Tour', deals: 'Tour', content: 'Content', finance: 'Finance',
   projects: 'Projects', analytics: 'Analytics', team: 'Team', legal: 'Legal', activity: 'Activity',
 }
 

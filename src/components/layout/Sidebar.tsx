@@ -60,8 +60,8 @@ export function Sidebar() {
       <div className="mb-2"><ClientSwitcher variant="rail" /></div>
 
       {inArtist ? (
-        groups.map(g => (
-          <div key={g.label || 'main'} className={g.label ? 'mt-2' : ''}>
+        groups.map((g, gi) => (
+          <div key={gi} className={g.label || gi > 0 ? 'mt-2' : ''}>
             {g.label && <div className={HEADING}>{g.label}</div>}
             {g.items.map(i => (
               <button

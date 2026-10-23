@@ -753,8 +753,8 @@ export const useStore = create<StudioState>((set, get) => ({
     // it; what it actually shows is filtered per-event by each event's real
     // section access (see src/lib/calendar.ts), not gated here.
     if (section === 'calendar') return true
-    // Today is the same for viewing, but it is a list to read and act on, never a page to edit.
-    if (section === 'today') return !requireEdit
+    // Today and the Overview are the same for viewing (each part shows only what this person may open), but they are never pages to edit.
+    if (section === 'today' || section === 'overview') return !requireEdit
     // Activity has no grant of its own either: the database decides which entries a person may read.
     const a = accessFor(s, cid)
     if (section === 'activity') return a.role !== 'artist'
@@ -988,7 +988,7 @@ export const useStore = create<StudioState>((set, get) => ({
   openClient: (id) => {
     const s = get()
     const a = accessFor(s, id)
-    const firstAccessible = (a.role === 'manager' || a.role === 'artist') ? 'calendar' : (ALL_SECTIONS.find(sec => s.hasAccess(sec, id)) ?? 'songs')
+    const firstAccessible = a.role === 'manager' ? 'overview' : a.role === 'artist' ? 'calendar' : (ALL_SECTIONS.find(sec => s.hasAccess(sec, id)) ?? 'songs')
     const firstSection: MainSection = firstAccessible === 'deals' ? 'tour' : firstAccessible   // Deals & fees opens on the Tour page's Offers tab
     // Opening an artist that belongs to another company switches the app to that company (its role, pages and people).
     const ws = s.clientWorkspace[id]

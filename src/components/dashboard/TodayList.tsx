@@ -17,7 +17,8 @@ import { STATUS_CONFIG } from '@/components/manager/ProjectsView'
 import type { InboxItem, InboxSeverity } from '@/lib/inbox'
 import { money2 } from '@/lib/settlement-math'
 import { addDays, fromDateStr, today } from '@/lib/utils'
-import type { BizSub, LegalSub, Project, Task, TourSub } from '@/types'
+import { openInboxItem } from '@/lib/inbox-open'
+import type { Project, Task } from '@/types'
 import { AddTodo } from './AddTodo'
 import { AssigneeSelect, ChipName, ROW, TaskRow } from './todo-parts'
 
@@ -227,15 +228,8 @@ function DoneRow({ task, clientId, clientName }: { task: Task; clientId: string;
 // ── The automatic "needs you" items ───────────────────────────────────────────
 
 function AutoRow({ item, hiddenRow = false }: { item: InboxItem; hiddenRow?: boolean }) {
-  const { openClient, setSection, setBizSub, setTourSub, setLegalSub, markInboxDone, snoozeInboxItem, restoreInboxItem } = useStore()
-
-  function open() {
-    openClient(item.clientId)
-    setSection(item.go.section)
-    if (item.go.section === 'finance' && item.go.sub) setBizSub(item.go.sub as BizSub)
-    if (item.go.section === 'tour' && item.go.sub) setTourSub(item.go.sub as TourSub)
-    if (item.go.section === 'legal' && item.go.sub) setLegalSub(item.go.sub as LegalSub)
-  }
+  const { markInboxDone, snoozeInboxItem, restoreInboxItem } = useStore()
+  const open = () => openInboxItem(item)
 
   return (
     <div className={ROW}>
