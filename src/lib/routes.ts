@@ -3,20 +3,24 @@
 //  which section and tab, which show or budget); this turns that into a web address and back, so Back, bookmarks, opening
 //  in a new tab and links in Slack all work:
 //
-//    /today                                   Home
+//    /today  /calendar  /tour  /music  /finance  /legal      the "All artists" pages
 //    /company                                 the company page
+//    /artists/{artist}/today                  an artist's Today
 //    /artists/{artist}/calendar               an artist's calendar
 //    /artists/{artist}/tour/advance/{show}    a show's advance
-//    /artists/{artist}/money/invoices         the invoices
+//    /artists/{artist}/finance/invoices       the invoices   (this used to be .../money/..., which still opens)
 //    /artists/{artist}/music/label-copy/{release}
 //
 //  Pure logic (no store, no screen), covered by scripts/check-routes.ts.
 // ──────────────────────────────────────────────────────────
 
 import type { AnalyticsSub, BizSub, ContentSub, LegalSub, MainSection, SongsSub, TourSub } from '@/types'
+import { ROSTER_PAGE_LABEL, isRosterPage, type RosterPage } from '@/lib/nav-map'
 
 export interface Nav {
   view: 'dashboard' | 'studio' | 'company'
+  /** Which "All artists" page is open (only meaningful when no artist is). */
+  rosterPage: RosterPage
   clientId: string | null
   section: MainSection
   songsSub: SongsSub
@@ -33,18 +37,19 @@ export interface Nav {
 type Subs = Pick<Nav, 'songsSub' | 'contentSub' | 'bizSub' | 'tourSub' | 'analyticsSub' | 'legalSub'>
 
 export type Route =
-  | { view: 'dashboard' }
+  | { view: 'dashboard'; page: RosterPage }
   | { view: 'company' }
   | { view: 'studio'; clientId: string; section: MainSection; subs: Partial<Subs>; selectedShowId?: string; selectedAlbumId?: string; selectedBudgetId?: string }
 
 // Section names as they appear in a web address.
 const SECTION_SLUG: Record<MainSection, string> = {
-  calendar: 'calendar', profile: 'profile', songs: 'music', tour: 'tour', deals: 'tour', content: 'content', finance: 'money',
+  today: 'today', calendar: 'calendar', profile: 'profile', songs: 'music', tour: 'tour', deals: 'tour', content: 'content', finance: 'finance',
   projects: 'projects', analytics: 'analytics', team: 'team', legal: 'legal', activity: 'activity',
 }
-const SLUG_SECTION: Record<string, MainSection> = Object.fromEntries(
-  (Object.entries(SECTION_SLUG) as [MainSection, string][]).filter(([k]) => k !== 'deals').map(([k, v]) => [v, k]),
-)
+const SLUG_SECTION: Record<string, MainSection> = {
+  ...Object.fromEntries((Object.entries(SECTION_SLUG) as [MainSection, string][]).filter(([k]) => k !== 'deals').map(([k, v]) => [v, k])),
+  money: 'finance',                      // the old address of Finance: links and bookmarks made before the rename keep working
+}
 
 // Tab names, where the address says it differently from the store.
 const TOUR_SLUG: Record<TourSub, string> = {
@@ -67,7 +72,7 @@ const join = (...parts: (string | null | undefined)[]) => '/' + parts.filter((p)
 
 /** The address for what is open. */
 export function pathFor(nav: Nav): string {
-  if (nav.view === 'dashboard' || (nav.view === 'studio' && !nav.clientId)) return '/today'
+  if (nav.view === 'dashboard' || (nav.view === 'studio' && !nav.clientId)) return `/${nav.view === 'dashboard' ? nav.rosterPage : 'today'}`
   if (nav.view === 'company') return '/company'
   const artist = nav.clientId!
   const section: MainSection = nav.section === 'deals' ? 'tour' : nav.section
@@ -91,7 +96,8 @@ export function pathFor(nav: Nav): string {
 export function parsePath(pathname: string): Route | null {
   let parts: string[]
   try { parts = pathname.split('/').filter(Boolean).map(decodeURIComponent) } catch { return null }
-  if (parts.length === 0 || (parts.length === 1 && parts[0] === 'today')) return { view: 'dashboard' }
+  if (parts.length === 0) return { view: 'dashboard', page: 'today' }
+  if (parts.length === 1 && isRosterPage(parts[0])) return { view: 'dashboard', page: parts[0] }
   if (parts.length === 1 && parts[0] === 'company') return { view: 'company' }
   if (parts[0] !== 'artists' || parts.length < 2 || parts.length > 5) return null
 
@@ -124,13 +130,13 @@ export function parsePath(pathname: string): Route | null {
 }
 
 const SECTION_TITLE: Record<MainSection, string> = {
-  calendar: 'Calendar', profile: 'Profile', songs: 'Music', tour: 'Tour', deals: 'Tour', content: 'Content', finance: 'Finance',
+  today: 'Today', calendar: 'Calendar', profile: 'Profile', songs: 'Music', tour: 'Tour', deals: 'Tour', content: 'Content', finance: 'Finance',
   projects: 'Projects', analytics: 'Analytics', team: 'Team', legal: 'Legal', activity: 'Activity',
 }
 
 /** The page title (browser tab, history): "Tour · nimino", "Today", "Company". */
-export function titleFor(nav: Pick<Nav, 'view' | 'section'>, artistName?: string): string {
-  if (nav.view === 'dashboard') return 'Today'
+export function titleFor(nav: Pick<Nav, 'view' | 'section' | 'rosterPage'>, artistName?: string): string {
+  if (nav.view === 'dashboard') return ROSTER_PAGE_LABEL[nav.rosterPage]
   if (nav.view === 'company') return 'Company'
   return artistName ? `${SECTION_TITLE[nav.section]} · ${artistName}` : SECTION_TITLE[nav.section]
 }

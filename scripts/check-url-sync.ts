@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { useStore } from '../src/lib/store'
 import { startUrlSync, type BrowserLike } from '../src/lib/url-sync'
 import { PRODUCT_NAME } from '../src/lib/brand'
+import { artistsForPage, pickerNote, type RosterPage } from '../src/lib/nav-map'
 import type { Client } from '../src/types'
 
 // ── a pretend browser with a real history ──
@@ -45,7 +46,7 @@ const artist = (id: string, name: string): Client => ({
 const fresh = (over: Record<string, unknown> = {}) => useStore.setState({
   data: { clients: [artist('c1', 'Alpha'), artist('c2', 'Beta')] },
   role: 'manager', grants: [], authClientId: null,
-  view: 'dashboard', clientId: null, section: 'calendar',
+  view: 'dashboard', rosterPage: 'today', clientId: null, section: 'calendar',
   songsSub: 'tracks', contentSub: 'manage', bizSub: 'royalties', tourSub: 'tour', analyticsSub: 'overview', legalSub: 'pipeline',
   selectedShowId: null, selectedAlbumId: null, selectedBudgetId: null,
   ...over,
@@ -87,7 +88,7 @@ assert.deepEqual(win.entries.slice(-1), ['/artists/c2/tour/advance'])        // 
 useStore.getState().setBizSub('pl')
 useStore.getState().setSection('finance')
 win.flush()
-assert.deepEqual(win.entries.slice(-1), ['/artists/c2/money/pl'])
+assert.deepEqual(win.entries.slice(-1), ['/artists/c2/finance/pl'])       // the page is called Finance in the address, as everywhere else
 win.flush()
 assert.equal(win.entries.length, 5)                                          // nothing changed, nothing added
 
@@ -106,6 +107,63 @@ assert.equal(win.entries.length, before)                                     // 
 win.forward()
 assert.deepEqual(nav().slice(0, 2), ['studio', 'c2'])
 stop()
+
+// ── the old Finance address (bookmarks) still opens Finance, and the address bar is corrected ──
+fresh(); win = browser('/artists/c2/money/pl'); stop = startUrlSync(win)
+assert.deepEqual(nav().slice(0, 3), ['studio', 'c2', 'finance']); assert.deepEqual(win.entries, ['/artists/c2/finance/pl']); stop()
+
+// ── "All artists" pages have their own addresses, and the artist switcher keeps you on the same page ──
+fresh(); win = browser('/tour'); stop = startUrlSync(win)
+assert.equal(useStore.getState().view, 'dashboard'); assert.equal(useStore.getState().rosterPage, 'tour'); assert.deepEqual(win.entries, ['/tour'])
+assert.equal(win.title(), `Tour · ${PRODUCT_NAME}`)
+useStore.getState().switchScope('c1'); win.flush()
+assert.deepEqual(nav().slice(0, 3), ['studio', 'c1', 'tour']); assert.deepEqual(win.entries.slice(-1), ['/artists/c1/tour/shows'])
+useStore.getState().switchScope('all'); win.flush()
+assert.equal(useStore.getState().view, 'dashboard'); assert.equal(useStore.getState().rosterPage, 'tour'); assert.deepEqual(win.entries.slice(-1), ['/tour'])
+useStore.getState().goToRoster('finance'); win.flush()
+assert.deepEqual(win.entries.slice(-1), ['/finance'])
+useStore.getState().switchScope('c2'); win.flush()
+assert.deepEqual(nav().slice(0, 3), ['studio', 'c2', 'finance'])
+stop()
+fresh(); win = browser('/artists/c1/today'); stop = startUrlSync(win)                  // Today inside an artist
+assert.deepEqual(nav().slice(0, 3), ['studio', 'c1', 'today']); assert.deepEqual(win.entries, ['/artists/c1/today']); stop()
+
+// ── the switcher never lands on a page the person cannot open ──
+fresh({ role: 'team', grants: [{ section: 'tour', clientId: 'c1', canEdit: false }, { section: 'finance', clientId: 'c2', canEdit: false }] })
+useStore.getState().goToRoster('tour')
+useStore.getState().switchScope('c1')
+assert.deepEqual(nav().slice(0, 3), ['studio', 'c1', 'tour'])                // they can open Tour for Alpha
+useStore.getState().switchScope('c2')
+assert.deepEqual(nav().slice(0, 3), ['studio', 'c2', 'finance'])             // not for Beta: they land on what Beta has shared with them
+
+// ── moving to another artist starts fresh; picking the artist you are already on changes nothing ──
+fresh()
+useStore.getState().openClient('c1'); useStore.getState().setSection('tour'); useStore.getState().setSelectedShow('c1-s1'); useStore.getState().setSelectedBudget('c1-b1')
+useStore.getState().switchScope('c1')
+assert.equal(useStore.getState().selectedShowId, 'c1-s1'); assert.equal(useStore.getState().selectedBudgetId, 'c1-b1')   // same artist: untouched
+useStore.getState().switchScope('c2')
+assert.deepEqual(nav().slice(0, 3), ['studio', 'c2', 'tour'])
+assert.equal(useStore.getState().selectedShowId, null); assert.equal(useStore.getState().selectedBudgetId, null)           // another artist: nothing carried over
+useStore.getState().setSelectedBudget('c2-b1'); useStore.getState().openClient('c1')
+assert.equal(useStore.getState().selectedBudgetId, null, 'opening an artist never inherits a selected budget')
+
+// ── Today is read and acted on, never edited like a page ──
+fresh()
+useStore.getState().openClient('c1')
+assert.equal(useStore.getState().hasAccess('today'), true); assert.equal(useStore.getState().hasAccess('today', 'c1', true), false)
+
+// ── who the pick-an-artist pages list, from the real access rules ──
+const listed = (page: RosterPage) => artistsForPage(page, useStore.getState().data.clients, (sec, id) => useStore.getState().hasAccess(sec, id)).map(c => c.id)
+fresh()
+assert.deepEqual(listed('finance'), ['c1', 'c2'])                                             // a manager opens everyone's
+fresh({ role: 'team', grants: [{ section: 'tour', clientId: 'c1', canEdit: false }, { section: 'finance', clientId: 'c2', canEdit: false }] })
+assert.deepEqual(listed('tour'), ['c1']); assert.deepEqual(listed('finance'), ['c2']); assert.deepEqual(listed('legal'), [])
+fresh({ role: 'team', grants: [{ section: 'deals', clientId: 'c1', canEdit: false }] })
+assert.deepEqual(listed('tour'), ['c1'])                                                      // Deals & fees opens the Tour page ...
+{ const st = useStore.getState(); assert.equal(pickerNote('tour', 'c1', { has: (s, i) => st.hasAccess(s, i), shareOnly: (s, i) => st.isShareOnly(s, i) }), 'Offers only') }   // ... but shows no shows
+fresh({ role: 'team', grants: [], data: { clients: [{ ...artist('c1', 'Alpha'), itemSections: ['finance'] }, artist('c2', 'Beta')] } })
+assert.deepEqual(listed('finance'), ['c1'])                                                   // one shared invoice opens Finance for viewing ...
+{ const st = useStore.getState(); assert.equal(pickerNote('finance', 'c1', { has: (s, i) => st.hasAccess(s, i), shareOnly: (s, i) => st.isShareOnly(s, i) }), 'Shared with you') }   // ... but no totals
 
 // ── things that must fall back, never break ──
 fresh(); win = browser('/artists/nobody/tour'); stop = startUrlSync(win)     // an artist that does not exist

@@ -25,7 +25,7 @@ export interface BrowserLike {
 }
 
 const navOf = (s: State): Nav => ({
-  view: s.view, clientId: s.clientId, section: s.section,
+  view: s.view, rosterPage: s.rosterPage, clientId: s.clientId, section: s.section,
   songsSub: s.songsSub, contentSub: s.contentSub, bizSub: s.bizSub, tourSub: s.tourSub, analyticsSub: s.analyticsSub, legalSub: s.legalSub,
   selectedShowId: s.selectedShowId, selectedAlbumId: s.selectedAlbumId, selectedBudgetId: s.selectedBudgetId,
 })
@@ -33,7 +33,7 @@ const navOf = (s: State): Nav => ({
 /** Opens what an address says. An artist that does not exist (or this person may not open), or a page they may not open, falls back to something that does. */
 export function applyRoute(route: Route): void {
   const s = useStore.getState()
-  if (route.view === 'dashboard') return s.goToDashboard()
+  if (route.view === 'dashboard') return s.goToRoster(route.page)
   if (route.view === 'company') return s.role === 'manager' ? s.goToCompany() : s.goToDashboard()
 
   const ids = s.accessibleClientIds()
@@ -83,7 +83,7 @@ export function startUrlSync(win: BrowserLike): () => void {
 
   function openAddress(path: string) {
     applying = true
-    try { applyRoute(parsePath(path) ?? { view: 'dashboard' }) } finally { applying = false }
+    try { applyRoute(parsePath(path) ?? { view: 'dashboard', page: 'today' }) } finally { applying = false }
   }
 
   // On arrival: open the address we were given, then tidy the address bar to match what actually opened.

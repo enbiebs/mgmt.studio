@@ -17,7 +17,8 @@ import { buildRecordEntries, type SearchTarget } from '@/lib/search-records'
 import { DRIVE_FOLDERS, folderLink } from '@/lib/drive-links'
 import { Icon, type IconName } from '@/components/ui/Icon'
 import type { BizSub, MainSection, TourSub } from '@/types'
-import { useVisibleNav } from './nav'
+import { ROSTER_PAGE_LABEL } from '@/lib/nav-map'
+import { ROSTER_PAGE_ICON, useVisibleNav, useVisibleRosterPages } from './nav'
 
 export const OPEN_COMMAND_BAR = 'mgmt:open-command-bar'
 
@@ -59,6 +60,7 @@ export function CommandBar() {
   const accessibleClientIds = useStore(s => s.accessibleClientIds)
   const me = useMe()
   const nav = useVisibleNav()
+  const rosterPages = useVisibleRosterPages()
 
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -90,7 +92,13 @@ export function CommandBar() {
     const roster = ids === 'all' ? data.clients : data.clients.filter(c => ids.includes(c.id))
     const current = roster.find(c => c.id === clientId)
 
-    out.push({ id: 'home', group: 'Go to', icon: 'home', label: 'Home', hint: 'All artists and what needs you', run: () => useStore.getState().goToDashboard() })
+    for (const p of rosterPages) {
+      out.push({
+        id: `go-all-${p}`, group: 'Go to', icon: ROSTER_PAGE_ICON[p], label: ROSTER_PAGE_LABEL[p],
+        hint: p === 'today' ? 'All artists and what needs you' : 'All artists', keywords: p === 'today' ? 'home' : undefined,
+        run: () => useStore.getState().goToRoster(p),
+      })
+    }
     if (role === 'manager') out.push({ id: 'company', group: 'Go to', icon: 'team', label: 'Company', hint: 'Your people and what each can open', keywords: 'team people access invite roster', run: () => useStore.getState().goToCompany() })
     if (view === 'studio' && current) {
       for (const g of nav) for (const i of g.items) {
@@ -213,7 +221,7 @@ export function CommandBar() {
       }
     }
     return out
-  }, [open, data, clientId, view, role, nav, hasAccess, accessibleClientIds])
+  }, [open, data, clientId, view, role, nav, rosterPages, hasAccess, accessibleClientIds])
 
   // Contracts, songs, releases, people, guests, travel, settlements, bills, budgets and posts (behind the same access as their pages).
   // They are only searched once something is typed, so the list you see on opening stays short.

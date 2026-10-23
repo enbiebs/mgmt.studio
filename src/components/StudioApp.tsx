@@ -14,12 +14,9 @@ import { useStore } from '@/lib/store'
 import { effectiveSub, shareOnlyTabs } from '@/lib/item-access'
 import { canOpenSection, visibleTourTabs } from '@/lib/tour-tabs'
 import { CompanyView } from '@/components/company/CompanyView'
-import { CompanySetupCard } from '@/components/dashboard/CompanySetupCard'
-import { CompanyInvitesCard, YourCompaniesCard } from '@/components/dashboard/CompaniesCards'
-import { ForecastCard } from '@/components/dashboard/ForecastCard'
 import { AppHeader }  from '@/components/layout/AppHeader'
 import { Subnav }     from '@/components/layout/Subnav'
-import { Rail }       from '@/components/layout/Rail'
+import { Sidebar }    from '@/components/layout/Sidebar'
 import { CommandBar } from '@/components/layout/CommandBar'
 import { ShowProgressBar } from '@/components/tour/ShowProgressBar'
 import { Toaster } from '@/components/ui/Toaster'
@@ -29,8 +26,9 @@ import { sectionLabel } from '@/components/layout/nav'
 import { CalendarView } from '@/components/calendar/CalendarView'
 
 // Dashboard
-import { ClientCard }      from '@/components/dashboard/ClientCard'
 import { DashboardModals } from '@/components/dashboard/Modals'
+import { RosterToday }     from '@/components/dashboard/RosterToday'
+import { ArtistPicker }    from '@/components/dashboard/ArtistPicker'
 
 // Manager views
 import { SongsView }    from '@/components/songs/SongsView'
@@ -70,7 +68,7 @@ import { ProfileView } from '@/components/profile/ProfileView'
 import { ARTIST_SIDE_NAME, PRODUCT_NAME } from '@/lib/brand'
 
 export function StudioApp() {
-  const { view, section, songsSub: rawSongsSub, contentSub: rawContentSub, bizSub: rawBizSub, tourSub: rawTourSub, clientId, data, role, hasAccess, isShareOnly, accessibleClientIds, openModal, isLoading, goToCompany, contexts, clientWorkspace, homeWorkspaceId, workspaceId } = useStore()
+  const { view, section, rosterPage, songsSub: rawSongsSub, contentSub: rawContentSub, bizSub: rawBizSub, tourSub: rawTourSub, clientId, data, role, hasAccess, isShareOnly, isLoading, workspaceId } = useStore()
   // Someone with only a shared item lands on a tab that shows it, not an empty one.
   const allowedTabs = isShareOnly(section) ? shareOnlyTabs(section, data.clients.find(c => c.id === clientId)) : undefined
   const songsSub = effectiveSub(rawSongsSub, allowedTabs) as typeof rawSongsSub
@@ -97,81 +95,26 @@ export function StudioApp() {
 
   return (
     <div className="app-shell flex h-screen overflow-hidden bg-canvas text-gray-900">
-      {role !== 'artist' && <Rail />}
+      {role !== 'artist' && <Sidebar />}
       <div className="flex-1 min-w-0 flex flex-col">
         <AppHeader />
 
-        {/* ── Dashboard (roster) — hidden entirely for artists, who land straight in their own client ── */}
-        {view === 'dashboard' && role !== 'artist' && (() => {
-          const visibleIds = accessibleClientIds()
-          const roster = visibleIds === 'all' ? data.clients : data.clients.filter(c => visibleIds.includes(c.id))
-          // Someone who works under several companies sees each company's artists under its own name (their home company first).
-          const companies = Object.values(contexts)
-          const grouped = companies.length > 1
-          const order = [homeWorkspaceId, ...companies.map(c => c.workspaceId)].filter((w, i, a): w is string => !!w && a.indexOf(w) === i)
-          const names = Object.fromEntries(companies.map(c => [c.workspaceId, c.companyName || 'Company']))
-          const groups = grouped
-            ? order.map(ws => ({ ws, name: names[ws], clients: roster.filter(c => clientWorkspace[c.id] === ws), canAdd: contexts[ws]?.role === 'manager' }))
-                .filter(g => g.clients.length > 0 || g.canAdd)
-            : []
-          const addTile = (ws?: string) => (
-            <button
-              onClick={() => openModal('add-client', ws ? { workspaceId: ws } : {})}
-              className="border-2 border-dashed border-gray-200 rounded-2xl p-5 min-h-[220px] flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-accent hover:text-accent transition-colors"
-            >
-              <span className="text-3xl">+</span>
-              <span className="text-sm font-medium">Add a client</span>
-            </button>
-          )
-          return (
+        {/* ── All artists — hidden entirely for artists, who land straight in their own client ── */}
+        {view === 'dashboard' && role !== 'artist' && (
+          rosterPage === 'calendar' ? (
+            <div className="glass-sheet flex-1 min-h-0 flex flex-col">
+              <h1 className="sr-only">Calendar · All artists</h1>
+              <CalendarView roster />
+            </div>
+          ) : (
             <main className="flex-1 overflow-auto p-4 md:p-8">
-              <CompanyInvitesCard />
-              <CompanySetupCard />
-              <TodayList />
-              <ForecastCard />
-
-              <div className="flex items-end justify-between mb-4">
-                <div>
-                  <h2 className="font-serif text-xl font-medium leading-tight">Your artists</h2>
-                  <p className="text-sm text-gray-400 mt-0.5">{roster.length} client{roster.length !== 1 ? 's' : ''}</p>
-                </div>
-                {role === 'manager' && (
-                  <button onClick={() => goToCompany()} className="text-xs font-medium text-accent hover:underline">Your team and what they can open →</button>
-                )}
-              </div>
-
-              {grouped ? (
-                <div className="flex flex-col gap-8">
-                  {groups.map(g => (
-                    <section key={g.ws} aria-label={g.name}>
-                      <div className="mb-2 flex items-baseline gap-2">
-                        <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{g.name}</h3>
-                        <span className="text-xs text-gray-400">{g.clients.length} client{g.clients.length !== 1 ? 's' : ''}</span>
-                      </div>
-                      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(310px,100%),1fr))] gap-4">
-                        {g.clients.map(c => <ClientCard key={c.id} client={c} />)}
-                        {g.canAdd && addTile(g.ws)}
-                      </div>
-                    </section>
-                  ))}
-                </div>
-              ) : (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(310px,100%),1fr))] gap-4">
-                  {roster.map(c => <ClientCard key={c.id} client={c} />)}
-                  {role === 'manager' && addTile()}
-                </div>
-              )}
-
-              {roster.length === 0 && (
-                <div className="text-center text-gray-300 py-16 text-sm">No clients you have access to yet</div>
-              )}
-
-              <YourCompaniesCard />
-
-              <DashboardModals />
+              {rosterPage === 'today'
+                ? <RosterToday />
+                : <ArtistPicker page={rosterPage} />}
             </main>
           )
-        })()}
+        )}
+        {view === 'dashboard' && role !== 'artist' && <DashboardModals />}
 
         {/* ── Company: everyone's access to every artist (managers) ── */}
         {view === 'company' && role === 'manager' && (
@@ -182,9 +125,10 @@ export function StudioApp() {
 
         {/* ── Studio: one near-solid frosted sheet holds the artist's pages (plain wrapper in the solid look) ── */}
         {view === 'studio' && (
-          <div className="glass-sheet flex-1 min-h-0 flex flex-col">
+          // Keyed by artist, so moving to another artist never carries a half-typed edit or a selected show across to them
+          <div key={clientId ?? 'none'} className="glass-sheet flex-1 min-h-0 flex flex-col">
             {/* One page heading for screen readers on the pages that do not draw their own (the Profile page, the Today list and the portal do) */}
-            {role !== 'artist' && section !== 'profile' && (
+            {role !== 'artist' && section !== 'profile' && section !== 'today' && (
               <h1 className="sr-only">{sectionLabel(section)} · {data.clients.find(c => c.id === clientId)?.name}</h1>
             )}
             {/* Artist portal */}
@@ -228,6 +172,7 @@ export function StudioApp() {
                       bizSub === 'forecast' ? <ForecastView />  :
                       <RoyaltiesView />
                     )}
+                    {section === 'today'      && <main className="flex-1 overflow-auto p-4 md:p-8"><TodayList clientId={clientId ?? undefined} /></main>}
                     {section === 'calendar'   && <CalendarView />}
                     {section === 'projects'   && <ProjectsView />}
                     {section === 'analytics'  && <AnalyticsView />}
