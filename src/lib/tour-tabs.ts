@@ -8,6 +8,19 @@ import type { MainSection } from '@/types'
 
 export const TOUR_TAB_ORDER = ['tour', 'offers', 'budget', 'settlements', 'advance', 'daysheet', 'travel', 'crew', 'guests'] as const
 
+/** One plain line under the tab strip saying what each tab is for (so no one has to know the trade words). Short, so it stays on one line on a phone. */
+export const TOUR_TAB_HINT: Record<(typeof TOUR_TAB_ORDER)[number], string> = {
+  tour: 'Shows for this artist. Open one to see what is left to do.',
+  offers: 'Offers being negotiated. A confirmed offer becomes a show.',
+  budget: 'Plan what a show will cost and earn.',
+  settlements: "The promoter's final numbers, and what you're still owed.",
+  advance: 'Details to confirm with the venue before the show.',
+  daysheet: 'A one-page schedule for show day, from the advance.',
+  travel: 'Flights, hotels and ground transport.',
+  crew: 'Everyone who travels with the artist.',
+  guests: 'The guest list for each show.',
+}
+
 export interface TourAccess {
   /** Tour access of any kind, including a single shared show (view only). */
   tour: boolean

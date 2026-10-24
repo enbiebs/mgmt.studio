@@ -11,6 +11,7 @@ import { useStore } from '@/lib/store'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { BudgetEditor } from './BudgetEditor'
 import { BackToList, detailPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
+import { budgetCandidates } from '@/lib/budget-candidates'
 import {
   COMMISSION_BASE_LABEL, DEFAULT_COMMISSIONS, financeSettings, makeConverter, showFigures, computeBudget,
 } from '@/lib/budget'
@@ -53,10 +54,8 @@ export function BudgetView() {
   const selectedRun = runs.find(r => r.id === runId)
 
   // Offers and shows that don't have a budget yet (offers made before budgets existed, shows added directly).
-  const offerHasBudget = (id: string) => budgets.some(b => b.offerId === id)
-  const showHasBudget = (id: string) => budgets.some(b => b.showId === id)
-  const needOffer = offers.filter(o => (o.status === 'inquiry' || o.status === 'hold' || o.status === 'confirmed') && !offerHasBudget(o.id) && !(o.showId && showHasBudget(o.showId)))
-  const needShow = client.tour.shows.filter(s => !s.historyOnly && !showHasBudget(s.id) && !offers.some(o => o.showId === s.id))
+  // A gig is listed once: as its offer while it is only an offer, as its show once there is one (see lib/budget-candidates.ts).
+  const { needOffer, needShow } = budgetCandidates(offers, client.tour.shows, budgets)
 
   function open(id: string) { setRunId(null); setSelectedBudget(id); pane.openDetail() }
   function create(target: { showId?: string; offerId?: string }) { const id = addBudget(target); if (id) open(id) }

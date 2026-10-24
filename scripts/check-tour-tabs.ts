@@ -1,8 +1,11 @@
 // Checks which Tour tabs each kind of person gets.  Run with:  npx tsx scripts/check-tour-tabs.ts
 import assert from 'node:assert/strict'
-import { canOpenSection, visibleTourTabs } from '../src/lib/tour-tabs'
+import { TOUR_TAB_HINT, TOUR_TAB_ORDER, canOpenSection, visibleTourTabs } from '../src/lib/tour-tabs'
 
 const all = ['tour', 'offers', 'budget', 'settlements', 'advance', 'daysheet', 'travel', 'crew', 'guests']
+// every tab says in one plain line what it is for: not blank, and short enough to stay on one line on a phone (about 60 characters)
+for (const tab of TOUR_TAB_ORDER) assert.ok(TOUR_TAB_HINT[tab].length >= 20 && TOUR_TAB_HINT[tab].length <= 60, `a short plain hint for ${tab}`)
+assert.deepEqual(Object.keys(TOUR_TAB_HINT).sort(), [...TOUR_TAB_ORDER].sort(), 'a hint for exactly the tabs there are')
 // a manager-style person with everything gets every tab, in menu order
 assert.deepEqual(visibleTourTabs({ tour: true, deals: true, finance: true }), all)
 // touring crew: the schedule side only, no offers, no money

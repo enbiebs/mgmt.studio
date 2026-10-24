@@ -1,6 +1,6 @@
 // Checks how dated things are classed (upcoming / due soon / overdue / done) and how shows are ordered.  Run with:  npx tsx scripts/check-date-state.ts
 import assert from 'node:assert/strict'
-import { SOON_DAYS, daysUntil, defaultShow, dueState, eventState, isUpcomingShow, nextShow, orderShows, splitShows, type DatedShow } from '../src/lib/date-state'
+import { SOON_DAYS, daysUntil, defaultShow, dueState, eventState, isUpcomingShow, nextShow, orderShows, showCounts, splitShows, type DatedShow } from '../src/lib/date-state'
 import { getCalendarEvents } from '../src/lib/calendar'
 import type { Client } from '../src/types'
 
@@ -92,5 +92,16 @@ assert.equal(state('bill-e1'), 'soon')
 assert.equal(state('contract-c1'), 'overdue')
 assert.equal(state('project-p1'), 'upcoming')
 assert.equal(state('offer-o1'), 'done')                                             // an open offer for a date that has passed just fades
+
+// ── the four numbers on an artist's Tour page ──
+assert.deepEqual(showCounts([], TODAY), { comingUp: 0, confirmed: 0, onHold: 0, past: 0 })
+const mix = [
+  show('c1', '2026-11-01'), show('c2', TODAY), show('h1', '2026-11-05', { status: 'hold' }), show('x1', '2026-11-09', { status: 'cancelled' }),
+  show('p1', '2026-09-01'), show('p2', '2026-09-02', { status: 'cancelled' }), show('p3', '2026-09-03', { status: 'hold' }), show('hist', '2025-01-01', { historyOnly: true }),
+]
+assert.deepEqual(showCounts(mix, TODAY), { comingUp: 3, confirmed: 2, onHold: 1, past: 3 })
+assert.equal(showCounts([show('a', '2026-10-18'), show('b', '2026-10-19')], TODAY).past, 1, 'yesterday is past, today is still coming up')
+assert.equal(showCounts([show('f', '2026-12-01', { historyOnly: true })], TODAY).comingUp, 0, 'a history-only show is never coming up')
+assert.equal(showCounts(mix, TODAY).past, splitShows(mix.filter(s => !s.historyOnly), TODAY).past.length, 'the tile and the list header agree')
 
 console.log('date-state checks passed')
