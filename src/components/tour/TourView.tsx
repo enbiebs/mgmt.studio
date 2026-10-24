@@ -9,9 +9,10 @@ import { ShowFolderLink } from '@/components/tour/ShowFolderLink'
 import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { MONTH_NAMES, MONTH_SHORT, fmt, today } from '@/lib/utils'
-import { isUpcomingShow, splitShows } from '@/lib/date-state'
+import { isUpcomingShow, showCounts, splitShows } from '@/lib/date-state'
 import { invoiceStateWithDeposits, showNet } from '@/lib/money'
 import { askConfirm } from '@/lib/confirm'
+import { notify } from '@/lib/notify'
 import { showImpact, staysLine } from '@/lib/delete-effects'
 import { STATUS_CONFIG as INVOICE_STATUS_CONFIG } from '@/components/business/InvoicesView'
 import type { Currency, Show } from '@/types'
@@ -32,18 +33,19 @@ export function TourView() {
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
-  const [showPlayed, setShowPlayed] = useState(false)
+  const [hidePlayed, setHidePlayed] = useState(false)
 
   if (!client) return null
   const allShows = client.tour.shows
   const shows    = allShows.filter(s => !s.historyOnly)      // shows that still need work
   const history  = allShows.filter(s => s.historyOnly)       // past shows kept for fee comparisons
-  // Shows still ahead come first (soonest at the top); shows already played sit in a collapsed group below (most recent first).
+  // Shows still ahead come first (soonest at the top); shows already past sit in a group below (most recent first) that stays open unless you fold it away.
   // "Upcoming" counts only shows that are still going to happen, so a cancelled show is never counted.
   const { upcoming: ahead, past: played } = splitShows(shows, today())
   const upcoming = shows.filter(s => isUpcomingShow(s, today()))
+  const counts = showCounts(shows, today())
   const selected = allShows.find(s => s.id === selectedShowId)
-  const playedOpen = showPlayed || (!!selected && played.some(s => s.id === selected.id))
+  const playedOpen = !hidePlayed || (!!selected && played.some(s => s.id === selected.id))
 
   // "Advance Dashboard" lite — flags upcoming shows with something outstanding,
   // computed entirely from data already in the store (no new tables).
@@ -144,10 +146,10 @@ export function TourView() {
               {played.length > 0 && (
                 <>
                   <button
-                    onClick={() => setShowPlayed(v => !v)}
+                    onClick={() => setHidePlayed(v => !v)}
                     className="w-full flex items-center justify-between px-4 py-2.5 border-b border-gray-100 text-left text-[11px] font-bold uppercase tracking-widest text-gray-400 hover:bg-gray-50"
                   >
-                    <span>Played ({played.length})</span><span>{playedOpen ? '▴' : '▾'}</span>
+                    <span>Past ({played.length})</span><span>{playedOpen ? '▴' : '▾'}</span>
                   </button>
                   {playedOpen && played.map(s => showRow(s, true))}
                 </>
@@ -173,7 +175,7 @@ export function TourView() {
         <BackToList onClick={pane.closeDetail} label="All shows" className="-mx-4 -mt-4 mb-4" />
         <div className="flex items-center justify-between mb-3 relative">
           {selected ? (
-            <button onClick={() => setSelectedShow(null)} className="text-xs text-gray-500 hover:text-gray-900 transition-colors">← Overview</button>
+            <button onClick={() => setSelectedShow(null)} className="text-xs text-gray-500 hover:text-gray-900 transition-colors">← Tour summary</button>
           ) : <span />}
           {editable && (<>
             <button
@@ -234,9 +236,9 @@ export function TourView() {
         {/* Overview: the numbers and what needs attention, until a show is opened (then the show leads) */}
         {!selected && (<>
         {/* Stats */}
-        <div className="flex gap-3.5 mb-6">
-          {[[String(shows.length), 'Shows'],[String(upcoming.length), 'Upcoming'],[String(shows.filter(s => s.status === 'confirmed').length), 'Confirmed']].map(([n, l]) => (
-            <div key={l} className="bg-gray-50 rounded-xl px-5 py-4 flex-1">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          {([['comingUp', 'Coming up'], ['confirmed', 'Confirmed'], ['onHold', 'On hold'], ['past', 'Past']] as const).map(([key, l]) => [String(counts[key]), l]).map(([n, l]) => (
+            <div key={l} className="bg-gray-50 rounded-xl px-4 py-4">
               <div className="text-2xl font-bold font-serif">{n}</div>
               <div className="text-xs text-gray-400 mt-1">{l}</div>
             </div>
@@ -364,20 +366,23 @@ export function TourView() {
       </div>
 
       {/* Add show modal */}
-      {addOpen && <AddShowModal onClose={() => setAddOpen(false)} />}
+      {addOpen && <AddShowModal onClose={() => setAddOpen(false)} onAdded={id => { setSelectedShow(id); pane.openDetail() }} />}
       {importOpen && <CalendarImportModal onClose={() => setImportOpen(false)} />}
     </div>
   )
 }
 
 // ── Add Show Modal ──────────────────────────────────────────
-export function AddShowModal({ defaultDate, onClose }: { defaultDate?: string; onClose: () => void }) {
+export function AddShowModal({ defaultDate, onClose, onAdded }: { defaultDate?: string; onClose: () => void; onAdded?: (showId: string) => void }) {
   const addShow = useStore(s => s.addShow)
   const [f, setF] = useState({ date: defaultDate ?? '', city: '', venue: '', time: '20:00' })
+  const [status, setStatus] = useState<'hold' | 'confirmed'>('hold')
 
   function handleAdd() {
     if (!f.date || !f.city || !f.venue) return
-    addShow(f.date, f.city, f.venue, f.time)
+    const id = addShow(f.date, f.city, f.venue, f.time, status)
+    notify(`Added ${f.venue}, ${f.city} as ${status === 'hold' ? 'a hold' : 'a confirmed show'}`)
+    onAdded?.(id)
     onClose()
   }
 
@@ -392,6 +397,15 @@ export function AddShowModal({ defaultDate, onClose }: { defaultDate?: string; o
       <FormField label="City"><input type="text" className={inputClass} placeholder="City" value={f.city} onChange={e => setF(p => ({...p, city: e.target.value}))} /></FormField>
       <FormField label="Venue"><input type="text" className={inputClass} placeholder="Venue name" value={f.venue} onChange={e => setF(p => ({...p, venue: e.target.value}))} /></FormField>
       <FormField label="Set time"><input type="time" className={inputClass} value={f.time} onChange={e => setF(p => ({...p, time: e.target.value}))} /></FormField>
+      <FormField label="Is it locked in?">
+        <div role="group" aria-label="Is it locked in?" className="inline-flex p-0.5 bg-gray-100 rounded-lg text-xs font-medium">
+          {([['hold', 'Not yet (hold)'], ['confirmed', 'Yes, confirmed']] as const).map(([value, label]) => (
+            <button key={value} type="button" aria-pressed={status === value} onClick={() => setStatus(value)}
+              className={`px-3 py-1.5 rounded-md transition-colors ${status === value ? 'bg-canvas shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>{label}</button>
+          ))}
+        </div>
+        <div className="mt-1 text-[11px] text-gray-400">A hold is a date being kept for now. You can confirm it later from the show.</div>
+      </FormField>
     </Modal>
   )
 }
@@ -443,6 +457,7 @@ function ShowFinancials({ show, editable, onViewOffer }: { show: Show; editable:
   return (
     <div className="border-t border-gray-100 pt-4 mb-4">
       <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Financials</div>
+      {editable && <p className="text-[11px] text-gray-400 mb-3">The guarantee is the fee the promoter agreed to pay. The deposit is the part paid up front.</p>}
       {editable ? (
         <>
           <div className="grid grid-cols-3 gap-3 mb-2">

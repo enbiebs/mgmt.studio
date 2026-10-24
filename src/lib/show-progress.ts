@@ -32,7 +32,8 @@ export type StepState = 'done' | 'now' | 'next' | 'open'
 export type ProgressLink = { section: 'tour'; sub: TourSub } | { section: 'finance'; sub: 'invoices' | 'payments' }
 
 export interface ProgressStep { key: StepKey; label: string; state: StepState }
-export interface NextStep { label: string; detail?: string; go: ProgressLink }
+/** `action: 'confirm'` means the step is done by pressing a button (set the show to Confirmed), not by going somewhere. */
+export interface NextStep { label: string; detail?: string; go: ProgressLink; action?: 'confirm' }
 export interface ProgressFact {
   key: string
   label: string
@@ -102,7 +103,7 @@ export function progressForShow(client: Client, show: Show, today: string): Show
   } else if (lapsed) {
     waiting = 'This hold passed without being confirmed'
   } else if (stepKey === 'confirmed') {
-    next = { label: 'Confirm the hold', detail: 'It is still a hold. Confirm it when the promoter locks it in.', go: { section: 'tour', sub: 'tour' } }
+    next = { label: 'Confirm the hold', detail: 'It is still a hold. Confirm it when the promoter locks it in.', go: { section: 'tour', sub: 'tour' }, action: 'confirm' }
   } else if (stepKey === 'advance') {
     next = !advance
       ? { label: 'Start the advance', detail: 'Schedule, production and hospitality for the venue', go: { section: 'tour', sub: 'advance' } }

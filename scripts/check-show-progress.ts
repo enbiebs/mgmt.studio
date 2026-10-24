@@ -20,6 +20,13 @@ const stateOf = (p: ReturnType<typeof progressForShow>, key: string) => p.steps.
 const currentKey = (p: ReturnType<typeof progressForShow>) => (p.current < STEPS.length ? STEPS[p.current].key : 'all-done')
 const fact = (p: ReturnType<typeof progressForShow>, key: string) => p.facts.find(f => f.key === key)!
 
+// ── a hold: confirming it is the job, and it is a button press, not a link to the page you are on ──
+const holdProgress = progressForShow(client(), show({ status: 'hold' }), TODAY)
+assert.equal(holdProgress.next?.label, 'Confirm the hold')
+assert.equal(holdProgress.next?.action, 'confirm')
+assert.equal(progressForShow(client(), show(), TODAY).next?.action, undefined, 'the other steps are links')
+assert.equal(progressForShow(client(), show({ status: 'hold', date: '2026-09-22' }), TODAY).next, null, 'a hold that passed is not confirmed any more')
+
 // ── a show still ahead: the advance is the job ──
 let p = progressForShow(client(), show(), TODAY)
 assert.equal(currentKey(p), 'advance')

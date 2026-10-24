@@ -1,7 +1,7 @@
 'use client'
 import { useStore } from '@/lib/store'
 import { shareOnlyTabs, effectiveSub } from '@/lib/item-access'
-import { visibleTourTabs } from '@/lib/tour-tabs'
+import { TOUR_TAB_HINT, visibleTourTabs } from '@/lib/tour-tabs'
 import { SECTION_FOLDER, folderLabel, folderLink } from '@/lib/drive-links'
 import { Icon } from '@/components/ui/Icon'
 
@@ -56,7 +56,11 @@ export function Subnav() {
   const folderKey = SECTION_FOLDER[section]
   const folder = folderKey ? folderLink(client, folderKey) : undefined
 
+  const activeTourTab = section === 'tour' ? effectiveSub(tourSub, tourTabs) : undefined
+  const hint = activeTourTab ? TOUR_TAB_HINT[activeTourTab as keyof typeof TOUR_TAB_HINT] : undefined
+
   return (
+    <>
     <div className="flex-shrink-0 flex items-stretch gap-1 px-3 md:px-6 border-b border-gray-100 overflow-x-auto no-scrollbar">
       {subs.map(([label, key]) => (
         <button
@@ -81,5 +85,7 @@ export function Subnav() {
         </a>
       )}
     </div>
+    {hint && <p className="flex-shrink-0 px-3 md:px-6 py-1.5 text-xs text-gray-400 border-b border-gray-100">{hint}</p>}
+    </>
   )
 }

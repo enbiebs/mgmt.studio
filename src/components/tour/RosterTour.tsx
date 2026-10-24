@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/Badge'
 import { useRosterClients } from '@/components/layout/nav'
 import { goShowStep } from '@/components/tour/progressNav'
 
-const WHEN_LABEL: Record<When, string> = { upcoming: 'Upcoming', played: 'Played', all: 'All' }
+const WHEN_LABEL: Record<When, string> = { upcoming: 'Upcoming', played: 'Past', all: 'All' }
 const STATE: Record<ShowState, { label: string; variant: 'green' | 'amber' | 'red' | 'gray' }> = {
   confirmed: { label: 'Confirmed', variant: 'green' },
   hold:      { label: 'Hold', variant: 'amber' },
@@ -148,7 +148,7 @@ export function RosterTour() {
       {view === 'shows' ? (
         shown.length === 0 ? (
           <p className="py-10 text-center text-sm text-gray-400">
-            {rows.length === 0 ? 'No shows yet. To add one, pick an artist with the switcher at the top left.' : when === 'upcoming' ? 'No shows ahead.' : when === 'played' ? 'No shows played yet.' : 'No shows.'}
+            {rows.length === 0 ? 'No shows yet. To add one, pick an artist with the switcher at the top left.' : when === 'upcoming' ? 'No shows ahead.' : when === 'played' ? 'No past shows yet.' : 'No shows.'}
           </p>
         ) : (
           <div className="glass bg-canvas border border-gray-100 rounded-2xl overflow-hidden">

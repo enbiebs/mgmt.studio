@@ -557,7 +557,8 @@ interface StudioState {
   deleteTravelItem: (itemId: string) => void
 
   // ── Show actions ──
-  addShow: (date: string, city: string, venue: string, time: string) => void
+  /** Adds a show (a hold unless told otherwise) and returns its id. */
+  addShow: (date: string, city: string, venue: string, time: string, status?: ShowStatus) => string
   // Adds many shows at once (the spreadsheet import). Resolves with how many were saved and how many weren't.
   importShows: (shows: Show[]) => Promise<{ saved: number; failed: number }>
   updateShowStatus: (showId: string, status: ShowStatus) => void
@@ -2364,9 +2365,9 @@ export const useStore = create<StudioState>((set, get) => ({
   },
 
   // ── Show actions ──
-  addShow: (date, city, venue, time) => {
+  addShow: (date, city, venue, time, status = 'hold') => {
     const { data, clientId } = get()
-    const newShow: Show = { id: 'show-' + uid(), date, city, venue, time, status: 'hold' }
+    const newShow: Show = { id: 'show-' + uid(), date, city, venue, time, status }
     const updated = {
       clients: data.clients.map(c => {
         if (c.id !== clientId) return c
@@ -2380,6 +2381,7 @@ export const useStore = create<StudioState>((set, get) => ({
       upsertShow(newShow, clientId).catch(console.error)
       pushToGoogleCalendar(clientId, 'show', newShow)
     }
+    return newShow.id
   },
 
   importShows: async (imported) => {

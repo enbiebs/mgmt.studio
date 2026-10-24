@@ -81,3 +81,19 @@ export function defaultShow<T extends DatedShow>(shows: T[], today: string): T |
   const played = shows.filter(s => s.date < today).sort((a, b) => byDateAsc(b, a))
   return played.find(s => s.status !== 'cancelled') ?? played[0] ?? shows.slice().sort(byDateAsc)[0]
 }
+
+/**
+ * The four numbers at the top of an artist's Tour page. The first three are about what is still ahead and going to happen (a
+ * cancelled show is never counted); "past" is every show whose date has gone by, played or not, the same group the list calls Past.
+ * A show kept only as history is left out of all four.
+ */
+export function showCounts(shows: readonly DatedShow[], today: string): { comingUp: number; confirmed: number; onHold: number; past: number } {
+  const live = shows.filter(s => !s.historyOnly)
+  const ahead = live.filter(s => isUpcomingShow(s, today))
+  return {
+    comingUp: ahead.length,
+    confirmed: ahead.filter(s => s.status === 'confirmed').length,
+    onHold: ahead.filter(s => s.status === 'hold').length,
+    past: live.filter(s => s.date < today).length,
+  }
+}
