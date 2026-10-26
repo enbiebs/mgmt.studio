@@ -9,6 +9,7 @@
 
 import type { Client, ContractStatus, ContractType, Currency, LegalSub, MainSection, UserRole } from '@/types'
 import { contractAlerts, daysToExpiry, effectiveStatus, expiryLine, type ContractDisplayStatus } from '@/lib/contract-status'
+import { dateToAct, noticeLine } from '@/lib/contract-dates'
 
 /** What this person may do with ONE artist's contracts. */
 export interface LegalAccess {
@@ -38,7 +39,8 @@ export interface ContractRow {
   attention: boolean                             // flagged, expiring or expired
   live: boolean                                  // signed (and maybe ending or ended): the end date is a real end. A draft's or a terminated contract's date is not shown or sorted as one
   days: number | null                            // days until it ends (negative once it has), null with no end date or when not live
-  endLine: string | null                         // "Expires Dec 1, 2026 (in 41 days)"; null with no end date or when not live
+  endLine: string | null                         // "Expires Dec 1, 2026 (in 41 days)" or "Renews Dec 1, 2026 (in 41 days)"; null with no end date or when not live
+  noticeLine: string | null                      // "Give notice by Oct 2, 2026 (in 12 days)" while the notice date needs acting on
   value?: { amount: number; currency: Currency }
   sub: LegalSub                                  // the tab on the artist's Legal page where it is worked on
 }
@@ -74,6 +76,7 @@ export function buildRosterLegal(inputs: readonly RosterLegalInput[], today: str
         contractId: c.id, title: c.title, counterparty: c.counterparty, type: c.type,
         state, flagged: !!c.flagged, attention, live,
         days: live ? daysToExpiry(c, today) : null, endLine: live ? expiryLine(c, today) : null,
+        noticeLine: live && dateToAct(c, today) ? noticeLine(c, today) : null,
         ...(c.value ? { value: { amount: c.value, currency: c.currency ?? 'USD' } } : {}),
         sub: subFor(access.full, attention, state),
       })

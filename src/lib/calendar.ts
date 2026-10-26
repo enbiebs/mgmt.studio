@@ -11,6 +11,7 @@
 import type { Client, MainSection, UserRole } from '@/types'
 import { dueState, eventState, type DateState } from '@/lib/date-state'
 import { effectiveStatus } from '@/lib/contract-status'
+import { currentTermEnd, dateToAct } from '@/lib/contract-dates'
 import { today as todayStr } from '@/lib/utils'
 import { invoiceStateWithDeposits } from '@/lib/money'
 
@@ -95,8 +96,15 @@ export function getCalendarEvents(
     for (const c of client.legal.contracts) {
       // Only a signed contract has a real end date to watch: a draft or one still being negotiated does not "expire".
       if (!c.expiryDate || (c.status !== 'signed' && c.status !== 'expired')) continue
-      const ended = effectiveStatus(c, today) === 'expired'
-      events.push({ id: `contract-${c.id}`, date: c.expiryDate, domain: 'contract', title: `${c.title} ${ended ? 'expired' : 'expires'}`, subtitle: c.counterparty, state: dueState(c.expiryDate, today) })
+      const end = currentTermEnd(c, today) ?? c.expiryDate
+      const renews = c.status === 'signed' && !!c.autoRenews
+      const ended = !renews && effectiveStatus(c, today) === 'expired'
+      events.push({ id: `contract-${c.id}`, date: end, domain: 'contract', title: `${c.title} ${renews ? 'renews' : ended ? 'expired' : 'expires'}`, subtitle: c.counterparty, state: dueState(end, today) })
+      // The notice date is the day to act, so it gets its own place on the calendar while it is still ahead.
+      const act = dateToAct(c, today)
+      if (act && !act.renewalOnly && !act.passed) {
+        events.push({ id: `contract-notice-${c.id}`, date: act.date, domain: 'contract', title: `Notice date: ${c.title}`, subtitle: c.counterparty, state: dueState(act.date, today) })
+      }
     }
   }
 

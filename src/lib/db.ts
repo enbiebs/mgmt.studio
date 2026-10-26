@@ -10,7 +10,7 @@
 import { createClient } from '@/lib/supabase/client'
 import type {
   AppData, Client, Track, Show, Post, Album,
-  Project, ArtistTodo, TourOffer, Contract,
+  Project, ArtistTodo, TourOffer, Contract, ContractFile,
   Invoice, Expense, PLMonth, ChecklistItem, ReleaseStakeholder, UserRole,
   ShowAdvance, AdvanceContact, AdvanceSchedule, AdvanceProduction,
   AdvanceHospitality, AdvanceLogistics,
@@ -608,13 +608,15 @@ export function assembleWorkspace(rows: WorkspaceRows): AppData {
 
     const cContracts = (contracts.data ?? [])
       .filter((ct: { client_id: string }) => ct.client_id === c.id)
-      .map((ct: { id: string; title: string; type: string; status: string; counterparty: string; value?: number; currency?: string; signed_date?: string; expiry_date?: string; notes?: string; created_at: string; flagged: boolean }) => ({
+      .map((ct: { id: string; title: string; type: string; status: string; counterparty: string; value?: number; currency?: string; signed_date?: string; expiry_date?: string; notes?: string; created_at: string; flagged: boolean; auto_renews?: boolean; renewal_months?: number | null; notice_days?: number | null; terms?: Record<string, string> | null; files?: ContractFile[] | null }) => ({
         id: ct.id, title: ct.title, type: ct.type as Contract['type'],
         status: ct.status as Contract['status'],
         counterparty: ct.counterparty, value: ct.value,
         currency: ct.currency as Contract['currency'],
         signedDate: ct.signed_date, expiryDate: ct.expiry_date,
         notes: ct.notes, createdAt: ct.created_at, flagged: ct.flagged,
+        autoRenews: ct.auto_renews || undefined, renewalMonths: ct.renewal_months ?? undefined, noticeDays: ct.notice_days ?? undefined,
+        terms: ct.terms && Object.keys(ct.terms).length > 0 ? ct.terms : undefined, files: ct.files && ct.files.length > 0 ? ct.files : undefined,
       }))
 
     const cInvoices = (invoices.data ?? [])
@@ -1691,6 +1693,27 @@ export async function upsertVenue(venue: Venue, clientId: string) {
 export async function deleteVenue(venueId: string) {
   const supabase = createClient()
   await supabase.from('venues').delete().eq('id', venueId)
+}
+
+// ── Contract ───────────────────────────────────────────────
+export async function upsertContract(contract: Contract, clientId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('contracts').upsert({
+    id: contract.id, client_id: clientId,
+    title: contract.title, type: contract.type, status: contract.status, counterparty: contract.counterparty,
+    value: contract.value ?? null, currency: contract.currency ?? 'USD',
+    signed_date: contract.signedDate || null, expiry_date: contract.expiryDate || null,
+    notes: contract.notes ?? null, created_at: contract.createdAt, flagged: !!contract.flagged,
+    auto_renews: !!contract.autoRenews, renewal_months: contract.renewalMonths ?? null, notice_days: contract.noticeDays ?? null,
+    terms: contract.terms ?? {}, files: contract.files ?? [],
+  })
+  if (error) throw error
+}
+
+export async function deleteContract(contractId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('contracts').delete().eq('id', contractId)
+  if (error) throw error
 }
 
 // ── Post ───────────────────────────────────────────────────

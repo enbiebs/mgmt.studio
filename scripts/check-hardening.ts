@@ -4,8 +4,9 @@ import assert from 'node:assert/strict'
 import { safeNextPath } from '../src/lib/safe-redirect'
 import {
   clientIdSchema, clientAndPath, plaidExchangeBody, inviteBody, gcalConnectBody, gcalPushBody, gcalPushDeleteBody,
-  calendarTokenSchema, SECTION_FOR_RECORD,
+  calendarTokenSchema, SECTION_FOR_RECORD, contractUploadBody, contractExtractBody,
 } from '../src/lib/api-schemas'
+import { filesInclude, isContractPathFor } from '../src/lib/contracts-server'
 import { isClientId, parseJson, LIMITS, addressKey } from '../src/lib/api-guard'
 
 const ok = (schema: { safeParse: (v: unknown) => { success: boolean } }, v: unknown) => schema.safeParse(v).success
@@ -49,6 +50,28 @@ async function main() {
   assert.ok(!ok(gcalPushBody, { clientId: 'c1', recordType: 'show', record: {} }))
   assert.ok(ok(gcalPushDeleteBody, { clientId: 'c1', recordType: 'post', recordId: 'p1' }))
   assert.deepEqual(SECTION_FOR_RECORD, { show: 'tour', post: 'content', project: 'projects' })
+  // contracts: a PDF or Word file only; read from a stored file or pasted words, never neither
+  assert.ok(ok(contractUploadBody, { clientId: 'c1', kind: 'pdf' }))
+  assert.ok(ok(contractUploadBody, { clientId: 'c1', kind: 'docx' }))
+  assert.ok(ok(contractUploadBody, { clientId: 'c1', kind: 'rtf' }))
+  for (const kind of ['exe', 'html', 'PDF', '', undefined]) assert.ok(!ok(contractUploadBody, { clientId: 'c1', kind }), String(kind))
+  assert.ok(!ok(contractUploadBody, { clientId: '../x', kind: 'pdf' }))
+  assert.ok(ok(contractExtractBody, { clientId: 'c1', path: 'c1/abc.pdf' }))
+  assert.ok(ok(contractExtractBody, { clientId: 'c1', text: 'This agreement...' }))
+  assert.ok(!ok(contractExtractBody, { clientId: 'c1' }))
+  assert.ok(!ok(contractExtractBody, { clientId: 'c1', text: '   ' }), 'blank words are nothing')
+  assert.ok(!ok(contractExtractBody, { clientId: 'c1', text: 'x'.repeat(200_001) }))
+  // a stored contract file is "<artist>/<plain id>.pdf|docx|rtf" and nothing cleverer
+  const uuid = '9f1c2d3e-aaaa-4bbb-8ccc-1234567890ab'
+  for (const good of ['c1/abc123.pdf', 'c1/abc123.docx', 'c1/abc123.rtf', `c1/${uuid}.pdf`]) assert.ok(isContractPathFor('c1', good), good)
+  assert.ok(isContractPathFor('c.1', 'c.1/x.pdf'), 'a dot in the artist id is a dot, not "any character"')
+  assert.ok(!isContractPathFor('c.1', 'cx1/x.pdf'))
+  for (const bad of ['c2/abc.pdf', 'c1/abc.exe', 'c1/../c2/abc.pdf', 'c1/%2e%2e/c2/abc.pdf', 'c1/./c2/a.pdf', 'c1//a.pdf', 'c1/x.pdf?y=.pdf', 'c1/x#/y.pdf', 'c1/a b.pdf', 'c1/sub/a.pdf', 'c1/A.PDF', 'c1/abc', 'c1abc.pdf', '/c1/a.pdf', 'c1/a.pdf\n', 'c1/\u0000a.pdf', `c1/${'a'.repeat(65)}.pdf`, '', null, 5, 'c1/a.pdf/../../x.pdf'])
+    assert.ok(!isContractPathFor('c1', bad), String(bad))
+  // which files a contract lists (the list comes back from the database as JSON, so it is checked, never trusted)
+  assert.ok(filesInclude([{ path: 'c1/a.pdf' }, { path: 'c1/b.pdf' }], 'c1/b.pdf'))
+  assert.ok(!filesInclude([{ path: 'c1/a.pdf' }], 'c1/b.pdf'))
+  for (const odd of [null, undefined, {}, 'c1/a.pdf', [null, 5, 'c1/a.pdf', {}], []]) assert.ok(!filesInclude(odd, 'c1/a.pdf'), String(odd))
   // calendar feed tokens are UUIDs
   assert.ok(ok(calendarTokenSchema, crypto.randomUUID()))
   for (const b of ['abc', '../../etc', 'x'.repeat(36), '']) assert.ok(!ok(calendarTokenSchema, b), b)

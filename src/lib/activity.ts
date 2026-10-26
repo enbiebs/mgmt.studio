@@ -50,6 +50,7 @@ const FIELD: Record<string, string> = {
   title: 'title', type: 'type', counterparty: 'counterparty', value: 'value', signed_date: 'signed date',
   expiry_date: 'expiry date', flagged: 'flag', payments: 'payments', total_due: 'total due', balance_due: 'balance due',
   drive_url: 'folder link', event_name: 'event', prepared_on: 'statement date', payout: 'payout', summary: 'summary', deal: 'deal', fx: 'exchange rates',
+  auto_renews: 'automatic renewal', renewal_months: 'renewal length (months)', notice_days: 'notice period (days)', files: 'attached files',
   response_note: 'artist\'s note', responded_at: 'answer date', message: 'message', detail: 'detail level',
 }
 // Behind-the-scenes links and copies: recorded, but meaningless to read ("set the show link to show-x5coe98").
@@ -102,6 +103,7 @@ function describeChange(field: string, change: unknown): string {
     if (field === 'via_agency') return to ? 'marked it as booked through an agency' : 'marked it as booked direct'
     if (field === 'locked_at') return to ? 'locked the budget\'s Original' : 'unlocked the budget'
     if (field === 'flagged') return to ? 'flagged it for review' : 'cleared the review flag'
+    if (field === 'auto_renews') return to ? 'set it to renew automatically' : 'turned off automatic renewal'
     if (to === null || to === '' || to === undefined) return `cleared the ${name} (was ${valueText(field, from)})`
     if (from === null || from === '' || from === undefined) return `set the ${name} to ${valueText(field, to)}`
     if (MONEY.has(field) || field === 'status' || DATE.has(field) || typeof to === 'number') return `changed the ${name} from ${valueText(field, from)} to ${valueText(field, to)}`

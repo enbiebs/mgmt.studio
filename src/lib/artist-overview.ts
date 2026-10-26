@@ -10,6 +10,7 @@ import { defaultChecklist } from '@/lib/utils'
 import { mayOpenFully } from '@/lib/section-access'
 import { daysUntil, isUpcomingShow, splitShows } from '@/lib/date-state'
 import { contractAlerts, expiryLine } from '@/lib/contract-status'
+import { noticeLine } from '@/lib/contract-dates'
 import { nextRelease, owedFigures, unfinishedSongs, type SummaryClient } from '@/lib/roster-summary'
 
 /** What this person may see for this artist. `offers` is Deals & fees, which can be held without Tour. */
@@ -74,13 +75,13 @@ export function buildOverview(c: OverviewClient, today: string, can: OverviewAcc
 
   if (can.legal) {
     const alerts = contractAlerts(c.legal.contracts, today)
-    // Worst first: ended, then ending soon, then flagged for review; a contract that is both flagged and ending shows once.
-    const ordered = [...alerts.expired, ...alerts.expiring, ...alerts.flagged].filter((x, i, all) => all.findIndex(y => y.id === x.id) === i)
+    // Worst first: ended, then a notice date coming up, then ending soon, then flagged for review; a contract that is on two lists shows once.
+    const ordered = [...alerts.expired, ...alerts.notice, ...alerts.expiring, ...alerts.flagged].filter((x, i, all) => all.findIndex(y => y.id === x.id) === i)
     out.legal = {
       total: c.legal.contracts.length,
       needing: alerts.count,
       items: ordered.slice(0, CONTRACTS_SHOWN).map(x => ({
-        id: x.id, title: x.title, line: expiryLine(x, today) ?? 'Flagged for review',
+        id: x.id, title: x.title, line: (alerts.notice.some(n => n.id === x.id) ? noticeLine(x, today) : null) ?? expiryLine(x, today) ?? 'Flagged for review',
         tone: alerts.expired.some(e => e.id === x.id) ? 'late' : 'todo',
       })),
     }

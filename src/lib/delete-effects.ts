@@ -12,7 +12,7 @@
 //                     a budget that has become a show's budget is kept (it stops pointing at the offer first).
 // ──────────────────────────────────────────────────────────
 
-import type { Client, Expense, Show, TourOffer, TravelItem } from '@/types'
+import type { Client, Contract, Expense, Show, TourOffer, TravelItem } from '@/types'
 import { formatTotals } from '@/lib/money'
 
 const money = (amount: number, currency: string) => formatTotals({ [currency]: amount })
@@ -115,6 +115,15 @@ export function clientImpact(client: Client): Impact {
 export function billImpact(expense: Pick<Expense, 'amount' | 'currency' | 'vendor' | 'billFilePath'>): Impact {
   const items = [`the ${money(expense.amount, expense.currency)} bill from ${expense.vendor || 'this vendor'}`]
   if (expense.billFilePath) items.push('the PDF attached to it')
+  return { items, stays: [] }
+}
+
+/** A contract: what is lost with it, in the words of the "are you sure?" box. Its key dates and reminders go with it, and so do the stored copies once the undo time has passed. */
+export function contractImpact(c: Pick<Contract, 'title' | 'files' | 'expiryDate' | 'noticeDays'>): Impact {
+  const items = [`the contract "${c.title}"`]
+  if (c.expiryDate || c.noticeDays !== undefined) items.push('its end date and the reminders that come from it')
+  const n = c.files?.length ?? 0
+  if (n > 0) items.push(n === 1 ? 'the copy of the contract kept with it' : `the ${n} copies of the contract kept with it`)
   return { items, stays: [] }
 }
 

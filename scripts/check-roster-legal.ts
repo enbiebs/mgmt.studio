@@ -49,6 +49,17 @@ assert.equal(row('flag').flagged, true)
 // the same answer as the artist's own page for "needs attention"
 assert.equal(rows.filter(r => r.attention).length, contractAlerts(alpha.legal.contracts, TODAY).count)
 
+// ── a contract that renews by itself, and its notice date ──
+const renewRows = buildRosterLegal([input(artist('r', 'Renew', [
+  contract({ id: 'auto', expiryDate: '2026-01-01', autoRenews: true, noticeDays: 60 }),
+  contract({ id: 'plain', expiryDate: '2028-01-01' }),
+]))], TODAY)
+const auto = renewRows.find(r => r.contractId === 'auto')!
+assert.deepEqual([auto.state, auto.attention, auto.days, auto.endLine], ['signed', true, 72, 'Renews Jan 1, 2027 (in 72 days)'], 'never "expired"; the notice date makes it need attention')
+assert.equal(auto.noticeLine, 'Give notice by Nov 2, 2026 (in 12 days)')
+assert.equal(renewRows.find(r => r.contractId === 'plain')!.noticeLine, null)
+assert.equal(row('draft-old').noticeLine, null)
+
 // ── where a contract opens ──
 assert.deepEqual([row('gone').sub, row('soon').sub, row('flag').sub], ['alerts', 'alerts', 'alerts'], 'needs attention: the alerts')
 assert.deepEqual([row('draft-old').sub, row('neg').sub], ['pipeline', 'pipeline'], 'being worked on: the pipeline')

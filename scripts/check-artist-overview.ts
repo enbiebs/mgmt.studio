@@ -117,5 +117,14 @@ assert.deepEqual(buildOverview(client({ contracts: [
   contract({ id: 'gone', title: 'WME', expiryDate: '2026-10-01' }), contract({ id: 'both', title: 'Sony', expiryDate: '2026-11-15', flagged: true }), contract({ id: 'flag', title: 'NDA', flagged: true }),
 ] }), TODAY, ALL).legal!.items.map(i => i.id), ['gone', 'both', 'flag'], 'a contract that is flagged AND ending is listed once, so the next one still fits')
 assert.deepEqual(buildOverview(client({ contracts: [contract({ id: 'c', status: 'draft', expiryDate: '2020-01-01' })] }), TODAY, ALL).legal, { total: 1, needing: 0, items: [] })
+// a notice date is listed after what has ended, before what is merely ending, in its own words (TODAY is 2026-10-21)
+const n = buildOverview(client({ contracts: [
+  contract({ id: 'soon', title: 'Kobalt', expiryDate: '2026-12-01' }),
+  contract({ id: 'note', title: 'WME', expiryDate: '2026-12-31', noticeDays: 60 }),
+  contract({ id: 'gone', title: 'Sony', expiryDate: '2026-10-01' }),
+] }), TODAY, ALL).legal!
+assert.deepEqual(n.items.map(i => i.id), ['gone', 'note', 'soon'])
+assert.equal(n.items[1].line, 'Give notice by Nov 1, 2026 (in 11 days)')
+assert.equal(n.items[2].line, 'Expires Dec 1, 2026 (in 41 days)')
 
 console.log('artist-overview checks passed')

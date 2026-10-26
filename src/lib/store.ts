@@ -24,7 +24,7 @@ import type {
   LegalTemplate, LegalTemplateClause, TrackRound, TrackNote, TrackNoteReply, TrackCredit,
   ReleaseType, Venue, TourOffer, Expense, Vendor, Run, Budget, BudgetBucket, CrewRate, FinanceSettings,
   OfferSheet, OfferSheetDetail, OfferTerms, Settlement, SettlementDraft, SettlementPayment,
-  Task, TaskLinkType, TaskSource, WorkspacePerson, AgendaPoint, AgendaItemType,
+  Task, TaskLinkType, TaskSource, WorkspacePerson, AgendaPoint, AgendaItemType, Contract,
 } from '@/types'
 import { DEMO_DATA } from '@/lib/demo-data'
 import { DEFAULT_LEGAL_TEMPLATES } from '@/lib/legal-templates-demo'
@@ -34,6 +34,10 @@ import { EMPTY_LEGAL } from '@/lib/legal-demo'
 import { EMPTY_FINANCE } from '@/lib/finance-demo'
 import { EMPTY_TOUR } from '@/lib/advance-demo'
 import { notify } from '@/lib/notify'
+import { removeContractFiles } from '@/lib/contract-files-client'
+
+/** How long a deleted contract can be brought back before its stored copies are removed. */
+const CONTRACT_UNDO_MS = 60_000
 import { addOrReuse, applyPersonPatch, emailTakenMessage } from '@/lib/people-dedupe'
 import { scopeTarget, type RosterPage } from '@/lib/nav-map'
 import { canOpenSection } from '@/lib/tour-tabs'
@@ -88,6 +92,7 @@ import {
   upsertCatalogWork, deleteCatalogWork as dbDeleteCatalogWork,
   linkBankTransaction,
   upsertInvoice, deleteInvoice as dbDeleteInvoice,
+  upsertContract, deleteContract as dbDeleteContract,
   loadLegalTemplates, upsertLegalTemplate, deleteLegalTemplate as dbDeleteLegalTemplate,
   upsertTrackRound, deleteTrackRound as dbDeleteTrackRound,
   upsertTrackNote, deleteTrackNote as dbDeleteTrackNote,
@@ -530,6 +535,14 @@ interface StudioState {
   addInvoice: (patch: { number: string; to: string; toEmail?: string; category: RevenueStream; currency: Currency; issuedDate: string; dueDate: string; items: InvoiceLineItem[]; notes?: string }) => void
   updateInvoiceStatus: (invoiceId: string, status: InvoiceStatus) => void
   deleteInvoice: (invoiceId: string) => void
+
+  // ── Contracts (Legal) ──
+  /** Adds a contract to the open artist and returns its id (empty when no artist is open). */
+  addContract: (contract: Omit<Contract, 'id' | 'createdAt'>) => string
+  /** Replaces what is saved for a contract with the form's contract (the id and the date it was added stay). Resolves true once it is saved. */
+  updateContract: (contractId: string, contract: Omit<Contract, 'id' | 'createdAt'>) => Promise<boolean>
+  /** Deletes a contract with a short Undo (contracts are not in the trash). Its attached files are removed a minute later, unless it is undone. */
+  deleteContract: (contractId: string) => void
 
   // ── Release stakeholders ──
   addStakeholder: (albumId: string, patch: { personId: string; role: StakeholderRole; notes?: string }) => void
@@ -2189,6 +2202,70 @@ export const useStore = create<StudioState>((set, get) => ({
     saveData(updated)
     if (!clientId) { dbDeleteInvoice(invoiceId).catch(console.error); return }
     deleteViaTrash({ kind: 'invoice', id: invoiceId, clientId, label: inv?.number ?? 'Invoice', detail: inv?.to, before: data, run: () => dbDeleteInvoice(invoiceId) })
+  },
+
+  // ── Contracts (Legal) ──
+  addContract: (contract) => {
+    const { data, clientId, workspaceId } = get()
+    if (!clientId) return ''
+    const saved: Contract = { ...contract, id: 'ct-' + uid(), createdAt: localToday() }
+    const updated = {
+      clients: data.clients.map(c => c.id !== clientId ? c : { ...c, legal: { ...c.legal, contracts: [...(c.legal?.contracts ?? []), saved] } }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    if (workspaceId) upsertContract(saved, clientId).catch(e => { console.error(e); notify('That contract could not be saved. Please try again.') })
+    return saved.id
+  },
+
+  updateContract: (contractId, contract) => {
+    const { data, clientId, workspaceId } = get()
+    if (!clientId) return Promise.resolve(false)
+    let saved: Contract | undefined
+    const updated = {
+      clients: data.clients.map(c => c.id !== clientId ? c : {
+        ...c,
+        legal: { ...c.legal, contracts: (c.legal?.contracts ?? []).map(x => { if (x.id !== contractId) return x; saved = { ...contract, id: x.id, createdAt: x.createdAt }; return saved }) },
+      }),
+    }
+    if (!saved) return Promise.resolve(false)
+    set({ data: updated })
+    saveData(updated)
+    if (!workspaceId) return Promise.resolve(true)
+    return upsertContract(saved, clientId).then(() => true).catch(e => { console.error(e); notify('That change could not be saved. Please try again.'); return false })
+  },
+
+  deleteContract: (contractId) => {
+    const { data, clientId, workspaceId } = get()
+    const existing = data.clients.find(c => c.id === clientId)?.legal?.contracts.find(x => x.id === contractId)
+    if (!clientId || !existing) return
+    const updated = {
+      clients: data.clients.map(c => c.id !== clientId ? c : { ...c, legal: { ...c.legal, contracts: c.legal.contracts.filter(x => x.id !== contractId) } }),
+    }
+    set({ data: updated })
+    saveData(updated)
+
+    // Undo puts the contract back exactly as it was. Its stored copies are only removed once the time to undo has passed.
+    let cleanup: ReturnType<typeof setTimeout> | undefined
+    const undo = () => {
+      if (cleanup) clearTimeout(cleanup)
+      const now = get()
+      const restored = {
+        clients: now.data.clients.map(c => c.id !== clientId ? c : {
+          ...c, legal: { ...c.legal, contracts: c.legal.contracts.some(x => x.id === existing.id) ? c.legal.contracts : [...c.legal.contracts, existing] },
+        }),
+      }
+      set({ data: restored })
+      saveData(restored)
+      if (now.workspaceId) upsertContract(existing, clientId).catch(e => { console.error(e); notify('That contract could not be put back. Reload the page to see where it stands.') })
+    }
+    const done = () => {
+      notify(`Contract "${existing.title}" deleted`, { label: 'Undo', run: undo })
+      const paths = (existing.files ?? []).map(f => f.path)
+      if (paths.length > 0 && workspaceId) cleanup = setTimeout(() => { void removeContractFiles(clientId, paths) }, CONTRACT_UNDO_MS)
+    }
+    if (!workspaceId) { done(); return }
+    dbDeleteContract(contractId).then(done).catch(e => { console.error(e); notify('That contract could not be deleted. Reload the page to see where it stands.') })
   },
 
   // ── Expenses ──

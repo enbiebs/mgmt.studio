@@ -114,6 +114,24 @@ assert.equal(run({ contracts: [contract({ status: 'terminated', expiryDate: '202
 assert.deepEqual(sev({ contracts: [contract({ flagged: true })] }, 'contract'), ['soon'])
 assert.equal(run({ contracts: [contract({ expiryDate: '2026-10-01', flagged: true })] }, 'contract').length, 1)         // one item, not two
 
+// ── contract: the notice date is the day to act (TODAY is 2026-10-19) ──
+it = one({ contracts: [contract({ expiryDate: '2026-12-31', noticeDays: 60 })] }, 'contract')                // notice by Nov 1: 13 days
+assert.equal(it.severity, 'soon'); assert.match(it.title, /Notice on Pub deal is due in 13 days/); assert.equal(it.date, '2026-11-01'); assert.match(it.detail ?? '', /Give notice by Nov 1, 2026/)
+assert.equal(run({ contracts: [contract({ expiryDate: '2026-12-31', noticeDays: 60 })] }, 'contract').length, 1, 'one item: the notice, not also "ends in 73 days"')
+assert.deepEqual(sev({ contracts: [contract({ expiryDate: '2026-12-25', noticeDays: 60 })] }, 'contract'), ['urgent'], 'notice by Oct 26: a week away')
+assert.match(one({ contracts: [contract({ expiryDate: '2026-12-18', noticeDays: 60 })] }, 'contract').title, /due today/)
+it = one({ contracts: [contract({ expiryDate: '2026-12-10', autoRenews: true, noticeDays: 60 })] }, 'contract')                 // notice date passed 8 days ago
+assert.equal(it.severity, 'urgent'); assert.match(it.title, /will renew: the notice date has passed/)
+assert.equal(run({ contracts: [contract({ expiryDate: '2026-12-01', autoRenews: true, noticeDays: 60 })] }, 'contract').length, 0, 'passed 17 days ago: it has said so; it does not keep saying it')
+assert.equal(run({ contracts: [contract({ expiryDate: '2027-06-01', noticeDays: 60 })] }, 'contract').length, 0, 'a notice date far off is quiet')
+assert.equal(run({ contracts: [contract({ expiryDate: '2026-01-01', autoRenews: true, noticeDays: 60 })] }, 'contract').length, 1, 'a renewing contract: notice by Nov 2, so one alert')
+assert.equal(run({ contracts: [contract({ expiryDate: '2026-01-01', autoRenews: true })] }, 'contract').length, 0, 'renews Jan 1, 2027 with no notice period written down: far off, so quiet')
+it = one({ contracts: [contract({ expiryDate: '2026-11-15', autoRenews: true })] }, 'contract')                              // renews in 27 days, no notice period known
+assert.equal(it.severity, 'soon'); assert.match(it.title, /renews in 27 days/); assert.match(it.detail ?? '', /Add its notice period/); assert.equal(it.date, '2026-11-15')
+assert.equal(one({ contracts: [contract({ expiryDate: '2026-10-24', autoRenews: true })] }, 'contract').severity, 'urgent', 'renews in 5 days')
+assert.match(one({ contracts: [contract({ expiryDate: TODAY, autoRenews: true })] }, 'contract').title, /renews today/)
+
+
 // ── project: overdue, or unassigned and due soon ──
 it = one({ projects: [project()] }, 'project')
 assert.equal(it.severity, 'soon'); assert.match(it.title, /3 days overdue/); assert.equal(it.detail, 'Nobody is assigned to it')
