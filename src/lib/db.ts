@@ -308,7 +308,7 @@ export function assembleWorkspace(rows: WorkspaceRows): AppData {
   // Build round→notes→replies lookups (audio review threads)
   type ReplyRow = { id: string; note_id: string; author: string; text: string; created_at: string }
   type NoteRow = { id: string; round_id: string; timestamp: number; author: string; text: string; resolved: boolean; created_at: string }
-  type RoundRow = { id: string; track_id: string; label: string; stage: string; audio_path?: string; duration?: number; created_at: string }
+  type RoundRow = { id: string; track_id: string; label: string; stage: string; audio_path?: string; duration?: number; created_at: string; approval?: string | null; approval_asked_at?: string | null; approval_by?: string | null; approval_at?: string | null; approval_note?: string | null }
   type CreditRow = { id: string; track_id: string; name: string; role: string; split: number }
 
   const repliesByNote = ((trackNoteReplies.data ?? []) as ReplyRow[]).reduce((acc, r) => {
@@ -387,6 +387,9 @@ export function assembleWorkspace(rows: WorkspaceRows): AppData {
               id: r.id, label: r.label, stage: r.stage as Stage,
               audioPath: r.audio_path ?? undefined, duration: r.duration ?? undefined,
               createdAt: r.created_at,
+              ...(r.approval === 'awaiting' || r.approval === 'approved' || r.approval === 'changes' ? { approval: {
+                status: r.approval, askedAt: r.approval_asked_at ?? undefined, by: r.approval_by ?? undefined, at: r.approval_at ?? undefined, note: r.approval_note ?? undefined,
+              } } : {}),
               notes: (notesByRound[r.id] ?? []).map((n): TrackNote => ({
                 id: n.id, timestamp: n.timestamp, author: n.author, text: n.text,
                 resolved: n.resolved, createdAt: n.created_at,
@@ -1268,6 +1271,24 @@ export async function upsertTrackRound(round: TrackRound, trackId: string, sortO
   })
 }
 
+/**
+ * Asks for approval (or takes the request back). Only the request: the artist's answer is written by answerRound, never from here.
+ * It changes the row only if it is still where the screen thinks it is (asking: nothing yet, or "I want changes"; taking back: still waiting),
+ * so a screen left open cannot wipe an answer that arrived in the meantime. Resolves false when nothing was changed for that reason.
+ */
+export async function setRoundApproval(roundId: string, ask: boolean): Promise<boolean> {
+  const q = createClient().from('track_rounds').update({ approval: ask ? 'awaiting' : null }).eq('id', roundId)
+  const { data, error } = await (ask ? q.or('approval.is.null,approval.eq.changes') : q.eq('approval', 'awaiting')).select('id')
+  if (error) throw error
+  return (data?.length ?? 0) > 0
+}
+
+/** The artist's answer. The database checks that this is the artist's own login and that the version is waiting for an answer. */
+export async function answerRound(roundId: string, decision: 'approved' | 'changes', note: string) {
+  const { error } = await createClient().rpc('decide_round', { p_round: roundId, p_decision: decision, p_note: note.trim() || null })
+  if (error) throw error
+}
+
 export async function deleteTrackRound(roundId: string) {
   const supabase = createClient()
   await supabase.from('track_rounds').delete().eq('id', roundId)
@@ -1330,9 +1351,9 @@ export async function deleteTrackAudio(path: string) {
 // Signed URL is short-lived by design — this is unreleased music, so the
 // bucket is private and every playback gets a fresh, expiring link rather
 // than a permanent public URL.
-export async function getTrackAudioUrl(path: string): Promise<string | null> {
+export async function getTrackAudioUrl(path: string, seconds = 3600): Promise<string | null> {
   const supabase = createClient()
-  const { data, error } = await supabase.storage.from('track-audio').createSignedUrl(path, 3600)
+  const { data, error } = await supabase.storage.from('track-audio').createSignedUrl(path, seconds)
   if (error) return null
   return data.signedUrl
 }

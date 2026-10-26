@@ -4,6 +4,7 @@
 //
 //  This is what the artist sees. It shows:
 //    • Their releases (simplified stage progress)
+//    • Versions of their tracks the manager asked them to approve (listen, approve or ask for changes)
 //    • Offers the manager has sent them an offer sheet for (Approve / Pass)
 //    • Upcoming confirmed shows
 //    • Scheduled content
@@ -24,6 +25,7 @@ import { fmt, today as localToday } from '@/lib/utils'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { STATUS_CONFIG } from '@/components/manager/ProjectsView'
 import { OfferSheetsCard } from '@/components/artist/OfferSheets'
+import { ApprovalsCard } from '@/components/artist/ApprovalsCard'
 import { analyticsHasData } from '@/lib/unfinished'
 import { ARTIST_SIDE_NAME } from '@/lib/brand'
 import { ArtistAvatar } from '@/components/ui/ArtistAvatar'
@@ -139,6 +141,9 @@ export function ArtistView() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-3 md:p-6">
+
+        {/* ── Versions of their tracks waiting for their OK ── */}
+        <ApprovalsCard />
 
         {/* ── Their photo and logo: what makes this page theirs ── */}
         <div className="lg:col-span-2"><BrandingCard client={client} canEdit /></div>

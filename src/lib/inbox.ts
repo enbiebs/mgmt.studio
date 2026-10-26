@@ -18,11 +18,14 @@ import { mayOpenFully } from '@/lib/section-access'
 import { invoiceOutstanding, settlementBalancesNotOnInvoices } from '@/lib/money'
 import { daysToExpiry, effectiveStatus } from '@/lib/contract-status'
 import { dateToAct, noticeLine } from '@/lib/contract-dates'
+import { CRITICAL_STEPS, releaseStatus } from '@/lib/release-plan'
+import { plainLine } from '@/lib/email-address'
+import { changesWanted, daysWaiting, NUDGE_DAYS, URGENT_DAYS, waitingForAnswer } from '@/lib/round-approval'
 
 export type InboxSeverity = 'urgent' | 'soon' | 'info'
 export type InboxRule =
   | 'invoice' | 'bill' | 'balance' | 'no_settlement' | 'offer_reply' | 'offer_hold' | 'sheet'
-  | 'no_budget' | 'deposits' | 'receivable' | 'empty' | 'contract' | 'project'
+  | 'no_budget' | 'deposits' | 'receivable' | 'empty' | 'contract' | 'project' | 'release' | 'approval'
 
 export interface InboxItem {
   key: string
@@ -41,9 +44,9 @@ export interface InboxItem {
 }
 
 // What this person may see for this client: money items need Finance, show items need Tour,
-// offer items need Deals & fees, contract items need Legal, project items need Projects.
+// offer items need Deals & fees, contract items need Legal, project items need Projects, release items need Music.
 // (The artist's own login never gets an inbox at all.)
-export interface InboxAccess { finance: boolean; tour: boolean; deals: boolean; legal: boolean; projects: boolean }
+export interface InboxAccess { finance: boolean; tour: boolean; deals: boolean; legal: boolean; projects: boolean; music: boolean }
 
 /** The alerts a person gets, from what they may open in full (not just single items sent to them): an alert is a figure worked out from many rows. */
 export const inboxAccessFor = (
@@ -52,7 +55,7 @@ export const inboxAccessFor = (
   clientId: string,
 ): InboxAccess => {
   const may = mayOpenFully(has, shareOnly, clientId)
-  return { finance: may('finance'), tour: may('tour'), deals: may('deals'), legal: may('legal'), projects: may('projects') }
+  return { finance: may('finance'), tour: may('tour'), deals: may('deals'), legal: may('legal'), projects: may('projects'), music: may('songs') }
 }
 
 const DAY = 86_400_000
@@ -220,6 +223,40 @@ export function buildInbox(client: Client, today: string, access: InboxAccess): 
       } else if (c.flagged && c.status !== 'terminated') {
         add('contract', c.id, 'soon', { title: `${c.title} is flagged for review`, detail: c.counterparty, date: c.expiryDate, go })
       }
+    }
+  }
+
+  // ── Releases that are falling behind ──────────────────
+  // A release coming up whose checklist is behind its own timeline (lib/release-plan.ts). Only for releases within two months, and only once
+  // someone has started using the checklist: a release whose checklist was never touched would otherwise show every step as late.
+  if (access.music) {
+    for (const album of client.songs?.albums ?? []) {
+      const r = releaseStatus(album, today, 60)
+      if (!r || !r.engaged || r.late.length === 0) continue
+      // Needs you now when the release is two weeks away, or when the final master / delivery to the platforms / the pitch is a week late.
+      const criticalLate = r.late.some(p => CRITICAL_STEPS.includes(p.item.key) && (p.daysLeft ?? 0) <= -7)
+      const severity: InboxSeverity = r.daysToRelease <= 14 || criticalLate ? 'urgent' : 'soon'
+      const lateWord = (p: { item: { label: string }; daysLeft: number | null }) => `${p.item.label} (${plural(-(p.daysLeft ?? 0), 'day')} late)`
+      add('release', album.id, severity, {
+        title: `"${album.title}" comes out ${r.daysToRelease === 0 ? 'today' : when(r.daysToRelease)} and ${plural(r.late.length, 'step')} ${r.late.length === 1 ? 'is' : 'are'} behind`,
+        detail: `${r.late.slice(0, 2).map(lateWord).join(' · ')}${r.late.length > 2 ? ` · and ${r.late.length - 2} more` : ''}`,
+        date: r.late[0].due ?? undefined, go: { section: 'songs', sub: 'checklist' },
+      })
+    }
+  }
+
+  // ── Versions waiting on the artist, and versions they sent back ──
+  if (access.music) {
+    const go = { section: 'songs' as const, sub: 'tracks' }
+    for (const r of waitingForAnswer(client)) {
+      const d = daysWaiting(r.round, today)
+      if (d < NUDGE_DAYS) continue                       // give them a few days before it counts as late
+      // (The key names the request itself, so "Done" on one request does not hide a later one on the same version.)
+      add('approval', `${r.round.id}:asked:${r.round.approval?.askedAt ?? ''}`, d >= URGENT_DAYS ? 'urgent' : 'soon', { title: `${client.name} hasn't answered on "${r.trackTitle}" (${r.round.label}) yet`, detail: `Asked ${plural(d, 'day')} ago`, date: r.round.approval?.askedAt ? localDateOf(r.round.approval.askedAt) : undefined, go })
+    }
+    for (const r of changesWanted(client)) {
+      const note = plainLine(r.round.approval?.note ?? '', 90)           // the artist's words: one plain line, no links (this text also goes into the morning email)
+      add('approval', `${r.round.id}:changes:${r.round.approval?.at ?? ''}`, 'soon', { title: `${client.name} wants changes to "${r.trackTitle}" (${r.round.label})`, detail: note || 'Upload a new version, or ask again', date: r.round.approval?.at ? localDateOf(r.round.approval.at) : undefined, go })
     }
   }
 

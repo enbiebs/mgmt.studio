@@ -77,6 +77,18 @@ export interface TrackNote {
   createdAt: string
 }
 
+/**
+ * Where a version stands with the artist: "awaiting" once management asks, then the artist's own answer. The answer can only be written by
+ * the artist's login (the database refuses anything else), and `by`, `at` and `note` are theirs.
+ */
+export interface RoundApproval {
+  status: 'awaiting' | 'approved' | 'changes'
+  askedAt?: string       // ISO time the request was sent
+  by?: string            // who answered
+  at?: string            // ISO time of the answer
+  note?: string          // what they said
+}
+
 export interface TrackRound {
   id: string
   label: string        // "V3", "Working V2", "mix ref"
@@ -85,6 +97,7 @@ export interface TrackRound {
   duration?: number      // seconds, cached from the audio file
   notes: TrackNote[]
   createdAt: string
+  approval?: RoundApproval
 }
 
 export interface TrackCredit {

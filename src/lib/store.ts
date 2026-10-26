@@ -94,7 +94,7 @@ import {
   upsertInvoice, deleteInvoice as dbDeleteInvoice,
   upsertContract, deleteContract as dbDeleteContract,
   loadLegalTemplates, upsertLegalTemplate, deleteLegalTemplate as dbDeleteLegalTemplate,
-  upsertTrackRound, deleteTrackRound as dbDeleteTrackRound,
+  upsertTrackRound, deleteTrackRound as dbDeleteTrackRound, setRoundApproval, answerRound as dbAnswerRound,
   upsertTrackNote, deleteTrackNote as dbDeleteTrackNote,
   addTrackNoteReply as dbAddTrackNoteReply,
   replaceTrackCredits, uploadTrackAudio, deleteTrackAudio,
@@ -140,6 +140,27 @@ function saveData(data: AppData) {
 const LEGAL_TEMPLATES_KEY = 'studio-legal-templates-v1'
 
 const trashDeps: TrashDeps = { trashDelete }
+
+/** One version of a track, wherever it sits (any artist). */
+function findRound(data: AppData, roundId: string): TrackRound | undefined {
+  for (const c of data.clients) for (const a of c.songs.albums) for (const t of a.tracks) { const r = (t.rounds ?? []).find(x => x.id === roundId); if (r) return r }
+  return undefined
+}
+
+/** The same data with one version changed. */
+function withRound(data: AppData, roundId: string, change: (r: TrackRound) => TrackRound): AppData {
+  return {
+    clients: data.clients.map(c => ({
+      ...c,
+      songs: { ...c.songs, albums: c.songs.albums.map(a => ({ ...a, tracks: a.tracks.map(t => ((t.rounds ?? []).some(r => r.id === roundId) ? { ...t, rounds: (t.rounds ?? []).map(r => (r.id === roundId ? change(r) : r)) } : t)) })) },
+    })),
+  }
+}
+
+/** The artist a version belongs to. */
+function clientOfRound(data: AppData, roundId: string): Client | undefined {
+  return data.clients.find(c => c.songs.albums.some(al => al.tracks.some(t => (t.rounds ?? []).some(r => r.id === roundId))))
+}
 
 /**
  * Deletes through the trash: the database keeps a copy and deletes in one step, and the message offers Undo (to someone who is allowed to
@@ -507,6 +528,10 @@ interface StudioState {
   /** Returns the new round's id (or undefined if no client is selected). */
   addTrackRound: (trackId: string, label: string, stage: Stage, file: File, duration?: number) => Promise<string | undefined>
   deleteTrackRound: (trackId: string, roundId: string) => void
+  /** Sends a version to the artist for their OK (or takes the request back). The artist's answer is a separate action: only they can give it. */
+  askRoundApproval: (roundId: string, ask: boolean) => void
+  /** The artist's own answer to a version waiting for it. Resolves true once it is saved. */
+  answerRound: (roundId: string, decision: 'approved' | 'changes', note: string) => Promise<boolean>
   addTrackNote: (trackId: string, roundId: string, timestamp: number, author: string, text: string) => void
   toggleTrackNoteResolved: (trackId: string, roundId: string, noteId: string) => void
   deleteTrackNote: (trackId: string, roundId: string, noteId: string) => void
@@ -1550,6 +1575,49 @@ export const useStore = create<StudioState>((set, get) => ({
     saveData(updated)
     dbDeleteTrackRound(roundId).catch(console.error)
     if (removedPath) deleteTrackAudio(removedPath).catch(console.error)
+  },
+
+  askRoundApproval: (roundId, ask) => {
+    const { data, workspaceId } = get()
+    const before = findRound(data, roundId)
+    const owner = clientOfRound(data, roundId)
+    if (!before || !owner) return
+    const next: TrackRound['approval'] = ask ? { status: 'awaiting', askedAt: new Date().toISOString() } : undefined
+    const updated = withRound(data, roundId, r => ({ ...r, approval: next }))
+    set({ data: updated }); saveData(updated)
+    if (!workspaceId) return
+    // If the version has moved on since this screen was drawn (the artist answered, or someone else asked), nothing is changed and the
+    // screen is brought up to date instead of overwriting their answer.
+    setRoundApproval(roundId, ask).then(async changed => {
+      if (changed) return
+      await get().reloadClient(owner.id)
+      notify('That version has changed since you last looked. It is up to date now.')
+    }).catch(e => {
+      console.error(e)
+      const back = withRound(get().data, roundId, r => ({ ...r, approval: before.approval }))
+      set({ data: back }); saveData(back)
+      notify('That could not be saved. Please try again.')
+    })
+  },
+
+  answerRound: async (roundId, decision, note) => {
+    const { data, workspaceId, previewMemberId } = get()
+    const round = findRound(data, roundId)
+    const owner = clientOfRound(data, roundId)
+    if (!round || !owner || previewMemberId || round.approval?.status !== 'awaiting') return false
+    if (workspaceId) {
+      try { await dbAnswerRound(roundId, decision, note) } catch (e) {
+        console.error(e)
+        // Maybe it did go through and only the reply was lost, or it was withdrawn in the meantime: look again before saying anything.
+        await get().reloadClient(owner.id)
+        const after = findRound(get().data, roundId)
+        notify(!after || after.approval?.status === 'awaiting' ? 'That could not be saved. Please try again.' : "This version isn't waiting for your OK any more.")
+        return false
+      }
+    }
+    const updated = withRound(get().data, roundId, r => ({ ...r, approval: { status: decision, askedAt: r.approval?.askedAt, by: owner.name, at: new Date().toISOString(), note: note.trim() || undefined } }))
+    set({ data: updated }); saveData(updated)
+    return true
   },
 
   addTrackNote: (trackId, roundId, timestamp, author, text) => {

@@ -21,7 +21,7 @@ import type { Client } from '../src/types'
 
 const OWNER = 'f7303cf1-f728-46a2-a861-dc7787c00d9c'
 const ctxFor = (anchor: string): DemoContext => ({ anchor, clientId: DEMO_CLIENT_ID, ownerUserId: OWNER })
-const ACCESS = { finance: true, tour: true, deals: true, legal: true, projects: true }
+const ACCESS = { finance: true, tour: true, deals: true, legal: true, projects: true, music: true }
 const LIVE_RATES = { EUR: 1.08, GBP: 1.27 }
 
 function load(anchor: string) {

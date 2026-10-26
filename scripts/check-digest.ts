@@ -114,7 +114,7 @@ check('what the person marked Done or snoozed is not repeated; a snooze that has
 
 check('heads-ups do not make an email; nothing at all makes no email', () => {
   const headsUp = client({ deposits: [{ done: false }] })
-  assert.equal(buildInbox(headsUp, TODAY, { finance: true, tour: true, deals: true, legal: true, projects: true }).filter(i => i.severity === 'info').length, 1, 'the fixture does raise a heads-up')
+  assert.equal(buildInbox(headsUp, TODAY, { finance: true, tour: true, deals: true, legal: true, projects: true, music: true }).filter(i => i.severity === 'info').length, 1, 'the fixture does raise a heads-up')
   assert.equal(digestFor(person({ role: 'manager' }), [headsUp], ctx()), null)
   assert.equal(digestFor(person({ role: 'manager' }), [client()], ctx()), null)
   assert.equal(digestFor(person({ role: 'manager' }), [], ctx()), null)
