@@ -7,6 +7,7 @@ import { PRODUCT_NAME } from '../src/lib/brand'
 import { artistsForPage, type RosterPage } from '../src/lib/nav-map'
 import { tourAccessFor } from '../src/lib/roster-tour'
 import { financeAccessFor } from '../src/lib/roster-finance'
+import { legalAccessFor } from '../src/lib/roster-legal'
 import { overviewAccessFor } from '../src/lib/artist-overview'
 import { inboxAccessFor } from '../src/lib/inbox'
 import type { Client } from '../src/types'
@@ -224,6 +225,24 @@ assert.deepEqual(financeFlags({ role: 'team', grants: [grant('finance')], ...sha
 assert.deepEqual(financeFlags({ role: 'artist', authClientId: 'c1' }), { finance: false, showMoney: false, limited: false })   // an artist's own login never sees management money
 assert.deepEqual(financeFlags(twoCompanies, 'c1'), FULL)                                                              // manager of one company ...
 assert.deepEqual(financeFlags(twoCompanies, 'c2'), { finance: false, showMoney: false, limited: false })              // ... and an artist in another: no management money there
+
+// ── the All-artists Legal page: what each person gets for an artist, from the real access rules ──
+function legalFlags(over: Record<string, unknown>, id = 'c1') {
+  fresh(over)
+  const st = useStore.getState()
+  return legalAccessFor((s, i) => st.hasAccess(s, i), (s, i) => st.isShareOnly(s, i), id, st.roleFor(id))
+}
+const sharedContract = { data: { clients: [{ ...artist('c1', 'Alpha'), itemSections: ['legal'] }, artist('c2', 'Beta')] } }
+assert.deepEqual(legalFlags({}), { open: true, full: true })                                                          // a manager
+assert.deepEqual(legalFlags({ role: 'team', grants: [{ section: 'admin', clientId: 'c1', canEdit: true }] }), { open: true, full: true })   // a Point Person for the artist
+assert.deepEqual(legalFlags({ role: 'team', grants: [grant('legal')] }), { open: true, full: true })
+assert.deepEqual(legalFlags({ role: 'team', grants: [grant('finance'), grant('tour')] }), { open: false, full: false })                    // no Legal
+assert.deepEqual(legalFlags({ role: 'team', grants: [], ...sharedContract }), { open: true, full: false })                                // one contract sent to them: listed, not counted
+assert.deepEqual(legalFlags({ role: 'team', grants: [grant('legal')], ...sharedContract }), { open: true, full: true })                   // a real Legal grant wins over a shared item
+assert.deepEqual(legalFlags({ role: 'team', grants: [], ...sharedInvoice }), { open: false, full: false })                                // a shared invoice says nothing about Legal
+assert.deepEqual(legalFlags({ role: 'artist', authClientId: 'c1' }), { open: false, full: false })                                        // an artist's own login does not get the management view
+assert.deepEqual(legalFlags(twoCompanies, 'c1'), { open: true, full: true })                                                              // manager of one company ...
+assert.deepEqual(legalFlags(twoCompanies, 'c2'), { open: false, full: false })                                                            // ... and an artist in another
 
 // ── an artist's own login keeps landing where it did (their portal ignores the page, but the address does not change) ──
 fresh({ role: 'artist', authClientId: 'c1' }); useStore.getState().openClient('c1'); assert.equal(useStore.getState().section, 'calendar')

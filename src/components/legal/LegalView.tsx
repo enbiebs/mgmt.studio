@@ -12,11 +12,12 @@ import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { ItemTodos } from '@/components/dashboard/ItemTodos'
 import { Modal, FormField, inputClass } from '@/components/ui/Modal'
 import { uid, today as todayStr } from '@/lib/utils'
+import { effectiveSub, shareOnlyTabs } from '@/lib/item-access'
 import { contractAlerts, daysToExpiry, effectiveStatus, expiryLine, type ContractDisplayStatus } from '@/lib/contract-status'
 import { extractPlaceholders, fillClauses, guessDefault, downloadRtf } from '@/lib/legal-doc-gen'
 import type { Contract, ContractStatus, ContractType, LegalTemplate, LegalTemplateClause } from '@/types'
 
-const STATUS_CONFIG: Record<ContractDisplayStatus, { label: string; color: string; bg: string; dot: string }> = {
+export const STATUS_CONFIG: Record<ContractDisplayStatus, { label: string; color: string; bg: string; dot: string }> = {
   draft:       { label: 'Draft',       color: 'text-gray-500',   bg: 'bg-gray-100',   dot: 'bg-gray-400'   },
   review:      { label: 'In Review',   color: 'text-amber-700',  bg: 'bg-amber-50',   dot: 'bg-amber-400'  },
   negotiation: { label: 'Negotiating', color: 'text-purple-700', bg: 'bg-purple-50',  dot: 'bg-purple-400' },
@@ -37,7 +38,7 @@ const TYPE_ICONS: Record<ContractType, string> = {
   other:      '📄',
 }
 
-const TYPE_LABELS: Record<ContractType, string> = {
+export const TYPE_LABELS: Record<ContractType, string> = {
   recording:  'Recording',
   publishing: 'Publishing',
   sync:       'Sync License',
@@ -52,16 +53,18 @@ function fmtDate(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function fmt(n: number, currency = 'USD') {
+export function fmt(n: number, currency = 'USD') {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n)
 }
 
 export function LegalView() {
   const client = useStore(s => s.getClient())
-  const tab = useStore(s => s.legalSub)
+  const rawTab = useStore(s => s.legalSub)
+  const shareOnly = useStore(s => s.isShareOnly('legal'))
   const [filterType, setFilterType] = useState<ContractType | 'all'>('all')
 
   if (!client) return null
+  const tab = effectiveSub(rawTab, shareOnly ? shareOnlyTabs('legal', client) : undefined)   // someone sent single contracts has the pipeline tab only
   const contracts = client.legal?.contracts ?? []
 
   // What state each contract is in is worked out from today's date (contract-status.ts), never taken from the stored status alone.
