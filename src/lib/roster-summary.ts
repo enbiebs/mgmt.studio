@@ -1,6 +1,6 @@
 // ──────────────────────────────────────────────────────────
-//  The one line each artist gets on the "All artists" Music, Finance and Legal pages (the pick-an-artist pages):
-//    Music -> the next release, Finance -> money owed, Legal -> contracts needing attention.
+//  The one line each artist gets on the "All artists" Music and Legal pages (the pick-an-artist pages):
+//    Music -> the next release, Legal -> contracts needing attention.
 //  Every number reuses the same helper the artist's own page uses, so the line can never disagree with the page it opens.
 //  Pure logic (no store, no screen), covered by scripts/check-roster-summary.ts.
 // ──────────────────────────────────────────────────────────
@@ -11,7 +11,7 @@ import { contractAlerts, expiryLine } from '@/lib/contract-status'
 import { formatTotals, invoiceStateWithDeposits, owedByCurrency } from '@/lib/money'
 import { MONTH_SHORT } from '@/lib/utils'
 
-export type SummaryPage = 'music' | 'finance' | 'legal'
+export type SummaryPage = 'music' | 'legal'
 
 /** ok = nothing to do, todo = something to do, late = needs attention now, quiet = nothing there yet. */
 export type SummaryTone = 'ok' | 'todo' | 'late' | 'quiet'
@@ -67,12 +67,6 @@ export function owedFigures(c: Pick<SummaryClient, 'finance' | 'business'>, toda
   }
 }
 
-function financeSummary(c: SummaryClient, today: string): ArtistSummary {
-  const { owed, open, overdue } = owedFigures(c, today)
-  if (!owed) return { headline: 'Nothing owed', tone: c.finance.invoices.length > 0 ? 'ok' : 'quiet' }
-  return { headline: `${owed} owed`, detail: overdue > 0 ? `${plural(overdue, 'invoice')} overdue` : `${plural(open, 'open invoice')}`, tone: overdue > 0 ? 'late' : 'todo' }
-}
-
 function legalSummary(c: SummaryClient, today: string): ArtistSummary {
   const contracts = c.legal.contracts
   if (contracts.length === 0) return { headline: 'No contracts', tone: 'quiet' }
@@ -86,7 +80,6 @@ function legalSummary(c: SummaryClient, today: string): ArtistSummary {
 export function summarize(page: SummaryPage, client: SummaryClient, today: string): ArtistSummary {
   switch (page) {
     case 'music': return musicSummary(client, today)
-    case 'finance': return financeSummary(client, today)
     case 'legal': return legalSummary(client, today)
   }
 }

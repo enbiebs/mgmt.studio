@@ -1,7 +1,7 @@
-// Checks the one line each artist gets on the "All artists" Music, Finance and Legal pages.
+// Checks the one line each artist gets on the "All artists" Music and Legal pages, and the owed-money figures the Overview shows.
 // Run with:  npx tsx scripts/check-roster-summary.ts
 import assert from 'node:assert/strict'
-import { summarize, type SummaryClient } from '../src/lib/roster-summary'
+import { owedFigures, summarize, type SummaryClient } from '../src/lib/roster-summary'
 import type { Album, Contract, Deposit, Invoice, Track } from '../src/types'
 
 const TODAY = '2026-10-21'
@@ -35,25 +35,22 @@ assert.deepEqual(summarize('music', client({ albums: [album({ id: 'y', tracks: [
 assert.deepEqual(summarize('music', client({ albums: [album({ id: 'y', releaseDate: '2026-01-01', tracks: [track('t', 'done')] })] }), TODAY), { headline: 'Nothing in progress', tone: 'quiet' }, 'already released and finished')
 assert.equal(summarize('music', client({ albums: [album({ id: 'y', releaseDate: TODAY, tracks: [] })] }), TODAY).headline, 'Night Shift EP · Oct 21', 'releasing today is still ahead')
 
-// ── Finance: what is still owed, per currency, and what is late ──
-assert.deepEqual(summarize('finance', client(), TODAY), { headline: 'Nothing owed', tone: 'quiet' })
-const f1 = summarize('finance', client({ invoices: [
+// ── What is still owed on invoices (the Overview shows it): per currency, and what is late ──
+assert.deepEqual(owedFigures(client(), TODAY), { owed: '', open: 0, overdue: 0 })
+const f1 = owedFigures(client({ invoices: [
   invoice({ id: 'i1', dueDate: '2026-10-01' }),                              // overdue by date, $1,000
   invoice({ id: 'i2', status: 'overdue', dueDate: '2026-11-30' }),           // stored as overdue but not due yet: just open
   invoice({ id: 'i3', currency: 'EUR', items: [{ description: 'Fee', quantity: 2, rate: 250 }] }),
   invoice({ id: 'i4', status: 'paid' }), invoice({ id: 'i5', status: 'draft' }), invoice({ id: 'i6', status: 'void' }),
 ] }), TODAY)
-assert.equal(f1.headline, '$2,000 · €500 owed', 'draft, paid and void are not owed; currencies are never mixed')
-assert.equal(f1.detail, '1 invoice overdue')
-assert.equal(f1.tone, 'late')
-const f2 = summarize('finance', client({ invoices: [invoice({ id: 'i1' })] }), TODAY)
-assert.deepEqual(f2, { headline: '$1,000 owed', detail: '1 open invoice', tone: 'todo' })
-assert.equal(summarize('finance', client({ invoices: [invoice({ id: 'i1' }), invoice({ id: 'i2' })] }), TODAY).detail, '2 open invoices')
-assert.deepEqual(summarize('finance', client({ invoices: [invoice({ id: 'i4', status: 'paid' })] }), TODAY), { headline: 'Nothing owed', tone: 'ok' }, 'has invoices, all settled')
+assert.equal(f1.owed, '$2,000 · €500', 'draft, paid and void are not owed; currencies are never mixed')
+assert.deepEqual([f1.open, f1.overdue], [3, 1])
+assert.deepEqual(owedFigures(client({ invoices: [invoice({ id: 'i1' })] }), TODAY), { owed: '$1,000', open: 1, overdue: 0 })
+assert.deepEqual(owedFigures(client({ invoices: [invoice({ id: 'i4', status: 'paid' })] }), TODAY), { owed: '', open: 0, overdue: 0 }, 'has invoices, all settled')
 // a deposit that part-pays an invoice reduces what is owed; one that pays it fully makes it not owed at all
 const dep = (invoiceId: string, amount: number): Deposit => ({ id: `d-${invoiceId}`, name: 'Pay', date: '2026-10-10', amount, currency: 'USD', mgmt: 0.1, lawyer: 0, taxes: 0, done: true, invoiceId })
-assert.equal(summarize('finance', client({ invoices: [invoice({ id: 'i1' })], deposits: [dep('i1', 400)] }), TODAY).headline, '$600 owed', 'part paid')
-assert.deepEqual(summarize('finance', client({ invoices: [invoice({ id: 'i1' })], deposits: [dep('i1', 1000)] }), TODAY), { headline: 'Nothing owed', tone: 'ok' }, 'fully paid by a deposit')
+assert.equal(owedFigures(client({ invoices: [invoice({ id: 'i1' })], deposits: [dep('i1', 400)] }), TODAY).owed, '$600', 'part paid')
+assert.deepEqual(owedFigures(client({ invoices: [invoice({ id: 'i1' })], deposits: [dep('i1', 1000)] }), TODAY), { owed: '', open: 0, overdue: 0 }, 'fully paid by a deposit')
 
 // ── Legal: contracts needing attention, worst first ──
 assert.deepEqual(summarize('legal', client(), TODAY), { headline: 'No contracts', tone: 'quiet' })

@@ -4,8 +4,9 @@ import assert from 'node:assert/strict'
 import { useStore } from '../src/lib/store'
 import { startUrlSync, type BrowserLike } from '../src/lib/url-sync'
 import { PRODUCT_NAME } from '../src/lib/brand'
-import { artistsForPage, pickerNote, type RosterPage } from '../src/lib/nav-map'
+import { artistsForPage, type RosterPage } from '../src/lib/nav-map'
 import { tourAccessFor } from '../src/lib/roster-tour'
+import { financeAccessFor } from '../src/lib/roster-finance'
 import { overviewAccessFor } from '../src/lib/artist-overview'
 import { inboxAccessFor } from '../src/lib/inbox'
 import type { Client } from '../src/types'
@@ -201,6 +202,29 @@ const twoCompanies = { role: 'manager', workspaceId: 'w1', clientWorkspace: { c1
 assert.deepEqual(tourFlags(twoCompanies, 'c1'), ALLOWED)
 assert.deepEqual(tourFlags(twoCompanies, 'c2'), { shows: true, showsFully: false, deals: false, dealsFully: false, finance: false })
 
+// ── the All-artists Finance page: what each person gets for an artist, from the real access rules ──
+function financeOf(id = 'c1') {
+  const st = useStore.getState()
+  return financeAccessFor((s, i) => st.hasAccess(s, i), (s, i) => st.isShareOnly(s, i), id, st.roleFor(id))
+}
+const financeFlags = (over: Record<string, unknown>, id = 'c1') => { fresh(over); return financeOf(id) }
+const FULL = { finance: true, showMoney: true, limited: false }
+const NO_SHOWS = { finance: true, showMoney: false, limited: false }
+const grant = (section: string) => ({ section, clientId: 'c1', canEdit: false })
+assert.deepEqual(financeFlags({}), FULL)                                                                              // a manager
+assert.deepEqual(financeFlags({ role: 'team', grants: [{ section: 'admin', clientId: 'c1', canEdit: true }] }), FULL)  // a Point Person for the artist
+assert.deepEqual(financeFlags({ role: 'team', grants: [grant('finance'), grant('tour'), grant('deals')] }), FULL)
+assert.deepEqual(financeFlags({ role: 'team', grants: [grant('finance')] }), NO_SHOWS)                                  // Finance alone: invoices and bills, no settlements or show fees
+assert.deepEqual(financeFlags({ role: 'team', grants: [grant('finance'), grant('deals')] }), NO_SHOWS)                  // the Business Manager preset: no Tour, so no shows loaded
+assert.deepEqual(financeFlags({ role: 'team', grants: [grant('finance'), grant('tour')] }), NO_SHOWS)                  // no Deals & fees: fees and invoice links not loaded
+assert.deepEqual(financeFlags({ role: 'team', grants: [grant('finance'), grant('deals')], ...sharedShow }), NO_SHOWS)  // Finance and fees, but only one show sent to them
+assert.deepEqual(financeFlags({ role: 'team', grants: [grant('tour'), grant('deals')] }), { finance: false, showMoney: false, limited: false })   // no money at all
+assert.deepEqual(financeFlags({ role: 'team', grants: [], ...sharedInvoice }), { finance: false, showMoney: false, limited: true })                 // one invoice sent to them: not worked out
+assert.deepEqual(financeFlags({ role: 'team', grants: [grant('finance')], ...sharedInvoice }), NO_SHOWS)               // a real Finance grant wins over a shared item
+assert.deepEqual(financeFlags({ role: 'artist', authClientId: 'c1' }), { finance: false, showMoney: false, limited: false })   // an artist's own login never sees management money
+assert.deepEqual(financeFlags(twoCompanies, 'c1'), FULL)                                                              // manager of one company ...
+assert.deepEqual(financeFlags(twoCompanies, 'c2'), { finance: false, showMoney: false, limited: false })              // ... and an artist in another: no management money there
+
 // ── an artist's own login keeps landing where it did (their portal ignores the page, but the address does not change) ──
 fresh({ role: 'artist', authClientId: 'c1' }); useStore.getState().openClient('c1'); assert.equal(useStore.getState().section, 'calendar')
 
@@ -223,7 +247,7 @@ fresh({ role: 'team', grants: [{ section: 'deals', clientId: 'c1', canEdit: fals
 assert.deepEqual(listed('tour'), ['c1'])                                                      // Deals & fees opens the Tour page
 fresh({ role: 'team', grants: [], data: { clients: [{ ...artist('c1', 'Alpha'), itemSections: ['finance'] }, artist('c2', 'Beta')] } })
 assert.deepEqual(listed('finance'), ['c1'])                                                   // one shared invoice opens Finance for viewing ...
-{ const st = useStore.getState(); assert.equal(pickerNote('finance', 'c1', { shareOnly: (s, i) => st.isShareOnly(s, i) }), 'Shared with you') }   // ... but no totals
+assert.deepEqual(financeOf(), { finance: false, showMoney: false, limited: true })                // ... but the All-artists Finance page adds up nothing from it
 
 // ── things that must fall back, never break ──
 fresh(); win = browser('/artists/nobody/tour'); stop = startUrlSync(win)     // an artist that does not exist
