@@ -50,7 +50,7 @@ const FIELD: Record<string, string> = {
   title: 'title', type: 'type', counterparty: 'counterparty', value: 'value', signed_date: 'signed date',
   expiry_date: 'expiry date', flagged: 'flag', payments: 'payments', total_due: 'total due', balance_due: 'balance due',
   drive_url: 'folder link', event_name: 'event', prepared_on: 'statement date', payout: 'payout', summary: 'summary', deal: 'deal', fx: 'exchange rates',
-  auto_renews: 'automatic renewal', renewal_months: 'renewal length (months)', notice_days: 'notice period (days)', files: 'attached files',
+  auto_renews: 'automatic renewal', renewal_months: 'renewal length (months)', notice_days: 'notice period (days)', files: 'attached files', reminder_emails: 'people to remind',
   response_note: 'artist\'s note', responded_at: 'answer date', message: 'message', detail: 'detail level',
 }
 // Behind-the-scenes links and copies: recorded, but meaningless to read ("set the show link to show-x5coe98").

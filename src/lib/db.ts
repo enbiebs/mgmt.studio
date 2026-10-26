@@ -34,8 +34,12 @@ import type { SharingGrant } from '@/lib/sharing'
 import { uid } from '@/lib/utils'
 
 // ── Load ───────────────────────────────────────────────────
-export async function loadWorkspaceData(workspaceId: string): Promise<AppData> {
-  const supabase = createClient()
+/**
+ * A company's artists and everything about them. `supabase` is the signed-in person's own connection (the default, so the database's rules
+ * decide what comes back). Our server's daily email passes its all-seeing connection instead and then filters per person itself
+ * (lib/digest.ts), so that is the one place a caller may hand in something other than the default.
+ */
+export async function loadWorkspaceData(workspaceId: string, supabase: ReturnType<typeof createClient> = createClient()): Promise<AppData> {
 
   // Fetch clients
   const { data: clientRows, error } = await supabase
@@ -608,7 +612,7 @@ export function assembleWorkspace(rows: WorkspaceRows): AppData {
 
     const cContracts = (contracts.data ?? [])
       .filter((ct: { client_id: string }) => ct.client_id === c.id)
-      .map((ct: { id: string; title: string; type: string; status: string; counterparty: string; value?: number; currency?: string; signed_date?: string; expiry_date?: string; notes?: string; created_at: string; flagged: boolean; auto_renews?: boolean; renewal_months?: number | null; notice_days?: number | null; terms?: Record<string, string> | null; files?: ContractFile[] | null }) => ({
+      .map((ct: { id: string; title: string; type: string; status: string; counterparty: string; value?: number; currency?: string; signed_date?: string; expiry_date?: string; notes?: string; created_at: string; flagged: boolean; auto_renews?: boolean; renewal_months?: number | null; notice_days?: number | null; terms?: Record<string, string> | null; files?: ContractFile[] | null; reminder_emails?: string[] | null }) => ({
         id: ct.id, title: ct.title, type: ct.type as Contract['type'],
         status: ct.status as Contract['status'],
         counterparty: ct.counterparty, value: ct.value,
@@ -617,6 +621,7 @@ export function assembleWorkspace(rows: WorkspaceRows): AppData {
         notes: ct.notes, createdAt: ct.created_at, flagged: ct.flagged,
         autoRenews: ct.auto_renews || undefined, renewalMonths: ct.renewal_months ?? undefined, noticeDays: ct.notice_days ?? undefined,
         terms: ct.terms && Object.keys(ct.terms).length > 0 ? ct.terms : undefined, files: ct.files && ct.files.length > 0 ? ct.files : undefined,
+        reminderEmails: ct.reminder_emails && ct.reminder_emails.length > 0 ? ct.reminder_emails : undefined,
       }))
 
     const cInvoices = (invoices.data ?? [])
@@ -803,6 +808,25 @@ export async function saveInboxChoice(itemKey: string, choice: InboxChoice) {
 export async function clearInboxChoice(itemKey: string) {
   const supabase = createClient()
   const { error } = await supabase.from('inbox_state').delete().eq('item_key', itemKey)
+  if (error) throw error
+}
+
+// ── The morning email switch ───────────────────────────────
+/** Does this person get the morning email? `null` when it cannot be told (not signed in, or the switch does not exist yet on this database): then the menu shows nothing. */
+export async function loadMorningEmail(): Promise<boolean | null> {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data, error } = await supabase.from('email_prefs').select('morning_email').eq('user_id', user.id).maybeSingle()
+  if (error) return null
+  return data ? !!data.morning_email : true            // no row yet means on
+}
+
+export async function saveMorningEmail(on: boolean) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not signed in')
+  const { error } = await supabase.from('email_prefs').upsert({ user_id: user.id, morning_email: on, updated_at: new Date().toISOString() })
   if (error) throw error
 }
 
@@ -1696,7 +1720,11 @@ export async function deleteVenue(venueId: string) {
 }
 
 // ── Contract ───────────────────────────────────────────────
-export async function upsertContract(contract: Contract, clientId: string) {
+/**
+ * `hadReminders`: the contract used to have outside people to remind, so an empty list now has to be written to clear them. The column is
+ * otherwise left out of the save, so a contract with no reminders saves exactly as it did before the column existed.
+ */
+export async function upsertContract(contract: Contract, clientId: string, hadReminders = false) {
   const supabase = createClient()
   const { error } = await supabase.from('contracts').upsert({
     id: contract.id, client_id: clientId,
@@ -1706,6 +1734,7 @@ export async function upsertContract(contract: Contract, clientId: string) {
     notes: contract.notes ?? null, created_at: contract.createdAt, flagged: !!contract.flagged,
     auto_renews: !!contract.autoRenews, renewal_months: contract.renewalMonths ?? null, notice_days: contract.noticeDays ?? null,
     terms: contract.terms ?? {}, files: contract.files ?? [],
+    ...(hadReminders || (contract.reminderEmails?.length ?? 0) > 0 ? { reminder_emails: contract.reminderEmails ?? [] } : {}),
   })
   if (error) throw error
 }

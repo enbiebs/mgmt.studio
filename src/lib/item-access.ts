@@ -15,6 +15,7 @@
 import type { Client, MainSection, UserRole } from '@/types'
 import type { AccessGrant } from '@/lib/db'
 import { taskSection } from '@/lib/tasks'
+import { withoutDeal } from '@/lib/show-deals'
 
 export type ItemType = 'show' | 'album' | 'post' | 'project' | 'invoice' | 'contract' | 'expense'
 export type ItemEffect = 'hide' | 'share'
@@ -139,7 +140,10 @@ export function sectionsWithItems(c: Client): MainSection[] {
 export function filterClientForViewer(c: Client, v: Viewer, exceptions: ItemException[]): Client {
   const sees = (type: ItemType, id: string) => effectiveSees(v, type, id, c.id, exceptions)
 
-  const shows = c.tour.shows.filter(s => sees('show', s.id))
+  // A show's money (fee, deposit, commissions) and the booking offers need Deals & fees, not just Tour: the database keeps them in tables that
+  // only that grant opens. A person with Tour (or Finance) but without Deals sees the show, never what it pays. Never the artist's own login.
+  const dealsAccess = v.role !== 'artist' && hasSectionGrant(v, 'deals', c.id)
+  const shows = c.tour.shows.filter(s => sees('show', s.id)).map(s => (dealsAccess ? s : withoutDeal(s)))
   const showIds = new Set(shows.map(s => s.id))
   const tourAccess = hasSectionGrant(v, 'tour', c.id)
 
@@ -147,11 +151,11 @@ export function filterClientForViewer(c: Client, v: Viewer, exceptions: ItemExce
   // Vendors, budgets, crew pay and finance settings have no per-item sharing: management
   // side only, with Finance access (the database rule is the same).
   const vendorsVisible = v.role !== 'artist' && hasSectionGrant(v, 'finance', c.id)
-  // Offers are deal negotiations: management side with Tour access. The artist only learns
+  // Offers are deal negotiations: management side with Deals & fees access. The artist only learns
   // about an offer through a sheet sent to them (offer sheets also need Finance, since they
   // carry budget numbers).
-  const offersVisible = v.role !== 'artist' && tourAccess
-  const sheetsVisible = v.role === 'artist' ? v.clientId === c.id : tourAccess && vendorsVisible
+  const offersVisible = dealsAccess
+  const sheetsVisible = v.role === 'artist' ? v.clientId === c.id : dealsAccess && vendorsVisible
 
   const filtered: Client = {
     ...c,

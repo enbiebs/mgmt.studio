@@ -4,6 +4,8 @@ import { useStore } from '@/lib/store'
 import { createClient } from '@/lib/supabase/client'
 import { useDismiss } from './useDismiss'
 import { applyLook, applyTheme, parseLook, parseTheme, type Look, type Theme } from '@/lib/look'
+import { loadMorningEmail, saveMorningEmail } from '@/lib/db'
+import { notify } from '@/lib/notify'
 
 const ROLE_LABEL: Record<string, string> = { manager: 'Manager', artist: 'Artist', agent: 'Agent', lawyer: 'Lawyer', team: 'Team' }
 
@@ -23,6 +25,12 @@ export function UserMenu() {
     applyTheme(next)
     setTheme(next)
   }
+  // The morning email switch (null = not available, so the line is not shown).
+  const [morning, setMorning] = useState<boolean | null>(null)
+  function chooseMorning(on: boolean) {
+    setMorning(on)
+    saveMorningEmail(on).catch(() => { setMorning(!on); notify('That could not be saved. Please try again.') })
+  }
   const ref = useRef<HTMLDivElement>(null)
   const close = useCallback(() => setOpen(false), [])
   useDismiss(ref, open, close)
@@ -30,8 +38,9 @@ export function UserMenu() {
   useEffect(() => {
     let live = true
     createClient().auth.getUser().then(({ data }) => { if (live) setEmail(data.user?.email ?? '') }).catch(() => {})
+    if (role !== 'artist') loadMorningEmail().then(v => { if (live) setMorning(v) }).catch(() => {})
     return () => { live = false }
-  }, [])
+  }, [role])
 
   const canPreview = (authRole === null || authRole === 'manager') && previewMembers.length > 0
 
@@ -103,6 +112,12 @@ export function UserMenu() {
             ))}
           </div>
           <div className="h-px bg-gray-100 my-1" />
+          {morning !== null && role !== 'artist' && (
+            <label className="flex items-start gap-2 px-3 py-2 text-xs text-gray-500 cursor-pointer hover:bg-gray-50">
+              <input type="checkbox" className="mt-0.5 rounded" checked={morning} onChange={e => chooseMorning(e.target.checked)} />
+              <span>Morning email<span className="block text-[10px] text-gray-400">A short note on days something needs you, and nothing on quiet days.</span></span>
+            </label>
+          )}
           {authRole === 'manager' && (
             <label className="flex items-start gap-2 px-3 py-2 text-xs text-gray-500 cursor-pointer hover:bg-gray-50">
               <input type="checkbox" className="mt-0.5 rounded" checked={showUnfinished} onChange={e => setShowUnfinished(e.target.checked)} />

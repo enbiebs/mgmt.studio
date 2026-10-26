@@ -6,6 +6,7 @@
 
 import type { Contract, ContractFile, ContractStatus, ContractType, Currency } from '@/types'
 import { cleanTerms } from '@/lib/contract-terms'
+import { MAX_REMINDER_ADDRESSES, parseAddresses } from '@/lib/contract-reminders'
 
 export interface ContractDraft {
   title: string
@@ -23,11 +24,12 @@ export interface ContractDraft {
   flagged: boolean
   terms: Record<string, string>
   files: ContractFile[]
+  reminders: string           // addresses, as typed (commas or lines between them)
 }
 
 export const emptyDraft = (): ContractDraft => ({
   title: '', counterparty: '', type: 'management', status: 'draft', signedDate: '', expiryDate: '',
-  autoRenews: false, renewalMonths: '', noticeDays: '', value: '', currency: 'USD', notes: '', flagged: false, terms: {}, files: [],
+  autoRenews: false, renewalMonths: '', noticeDays: '', value: '', currency: 'USD', notes: '', flagged: false, terms: {}, files: [], reminders: '',
 })
 
 export function contractToDraft(c: Contract): ContractDraft {
@@ -36,7 +38,7 @@ export function contractToDraft(c: Contract): ContractDraft {
     signedDate: c.signedDate?.slice(0, 10) ?? '', expiryDate: c.expiryDate?.slice(0, 10) ?? '',
     autoRenews: !!c.autoRenews, renewalMonths: c.renewalMonths ? String(c.renewalMonths) : '', noticeDays: c.noticeDays !== undefined && c.noticeDays !== null ? String(c.noticeDays) : '',
     value: c.value ? String(c.value) : '', currency: c.currency ?? 'USD', notes: c.notes ?? '', flagged: !!c.flagged,
-    terms: { ...(c.terms ?? {}) }, files: [...(c.files ?? [])],
+    terms: { ...(c.terms ?? {}) }, files: [...(c.files ?? [])], reminders: (c.reminderEmails ?? []).join(', '),
   }
 }
 
@@ -62,6 +64,9 @@ export function contractProblemFor(d: ContractDraft): { field: keyof ContractDra
   if (value !== null && Number.isNaN(value)) return { field: 'value', message: 'The value must be a number, like 25,000.' }
   if (value !== null && value < 0) return { field: 'value', message: 'The value cannot be negative.' }
   if (d.autoRenews && !d.expiryDate) return { field: 'expiryDate', message: 'A contract that renews by itself needs the end date of its first term.' }
+  const { emails, bad } = parseAddresses(d.reminders)
+  if (bad.length > 0) return { field: 'reminders', message: `${bad[0]} is not an email address.` }
+  if (emails.length > MAX_REMINDER_ADDRESSES) return { field: 'reminders', message: `Up to ${MAX_REMINDER_ADDRESSES} addresses.` }
   return null
 }
 
@@ -74,6 +79,7 @@ export function draftToFields(d: ContractDraft): Omit<Contract, 'id' | 'createdA
   const months = num(d.renewalMonths)
   const value = num(d.value)
   const terms = cleanTerms(d.type, d.terms)
+  const { emails } = parseAddresses(d.reminders)
   return {
     title: d.title.trim(), counterparty: d.counterparty.trim(), type: d.type, status: d.status,
     ...(d.signedDate ? { signedDate: d.signedDate } : {}),
@@ -86,6 +92,7 @@ export function draftToFields(d: ContractDraft): Omit<Contract, 'id' | 'createdA
     ...(notice !== null ? { noticeDays: notice } : {}),
     ...(Object.keys(terms).length > 0 ? { terms } : {}),
     ...(d.files.length > 0 ? { files: d.files } : {}),
+    ...(emails.length > 0 ? { reminderEmails: emails } : {}),
   }
 }
 

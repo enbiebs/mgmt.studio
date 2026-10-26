@@ -67,6 +67,17 @@ assert.deepEqual(contractToDraft({ ...BASE, title: 'x', counterparty: 'y', type:
 assert.equal(contractToDraft({ ...BASE, title: 'x', counterparty: 'y', type: 'nda', status: 'draft', noticeDays: 0 }).noticeDays, '0', 'zero notice shows as 0, not blank')
 assert.equal(contractToDraft({ ...BASE, title: 'x', counterparty: 'y', type: 'nda', status: 'draft', noticeDays: null as unknown as undefined }).noticeDays, '', 'a missing number from the database shows blank')
 
+// ── who to remind ──
+assert.equal(contractProblem(draft({ reminders: '' })), null)
+assert.equal(contractProblem(draft({ reminders: 'lawyer@firm.com, pa@x.org' })), null)
+assert.match(contractProblem(draft({ reminders: 'lawyer@firm.com, nonsense' }))!, /nonsense is not an email address/)
+assert.match(contractProblem(draft({ reminders: 'a@x.org b@x.org c@x.org d@x.org e@x.org f@x.org' }))!, /Up to 5/)
+assert.equal(contractProblem(draft({ reminders: 'a@x.org A@X.org' })), null, 'the same address twice is one')
+assert.equal(contractProblemFor(draft({ reminders: 'oops' }))!.field, 'reminders')
+assert.deepEqual(draftToContract(draft({ reminders: 'Lawyer@Firm.com; pa@x.org, lawyer@firm.com' }), BASE).reminderEmails, ['lawyer@firm.com', 'pa@x.org'], 'saved clean: lower case, no repeats')
+assert.equal('reminderEmails' in draftToContract(draft({ reminders: '  ' }), BASE), false, 'no one to remind keeps no list')
+assert.equal(contractToDraft({ ...BASE, title: 'x', counterparty: 'y', type: 'nda', status: 'draft', reminderEmails: ['a@x.org', 'b@x.org'] }).reminders, 'a@x.org, b@x.org')
+
 // ── a template-made document, saved as a draft contract ──
 assert.deepEqual(['NDA (Confidentiality Agreement)', 'Split / Side Artist Agreement', 'Work-for-Hire + NDA', 'Management Agreement', 'Sync licence', 'Publishing admin', 'Merch deal', 'Brand endorsement', 'Booking agency agreement', 'Producer agreement', 'Something else'].map(typeFromName),
   ['nda', 'recording', 'nda', 'management', 'sync', 'publishing', 'merch', 'brand', 'touring', 'recording', 'other'])

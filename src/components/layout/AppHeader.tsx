@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useSyncExternalStore } from 'react'
 import { useStore } from '@/lib/store'
+import { useTodayBadge } from '@/lib/useInbox'
 import { SHOW_UNFINISHED_KEY, analyticsHasData } from '@/lib/unfinished'
 import { ARTIST_SIDE_NAME, PRODUCT_NAME } from '@/lib/brand'
 import { BrandMark, Icon } from '@/components/ui/Icon'
@@ -30,6 +31,8 @@ export function AppHeader() {
   const analyticsVisible = showUnfinished || analyticsHasData(client)
   const isArtist = role === 'artist'
   const inStudio = view === 'studio' && !isArtist
+  const openArtistId = useStore(s => s.clientId)
+  const todayBadge = useTodayBadge(inStudio, openArtistId)   // the number on the phone's Today link, same as the side rail's
 
   // Remember the "show unfinished screens" choice on this computer.
   useEffect(() => {
@@ -152,6 +155,9 @@ export function AppHeader() {
                 }`}
               >
                 {i.label}
+                {i.key === 'today' && todayBadge > 0 && (
+                  <span className="ml-1.5 px-1.5 rounded-full bg-accent text-white text-[10px] font-semibold leading-4 align-middle">{todayBadge}<span className="sr-only"> need action</span></span>
+                )}
               </button>
             ))}
           </nav>

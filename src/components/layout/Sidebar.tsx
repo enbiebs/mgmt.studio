@@ -1,6 +1,6 @@
 'use client'
 import { useStore } from '@/lib/store'
-import { useInbox } from '@/lib/useInbox'
+import { useTodayBadge } from '@/lib/useInbox'
 import { PRODUCT_NAME } from '@/lib/brand'
 import { ROSTER_PAGE_LABEL } from '@/lib/nav-map'
 import { BrandMark, Icon } from '@/components/ui/Icon'
@@ -30,14 +30,11 @@ export function Sidebar() {
   const isManager = useStore(s => s.role === 'manager')
   const companyName = useStore(s => s.companyName)
   const clientId = useStore(s => s.clientId)
-  const inboxAll = useInbox()
   const groups = useVisibleNav()
   const pages = useVisibleRosterPages()
 
   const inArtist = view === 'studio'
-  // The Today badge follows the scope: everything that needs action across all artists, or just this artist's (heads-ups never count).
-  const mine = clientId ? inboxAll.byClient[clientId] : undefined
-  const inbox = inArtist && clientId ? (mine?.urgent ?? 0) + (mine?.soon ?? 0) : inboxAll.total
+  const inbox = useTodayBadge(inArtist, clientId)    // follows the scope: all artists, or just this one
   const companyLink = isManager ? (
     <button
       onClick={() => goToCompany()}
