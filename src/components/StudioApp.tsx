@@ -31,6 +31,7 @@ import { DashboardModals } from '@/components/dashboard/Modals'
 import { RosterToday }     from '@/components/dashboard/RosterToday'
 import { ArtistPicker }    from '@/components/dashboard/ArtistPicker'
 import { RosterTour }      from '@/components/tour/RosterTour'
+import { RosterFinance }   from '@/components/business/RosterFinance'
 
 // Manager views
 import { SongsView }    from '@/components/songs/SongsView'
@@ -104,6 +105,7 @@ export function StudioApp() {
             <main className="flex-1 overflow-auto p-4 md:p-8">
               {rosterPage === 'today' ? <RosterToday />
                 : rosterPage === 'tour' ? <RosterTour />
+                : rosterPage === 'finance' ? <RosterFinance />
                 : <ArtistPicker page={rosterPage} />}
             </main>
           )
