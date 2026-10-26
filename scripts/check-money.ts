@@ -1,6 +1,6 @@
 // Checks the small money sums every screen shares: invoice totals, per-currency totals, and how a deposit divides up.  Run with:  npx tsx scripts/check-money.ts
 import assert from 'node:assert/strict'
-import { formatTotals, invoiceOutstanding, invoiceState, invoiceStateWithDeposits, invoiceTotal, owedByCurrency, r2, royaltiesOwed, settlementBalancesNotOnInvoices, showNet, splitDeposit, sumByCurrency, unloggedWhenPaid } from '../src/lib/money'
+import { fmtMoney, formatTotals, invoiceOutstanding, invoiceState, invoiceStateWithDeposits, invoiceTotal, owedByCurrency, r2, royaltiesOwed, settlementBalancesNotOnInvoices, showNet, splitDeposit, sumByCurrency, unloggedWhenPaid } from '../src/lib/money'
 import type { Invoice } from '../src/types'
 
 const items = (...rows: [number, number][]): Pick<Invoice, 'items'> => ({ items: rows.map(([quantity, rate], i) => ({ description: `line ${i}`, quantity, rate })) })
@@ -33,13 +33,15 @@ assert.deepEqual(sumByCurrency([{ a: 10 }, { a: 5 }], r => r.a, () => 'USD'), { 
 assert.deepEqual(splitDeposit(200000, { mgmt: 0.10, lawyer: 0.06, taxes: 0.40 }), { mgmt: 20000, lawyer: 12000, taxes: 80000, stays: 88000 })
 assert.deepEqual(splitDeposit(0, { mgmt: 0.2, lawyer: 0.06, taxes: 0.4 }), { mgmt: 0, lawyer: 0, taxes: 0, stays: 0 })
 assert.deepEqual(splitDeposit(1000, { mgmt: 0, lawyer: 0, taxes: 0 }), { mgmt: 0, lawyer: 0, taxes: 0, stays: 1000 })      // nothing taken: all stays
-// shares are rounded to whole units, and the remainder stays, so the four ALWAYS add back to the amount
+// shares are rounded to the cent, and the remainder stays, so the four ALWAYS add back to the amount
 for (const [amount, mgmt, lawyer, taxes] of [[1234.56, 0.18, 0.06, 0.4], [999, 0.333, 0.333, 0.333], [17, 0.1, 0.1, 0.1], [50000, 0.2, 0.06, 0.4]] as const) {
   const s = splitDeposit(amount, { mgmt, lawyer, taxes })
   assert.equal(r2(s.mgmt + s.lawyer + s.taxes + s.stays), amount, `split of ${amount} adds back up`)
-  assert.equal(Number.isInteger(s.mgmt) && Number.isInteger(s.lawyer) && Number.isInteger(s.taxes), true)
+  for (const v of [s.mgmt, s.lawyer, s.taxes, s.stays]) assert.equal(r2(v), v, `${v} is a whole number of cents`)
 }
-assert.deepEqual(splitDeposit(17, { mgmt: 0.1, lawyer: 0.1, taxes: 0.1 }), { mgmt: 2, lawyer: 2, taxes: 2, stays: 11 })     // 1.7 rounds up to 2
+assert.deepEqual(splitDeposit(17, { mgmt: 0.1, lawyer: 0.1, taxes: 0.1 }), { mgmt: 1.7, lawyer: 1.7, taxes: 1.7, stays: 11.9 })     // cents are kept, not rounded away
+assert.deepEqual(splitDeposit(1234.56, { mgmt: 0.18, lawyer: 0.06, taxes: 0.4 }), { mgmt: 222.22, lawyer: 74.07, taxes: 493.82, stays: 444.45 })   // 222.2208, 74.0736, 493.824 -> cents; the rest stays
+assert.deepEqual(splitDeposit(100, { mgmt: 1 / 3, lawyer: 1 / 3, taxes: 1 / 3 }), { mgmt: 33.33, lawyer: 33.33, taxes: 33.33, stays: 0.01 }, 'thirds: the stray cent stays')
 // shares that add to more than 100% leave a negative remainder rather than hiding it
 assert.equal(splitDeposit(1000, { mgmt: 0.5, lawyer: 0.4, taxes: 0.3 }).stays, -200)
 
@@ -69,6 +71,16 @@ assert.deepEqual(royaltiesOwed([]), {})
 assert.equal(formatTotals({ USD: 1500, GBP: 250, EUR: 80 }), '$1,500 · £250 · €80')
 assert.equal(formatTotals({ EUR: 80, USD: 1500 }), '$1,500 · €80')                          // dollars, pounds, euros, in that order
 assert.equal(formatTotals({ GBP: 250 }), '£250')
+// money is never rounded on screen: cents show when there are cents, and only then
+assert.deepEqual([fmtMoney(1250, 'USD'), fmtMoney(1250.5, 'USD'), fmtMoney(0.07, 'EUR'), fmtMoney(-80.25, 'GBP'), fmtMoney(1000000, 'USD')], ['$1,250', '$1,250.50', '€0.07', '-£80.25', '$1,000,000'])
+assert.equal(formatTotals({ USD: 1250.5, EUR: 80 }), '$1,250.50 · €80')
+// float noise and negative zero never reach the screen
+assert.equal(fmtMoney(0.1 + 2.7 + 0.2, 'USD'), '$3', '3.0000000000000004 is $3, not $3.00')
+assert.equal(fmtMoney(-1e-14, 'USD'), '$0', 'a remainder of nothing is $0, not -$0')
+assert.equal(fmtMoney(-0, 'EUR'), '€0')
+assert.equal(fmtMoney(1234.565, 'USD'), '$1,234.57')
+assert.equal(fmtMoney(splitDeposit(103, { mgmt: 0.3, lawyer: 0.3, taxes: 0.4 }).stays, 'USD'), '$0', 'a split that gives away all of it leaves $0')
+assert.equal(fmtMoney(splitDeposit(10.29, { mgmt: 0.5, lawyer: 0.25, taxes: 0.25 }).stays, 'USD'), '$0')
 assert.equal(formatTotals({ USD: 0 }), '')                                                    // nothing owed: nothing shown
 assert.equal(formatTotals({}), '')
 assert.equal(formatTotals({ USD: 0, GBP: 40000 }), '£40,000')                                 // a zero is left out

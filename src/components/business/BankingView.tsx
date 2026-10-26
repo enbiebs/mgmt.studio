@@ -2,8 +2,8 @@
 import { useEffect, useState } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 import { useStore } from '@/lib/store'
-import { fmt, today as localToday } from '@/lib/utils'
-import { invoiceOutstanding, invoiceTotal, splitDeposit } from '@/lib/money'
+import { today as localToday } from '@/lib/utils'
+import { fmtMoney, invoiceOutstanding, invoiceTotal, splitDeposit } from '@/lib/money'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import type { Currency, Invoice } from '@/types'
 
@@ -160,9 +160,9 @@ export function BankingView() {
                   <div className="text-xs text-gray-400 mt-0.5">{a.subtype ?? a.type}</div>
                 </div>
                 <div className="text-right">
-                  <div className="font-serif font-semibold text-lg">{fmt(a.currentBalance ?? 0, a.currency ?? 'USD')}</div>
+                  <div className="font-serif font-semibold text-lg">{fmtMoney(a.currentBalance ?? 0, a.currency ?? 'USD')}</div>
                   {a.availableBalance != null && a.availableBalance !== a.currentBalance && (
-                    <div className="text-xs text-gray-400">{fmt(a.availableBalance, a.currency ?? 'USD')} available</div>
+                    <div className="text-xs text-gray-400">{fmtMoney(a.availableBalance, a.currency ?? 'USD')} available</div>
                   )}
                 </div>
               </div>
@@ -179,7 +179,7 @@ export function BankingView() {
                   <div className="text-xs text-gray-400">{t.date}{t.category ? ` · ${t.category}` : ''}{t.pending ? ' · Pending' : ''}</div>
                 </div>
                 <div className={`font-medium flex-shrink-0 ${t.amount < 0 ? 'text-green-600' : 'text-gray-700'}`}>
-                  {t.amount < 0 ? '+' : ''}{fmt(Math.abs(t.amount), t.currency ?? 'USD')}
+                  {t.amount < 0 ? '+' : ''}{fmtMoney(Math.abs(t.amount), t.currency ?? 'USD')}
                 </div>
               </div>
             ))}
@@ -203,13 +203,13 @@ export function BankingView() {
                       <div className="font-semibold text-sm">{d.name}</div>
                       <div className="text-xs text-gray-400 mt-0.5">{d.date}</div>
                     </div>
-                    <div className="font-serif font-semibold text-xl">{fmt(d.amount, d.currency)}</div>
+                    <div className="font-serif font-semibold text-xl">{fmtMoney(d.amount, d.currency)}</div>
                   </div>
                   <div className="border-t border-gray-100">
                     {[['Management', mgmt], ['Lawyer', lawyer], ['Taxes', taxes], ['Stays in Operating', stays]].map(([lbl, val]) => (
                       <div key={lbl} className="flex items-center gap-2 py-1.5 border-b border-gray-50 last:border-0 text-sm">
                         <span className="flex-1 text-gray-500">{lbl}</span>
-                        <span className="font-semibold">{fmt(val as number, d.currency)}</span>
+                        <span className="font-semibold">{fmtMoney(val as number, d.currency)}</span>
                       </div>
                     ))}
                   </div>
@@ -241,7 +241,7 @@ export function BankingView() {
                   </div>
                   <div className="text-xs text-gray-400 mt-0.5">{d.date}</div>
                 </div>
-                <div className="font-serif font-semibold text-lg">{fmt(d.amount, d.currency)}</div>
+                <div className="font-serif font-semibold text-lg">{fmtMoney(d.amount, d.currency)}</div>
               </div>
             ))}
           </div>
@@ -319,7 +319,7 @@ function AddDepositModal({ onClose, initialInvoiceId }: { onClose: () => void; i
         <FormField label="Which invoice does this pay? (optional)">
           <select className={selectClass} value={invoiceId} onChange={e => pickInvoice(e.target.value)}>
             <option value="">Not an invoice payment</option>
-            {payable.map(i => <option key={i.id} value={i.id}>{i.number} · {i.to} · {fmt(stillDue(i), i.currency)}{stillDue(i) < invoiceTotal(i) - 0.005 ? ' still due' : ''}{i.status === 'paid' ? ' · marked paid' : ''}</option>)}
+            {payable.map(i => <option key={i.id} value={i.id}>{i.number} · {i.to} · {fmtMoney(stillDue(i), i.currency)}{stillDue(i) < invoiceTotal(i) - 0.005 ? ' still due' : ''}{i.status === 'paid' ? ' · marked paid' : ''}</option>)}
           </select>
           <span className="mt-1 block text-[11px] text-gray-400">Pick one if this money is the payment for an invoice, so the profit &amp; loss counts it once, not twice.</span>
         </FormField>
@@ -333,7 +333,7 @@ function AddDepositModal({ onClose, initialInvoiceId }: { onClose: () => void; i
         </FormField>
         <FormField label="Amount">
           <input type="number" min="0" className={inputClass} value={amount} onChange={e => setAmount(e.target.value)} />
-          {overpays && picked && <span className="mt-1 block text-[11px] text-amber-600">That is more than the {fmt(stillDue(picked), picked.currency)} still due on this invoice. If it also pays another one, log it as two deposits.</span>}
+          {overpays && picked && <span className="mt-1 block text-[11px] text-amber-600">That is more than the {fmtMoney(stillDue(picked), picked.currency)} still due on this invoice. If it also pays another one, log it as two deposits.</span>}
         </FormField>
       </div>
       <FormField label="Currency">

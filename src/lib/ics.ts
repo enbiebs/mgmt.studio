@@ -42,6 +42,34 @@ function escapeIcsText(text: string): string {
   return text.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n')
 }
 
+/** A show's title in a calendar: a held date says HOLD and a cancelled one says CANCELLED, so neither reads as a booking even in apps that ignore status. */
+export function showTitle(show: Pick<Show, 'status' | 'venue' | 'city'>): string {
+  const base = `${show.venue} — ${show.city}`
+  return show.status === 'cancelled' ? `CANCELLED: ${base}` : show.status === 'hold' ? `HOLD: ${base}` : base
+}
+
+// A held date goes out as tentative and a cancelled show as cancelled, so a subscriber's calendar never shows either as a confirmed booking.
+// (A cancelled event keeps its UID: calendar apps then update or remove the event they already have instead of leaving it behind.)
+function statusLines(show: Pick<Show, 'status'>): string[] {
+  if (show.status === 'cancelled') return ['STATUS:CANCELLED', 'TRANSP:TRANSPARENT']
+  return [show.status === 'hold' ? 'STATUS:TENTATIVE' : 'STATUS:CONFIRMED']
+}
+
+// RFC 5545: a line is at most 75 bytes; a longer one continues on the next line after a single space. (Counted in bytes, never splitting a character.)
+export function foldLine(line: string): string {
+  const out: string[] = []
+  let current = ''
+  let bytes = 0
+  for (const ch of line) {
+    const size = new TextEncoder().encode(ch).length
+    if (bytes + size > (out.length === 0 ? 75 : 74)) { out.push(current); current = ''; bytes = 0 }
+    current += ch
+    bytes += size
+  }
+  out.push(current)
+  return out.join('\r\n ')
+}
+
 export function buildIcsFeed(clientName: string, shows: Show[]): string {
   const stamp = nowUtcStamp()
   const lines: string[] = [
@@ -58,10 +86,11 @@ export function buildIcsFeed(clientName: string, shows: Show[]): string {
       `DTSTAMP:${stamp}`,
       `DTSTART:${toIcsDateTime(show.date, show.time)}`,
       `DTEND:${addHoursIcs(show.date, show.time, 3)}`,
-      `SUMMARY:${escapeIcsText(`${show.venue} — ${show.city}`)}`,
+      `SUMMARY:${escapeIcsText(showTitle(show))}`,
+      ...statusLines(show),
       'END:VEVENT',
     )
   }
   lines.push('END:VCALENDAR')
-  return lines.join('\r\n') + '\r\n'
+  return lines.map(foldLine).join('\r\n') + '\r\n'
 }

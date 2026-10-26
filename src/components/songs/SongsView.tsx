@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { ItemTodos } from '@/components/dashboard/ItemTodos'
-import { stageLabel, stageBadgeClass, isStale, uid, RELEASE_TYPE_LABEL } from '@/lib/utils'
+import { stageLabel, stageBadgeClass, isStale, uid, noteAuthorName, RELEASE_TYPE_LABEL } from '@/lib/utils'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { TrackWaveform } from './TrackWaveform'
 import { getTrackAudioUrl } from '@/lib/db'
@@ -500,6 +500,7 @@ function RoundsTab({ track, editable }: { track: Track; editable: boolean }) {
   const [replyText, setReplyText] = useState('')
 
   const role = useStore(s => s.role)
+  const myName = useStore(s => s.workspacePeople.find(p => p.memberId === s.myMemberId)?.label)
   const { deleteTrackRound, addTrackNote, toggleTrackNoteResolved, deleteTrackNote, addTrackNoteReply } = useStore()
 
   // Falls back to the newest round whenever nothing (or a since-deleted
@@ -528,7 +529,7 @@ function RoundsTab({ track, editable }: { track: Track; editable: boolean }) {
   function handleAddNoteAt(seconds: number) {
     setComposing(seconds)
     setComposeText('')
-    setComposeAuthor(role === 'manager' ? 'Manager' : role.charAt(0).toUpperCase() + role.slice(1))
+    setComposeAuthor(noteAuthorName(myName, role))   // the signed-in person's own name; they can still sign as a role (e.g. Mix Engineer)
   }
 
   function submitNote() {
@@ -539,7 +540,7 @@ function RoundsTab({ track, editable }: { track: Track; editable: boolean }) {
 
   function submitReply(note: TrackNote) {
     if (!selected || !replyText.trim()) return
-    addTrackNoteReply(track.id, selected.id, note.id, composeAuthor.trim() || (role === 'manager' ? 'Manager' : 'Team'), replyText.trim())
+    addTrackNoteReply(track.id, selected.id, note.id, noteAuthorName(myName, role), replyText.trim())
     setReplyingTo(null); setReplyText('')
   }
 

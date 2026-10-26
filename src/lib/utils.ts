@@ -103,6 +103,21 @@ export function addDays(dateStr: string, n: number): string {
   return toDateStr(d)
 }
 
+/** Who a new audio note or reply is from: the signed-in person's own name, else their role word ("Manager", "Team"). */
+export function noteAuthorName(myName: string | undefined, role: string): string {
+  const name = (myName ?? '').trim()
+  // The people list shows the login's email when it has no name, and 'Someone' when it has neither: neither is a name to sign a note with.
+  if (name && name !== 'Someone' && !name.includes('@')) return name
+  return role.charAt(0).toUpperCase() + role.slice(1)
+}
+
+/** The release day in words for a post title: the weekday alone ("Friday") and with the date ("Friday, Nov 7"). */
+export function releaseDayWords(releaseDate: string): { weekday: string; full: string } {
+  const d = new Date(releaseDate + 'T00:00:00')
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'long' })
+  return { weekday, full: `${weekday}, ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` }
+}
+
 /**
  * Release rollout template — the day-by-day content cadence a release
  * actually follows: countdown posts building to release day, then a
@@ -110,11 +125,11 @@ export function addDays(dateStr: string, n: number): string {
  * weeks after, since a single "official sound" clip gets re-cut across
  * every platform rather than posted once and left alone.
  */
-export const ROLLOUT_TEMPLATE: { offset: number; type: PostType; time: string; title: (t: string) => string }[] = [
-  { offset: -16, type: 'laylo',         time: '10:00am', title: t => `Pre-save "${t}" — out this Friday` },
+export const ROLLOUT_TEMPLATE: { offset: number; type: PostType; time: string; title: (t: string, day: { weekday: string; full: string }) => string }[] = [
+  { offset: -16, type: 'laylo',         time: '10:00am', title: (t, d) => `Pre-save "${t}" — out ${d.full}` },
   { offset: -14, type: 'post',          time: '11:00am', title: t => `Gearing up for "${t}" — behind the scenes` },
   { offset: -7,  type: 'post',          time: '11:00am', title: t => `One week until "${t}" 🔥` },
-  { offset: -4,  type: 'post',          time: '11:00am', title: t => `"${t}" is out this Friday` },
+  { offset: -4,  type: 'post',          time: '11:00am', title: (t, d) => `"${t}" is out ${d.weekday}` },
   { offset: -2,  type: 'story',         time: '5:00pm',  title: t => `"${t}" — pre-save reminder / countdown` },
   { offset: -1,  type: 'story',         time: '6:00pm',  title: t => `"${t}" drops tomorrow` },
   { offset: 0,   type: 'post',          time: '9:00am',  title: t => `${t.toUpperCase()} IS OUT NOW!` },
@@ -128,6 +143,12 @@ export const ROLLOUT_TEMPLATE: { offset: number; type: PostType; time: string; t
   { offset: 9,   type: 'story',         time: '11:00am', title: t => `"${t}" — behind-the-scenes archive drop` },
   { offset: 14,  type: 'reel',          time: '11:00am', title: t => `"${t}" — still on repeat` },
 ]
+
+/** The rollout posts for a release: date, title, time and type for each step (the store adds ids and marks them auto). */
+export function rolloutPosts(albumTitle: string, releaseDate: string): { date: string; title: string; time: string; type: PostType }[] {
+  const day = releaseDayWords(releaseDate)
+  return ROLLOUT_TEMPLATE.map(item => ({ date: addDays(releaseDate, item.offset), title: item.title(albumTitle, day), time: item.time, type: item.type }))
+}
 
 /** Calendar grid for a month — returns Date objects including padding days */
 export function calendarDays(year: number, month: number): { date: Date; current: boolean }[] {

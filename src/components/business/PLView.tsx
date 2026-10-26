@@ -11,9 +11,10 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { buildPL, monthsThisYear, netIncome, SOURCE_LABEL, totalExpenses, totalRevenue, type PLSource } from '@/lib/ledger'
 import { today } from '@/lib/utils'
+import { fmtMoney } from '@/lib/money'
 import type { PLMonth } from '@/types'
 
-const money = (n: number, currency: string) => new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n)
+const money = fmtMoney
 const SOURCE_STYLE: Record<PLSource, string> = { typed: 'bg-gray-100 text-gray-600', records: 'bg-green-50 text-green-700', bank: 'bg-blue-50 text-blue-700', none: 'bg-gray-50 text-gray-400' }
 
 function fmtMonth(iso: string) {
