@@ -605,14 +605,15 @@ function CostSummary({ items }: { items: TravelItem[] }) {
 }
 
 // ── Main view ────────────────────────────────────────────────
-export function TravelView() {
+/** `embedded`: shown inside a show's page, which already picked the show, so there is no show list of its own (trips not tied to a show are one click away). */
+export function TravelView({ embedded = false }: { embedded?: boolean } = {}) {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('tour'))
   const saveTravel   = useStore(s => s.saveTravelItem)
   const deleteTravel = useStore(s => s.deleteTravelItem)
   const saveAdvance  = useStore(s => s.saveAdvance)
   const sharedSelectedShowId = useStore(s => s.selectedShowId)
-  const [selectedShowId, setSelectedShowId] = useState<string | null>(null)
+  const [selectedShowId, setSelectedShowId] = useState<string | null>(() => useStore.getState().selectedShowId)
   const [viewingGeneral, setViewingGeneral] = useState(false)
   const [addMode, setAddMode] = useState<AddMode>(null)
   const [synced, setSynced] = useState(false)
@@ -731,6 +732,7 @@ export function TravelView() {
 
   return (
     <div className="flex-1 flex overflow-hidden">
+      {!embedded && (<>
       {/* ── Sidebar: show list ── */}
       <div className={`${listPaneClass(pane.detail)} w-full md:w-[220px] flex-shrink-0 border-r border-gray-100 flex-col`}>
         <div className="px-4 py-3 border-b border-gray-100">
@@ -793,14 +795,28 @@ export function TravelView() {
           </div>
         </div>
       </div>
+      </>)}
 
       {/* ── Main panel ── */}
-      <div className={`${detailPaneClass(pane.detail)} flex-1 overflow-y-auto`}>
-        <BackToList onClick={pane.closeDetail} label="All shows" />
+      <div className={`${detailPaneClass(embedded || pane.detail)} flex-1 overflow-y-auto`}>
+        {!embedded && <BackToList onClick={pane.closeDetail} label="All shows" />}
         {!show && !effectiveGeneral ? (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm">No shows available</div>
         ) : (
           <div className="max-w-2xl mx-auto py-4 md:py-6 px-3 md:px-6">
+            {/* Inside a show's page the show list is gone, so trips that are not tied to a show are one click away here */}
+            {embedded && (
+              <div role="group" aria-label="Which trips" className="inline-flex p-0.5 bg-gray-100 rounded-lg text-xs font-medium mb-4">
+                {([[false, 'This show'], [true, 'Not tied to a show']] as const).map(([general, label]) => (
+                  <button
+                    key={label}
+                    aria-pressed={effectiveGeneral === general}
+                    onClick={() => { setViewingGeneral(general); setAddMode(null) }}
+                    className={`px-3 py-1 rounded-md transition-colors ${effectiveGeneral === general ? 'bg-canvas shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                  >{label}</button>
+                ))}
+              </div>
+            )}
             {/* Show header */}
             <div className="flex items-start justify-between mb-6">
               <div>

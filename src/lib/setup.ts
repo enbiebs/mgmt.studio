@@ -29,13 +29,13 @@ export function setupSteps(client: Client, ctx: SetupContext): SetupStep[] {
   return [
     step({
       key: 'shows', title: 'Put their shows on the calendar',
-      hint: 'Import a spreadsheet of dates, or add shows one at a time.',
+      hint: 'Use + New gig to add them one at a time, or add many from a spreadsheet of dates.',
       action: 'Add shows', go: { section: 'tour', tourSub: 'tour' },
       done: client.tour.shows.length > 0,
     }),
     step({
       key: 'offers', title: 'Add any offers you are working on',
-      hint: 'Paste an offer email and the form fills itself in.',
+      hint: 'Use + New gig, then paste an offer email and the form fills itself in.',
       action: 'Add an offer', go: { section: 'tour', tourSub: 'offers' },
       done: client.agentData.offers.length > 0,
     }),

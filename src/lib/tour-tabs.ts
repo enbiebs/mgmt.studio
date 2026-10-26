@@ -43,3 +43,33 @@ export function visibleTourTabs(a: TourAccess): string[] {
 export function canOpenSection(section: MainSection, has: (section: MainSection) => boolean): boolean {
   return has(section) || (section === 'tour' && has('deals'))
 }
+
+// ── Four tabs on top, five screens inside a show ─────────────
+//  The nine screens are still there (each keeps its address), but the Tour page shows four tabs. Shows holds everything about
+//  ONE show (details, advance, travel, guests, day sheet), so the show is picked once and its steps are one bar.
+export type TourGroup = 'shows' | 'offers' | 'money' | 'crew'
+export const TOUR_GROUPS: TourGroup[] = ['shows', 'offers', 'money', 'crew']
+export const TOUR_GROUP_LABEL: Record<TourGroup, string> = { shows: 'Shows', offers: 'Offers', money: 'Money', crew: 'Crew' }
+
+const GROUP_OF: Record<(typeof TOUR_TAB_ORDER)[number], TourGroup> = {
+  tour: 'shows', advance: 'shows', travel: 'shows', guests: 'shows', daysheet: 'shows', offers: 'offers', budget: 'money', settlements: 'money', crew: 'crew',
+}
+/** The tab a screen belongs to (the stage plot, which has no screen of its own, counts as Shows). */
+export const groupOfSub = (sub: string): TourGroup => (Object.hasOwn(GROUP_OF, sub) ? GROUP_OF[sub as keyof typeof GROUP_OF] : 'shows')
+
+/** The tabs this person gets, from the screens they can open. */
+export const visibleTourGroups = (tabs: readonly string[]): TourGroup[] => TOUR_GROUPS.filter(g => tabs.some(t => groupOfSub(t) === g))
+
+/** Where clicking a tab goes: stay on the screen you are on if it belongs to that tab, else the tab's first screen this person has. */
+export function subForGroup(group: TourGroup, current: string, tabs: readonly string[]): string {
+  if (groupOfSub(current) === group && tabs.includes(current)) return current
+  return TOUR_TAB_ORDER.find(t => GROUP_OF[t] === group && tabs.includes(t)) ?? current
+}
+
+/**
+ * What the New gig button offers. A booked show and a spreadsheet of shows are Tour; an offer and a pasted offer are Deals & fees.
+ * Someone who may add neither gets no button at all.
+ */
+export function gigChoices(can: { show: boolean; offer: boolean }): { button: boolean; booked: boolean; talking: boolean; paste: boolean; spreadsheet: boolean } {
+  return { button: can.show || can.offer, booked: can.show, talking: can.offer, paste: can.offer, spreadsheet: can.show }
+}

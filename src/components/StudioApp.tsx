@@ -12,13 +12,13 @@
 
 import { useStore } from '@/lib/store'
 import { effectiveSub, shareOnlyTabs } from '@/lib/item-access'
-import { canOpenSection, visibleTourTabs } from '@/lib/tour-tabs'
+import { canOpenSection } from '@/lib/tour-tabs'
+import { useTourTabs } from '@/components/tour/useTourTabs'
 import { CompanyView } from '@/components/company/CompanyView'
 import { AppHeader }  from '@/components/layout/AppHeader'
 import { Subnav }     from '@/components/layout/Subnav'
 import { Sidebar }    from '@/components/layout/Sidebar'
 import { CommandBar } from '@/components/layout/CommandBar'
-import { ShowProgressBar } from '@/components/tour/ShowProgressBar'
 import { Toaster } from '@/components/ui/Toaster'
 import { ConfirmHost } from '@/components/ui/ConfirmHost'
 import { UrlSync } from '@/components/layout/UrlSync'
@@ -56,14 +56,9 @@ import { LegalView }     from '@/components/legal/LegalView'
 import { ArtistView }   from '@/components/artist/ArtistView'
 
 // Tour subviews
-import { AdvanceView }  from '@/components/tour/AdvanceView'
-import { DaySheetView } from '@/components/tour/DaySheetView'
-import { TravelView }   from '@/components/tour/TravelView'
-import { GuestListView } from '@/components/tour/GuestListView'
 import { CrewView }      from '@/components/tour/CrewView'
+import { MoneyView }     from '@/components/tour/MoneyView'
 import { OffersView }    from '@/components/tour/OffersView'
-import { BudgetView }    from '@/components/tour/BudgetView'
-import { SettlementsView } from '@/components/tour/SettlementsView'
 import { TodayList } from '@/components/dashboard/TodayList'
 import { ActivityView } from '@/components/activity/ActivityView'
 import { ProfileView } from '@/components/profile/ProfileView'
@@ -77,10 +72,7 @@ export function StudioApp() {
   const contentSub = effectiveSub(rawContentSub, allowedTabs) as typeof rawContentSub
   const bizSub = effectiveSub(rawBizSub, allowedTabs) as typeof rawBizSub
   // The Tour page opens for Tour, for Deals & fees alone, or both; each person lands on a tab they actually have.
-  const tourTabs = visibleTourTabs({
-    tour: hasAccess('tour'), deals: hasAccess('deals'), finance: role !== 'artist' && hasAccess('finance'),
-    sharedTabs: isShareOnly('tour') ? shareOnlyTabs('tour', data.clients.find(c => c.id === clientId)) : undefined,
-  })
+  const tourTabs = useTourTabs()
   const tourSub = effectiveSub(rawTourSub, tourTabs.length > 0 ? tourTabs : undefined) as typeof rawTourSub
 
   // Show loading spinner while Supabase data is hydrating
@@ -141,7 +133,6 @@ export function StudioApp() {
               canOpenSection(section, s => hasAccess(s)) ? (
                 <>
                   <Subnav />
-                  {section === 'tour' && ['advance', 'daysheet', 'travel', 'guests'].includes(tourSub) && <ShowProgressBar />}
                   <div className="flex-1 min-h-0 flex overflow-hidden">
                     {section === 'songs'    && (
                       songsSub === 'labelcopy' ? <LabelCopyView /> :
@@ -150,14 +141,10 @@ export function StudioApp() {
                       <SongsView />
                     )}
                     {section === 'tour'     && (
+                      // Four tabs: Shows (a show and its steps: details, advance, travel, guests, day sheet), Offers, Money, Crew.
                       tourSub === 'offers'   ? <OffersView />           :
-                      tourSub === 'budget'   ? <BudgetView />           :
-                      tourSub === 'settlements' ? <SettlementsView />   :
-                      tourSub === 'advance'  ? <AdvanceView />          :
-                      tourSub === 'daysheet' ? <DaySheetView />         :
-                      tourSub === 'travel'   ? <TravelView />           :
+                      tourSub === 'budget' || tourSub === 'settlements' ? <MoneyView /> :
                       tourSub === 'crew'     ? <CrewView />             :
-                      tourSub === 'guests'   ? <GuestListView />        :
                       <TourView />
                     )}
                     {section === 'content'  && (

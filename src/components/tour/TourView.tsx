@@ -3,13 +3,20 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { ItemTodos } from '@/components/dashboard/ItemTodos'
-import { CalendarImportModal } from '@/components/tour/CalendarImportModal'
+import { AdvanceView } from '@/components/tour/AdvanceView'
+import { DaySheetView } from '@/components/tour/DaySheetView'
+import { GuestListView } from '@/components/tour/GuestListView'
+import { TravelView } from '@/components/tour/TravelView'
+import { ShowStepBar } from '@/components/tour/ShowStepBar'
+import { useTourTabs } from '@/components/tour/useTourTabs'
+import { effectiveSub } from '@/lib/item-access'
 import { ShowProgressPanel } from '@/components/tour/ShowProgressPanel'
 import { ShowFolderLink } from '@/components/tour/ShowFolderLink'
 import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { MONTH_NAMES, MONTH_SHORT, fmt, today } from '@/lib/utils'
 import { isUpcomingShow, showCounts, splitShows } from '@/lib/date-state'
+import { stepsShowFor } from '@/lib/show-steps'
 import { invoiceStateWithDeposits, showNet } from '@/lib/money'
 import { askConfirm } from '@/lib/confirm'
 import { notify } from '@/lib/notify'
@@ -24,16 +31,19 @@ export function TourView() {
   const canSeeDeals = useStore(s => s.hasAccess('deals'))
   const canEditDeals = useStore(s => s.canEdit('deals'))
   const {
-    selectedShowId, setSelectedShow, setTourSub, updateShowStatus, updateShowFinancials, deleteShow,
+    selectedShowId, tourSub: rawTourSub, setSelectedShow, setTourSub, updateShowStatus, updateShowFinancials, deleteShow,
     enableCalendarFeed, disableCalendarFeed,
   } = useStore()
-  const [addOpen, setAddOpen] = useState(false)
-  const [importOpen, setImportOpen] = useState(false)
   const pane = useMobilePane(!!selectedShowId)   // arriving with a show already chosen (from All artists, the calendar or ⌘K) opens the show on a phone
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [hidePlayed, setHidePlayed] = useState(false)
+
+  // The screen inside Shows: the show's details, or one of its steps (each person gets only the ones they can open).
+  const tabs = useTourTabs()
+  const tourSub = effectiveSub(rawTourSub, tabs)
+  const onStepScreen = ['advance', 'travel', 'guests', 'daysheet'].includes(tourSub)
 
   if (!client) return null
   const allShows = client.tour.shows
@@ -45,6 +55,12 @@ export function TourView() {
   const upcoming = shows.filter(s => isUpcomingShow(s, today()))
   const counts = showCounts(shows, today())
   const selected = allShows.find(s => s.id === selectedShowId)
+  // The show whose steps are on screen: the one picked, or on a step screen with none picked (an old link, another tab) the next one.
+  // This only decides what to show; it never changes the pick, so "back" really goes back (lib/show-steps.ts).
+  const stepsShow = stepsShowFor(allShows, selectedShowId, onStepScreen, today())
+  const activeId = stepsShow?.id ?? selectedShowId
+  // On a phone the show opens on top of the list as soon as one is shown; "← All shows" puts the list back.
+  const showDetail = pane.detail || !!selected || !!stepsShow
   const playedOpen = !hidePlayed || (!!selected && played.some(s => s.id === selected.id))
 
   // "Advance Dashboard" lite — flags upcoming shows with something outstanding,
@@ -80,12 +96,12 @@ export function TourView() {
     return (
       <button
         key={s.id}
-        onClick={() => { setSelectedShow(s.id); pane.openDetail() }}
+        onClick={() => { setSelectedShow(s.id); if (s.historyOnly) setTourSub('tour'); pane.openDetail() }}   // a history show has no steps, so it opens on its details
         className={`w-full flex items-center gap-3 px-4 py-3 border-b border-gray-100 text-left transition-colors ${dim || s.status === 'cancelled' ? 'opacity-60' : ''} ${
-          selectedShowId === s.id ? 'bg-accent-soft' : 'hover:bg-gray-50'
+          activeId === s.id ? 'bg-accent-soft' : 'hover:bg-gray-50'
         }`}
       >
-        <div className={`w-10 flex-shrink-0 text-center rounded-lg py-1 ${selectedShowId === s.id ? 'bg-accent/15' : 'bg-gray-100'}`}>
+        <div className={`w-10 flex-shrink-0 text-center rounded-lg py-1 ${activeId === s.id ? 'bg-accent/15' : 'bg-gray-100'}`}>
           <div className="text-[9px] font-bold uppercase tracking-wider text-gray-400">{MONTH_SHORT[d.getMonth()]}</div>
           <div className="text-lg font-bold font-serif leading-none">{d.getDate()}</div>
         </div>
@@ -104,26 +120,9 @@ export function TourView() {
   return (
     <div className="flex-1 flex overflow-hidden">
       {/* Sidebar */}
-      <div className={`${listPaneClass(pane.detail)} w-full md:w-[272px] flex-shrink-0 border-r border-gray-100 flex-col`}>
+      <div className={`${listPaneClass(showDetail)} w-full md:w-[272px] flex-shrink-0 border-r border-gray-100 flex-col`}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Tour</span>
-          {editable && (
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setImportOpen(true)}
-                title="Add many shows at once from an Excel calendar"
-                className="px-2.5 py-1 text-xs text-gray-500 hover:text-gray-800 transition-colors"
-              >
-                Import
-              </button>
-              <button
-                onClick={() => setAddOpen(true)}
-                className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
-              >
-                + Show
-              </button>
-            </div>
-          )}
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Shows</span>
         </div>
 
         <div className="flex-1 overflow-auto">
@@ -131,11 +130,7 @@ export function TourView() {
             <div className="flex flex-col items-center justify-center gap-2 py-12 text-gray-300">
               <span className="text-4xl">🎤</span>
               <span className="text-sm">No shows yet</span>
-              {editable && (
-                <button onClick={() => setImportOpen(true)} className="mt-1 text-xs text-accent hover:underline">
-                  Import them from a spreadsheet
-                </button>
-              )}
+              {editable && <span className="mt-1 text-center text-xs text-gray-400">Add one with + New gig, above.</span>}
             </div>
           ) : (
             <>
@@ -171,11 +166,19 @@ export function TourView() {
       </div>
 
       {/* Main */}
-      <div className={`${detailPaneClass(pane.detail)} flex-1 overflow-auto p-4 md:p-6`}>
-        <BackToList onClick={pane.closeDetail} label="All shows" className="-mx-4 -mt-4 mb-4" />
+      <div className={`${detailPaneClass(showDetail, 'flex')} flex-1 flex-col overflow-hidden`}>
+        <BackToList onClick={() => { pane.closeDetail(); setSelectedShow(null); setTourSub('tour') }} label="All shows" />
+        {stepsShow && <ShowStepBar show={stepsShow} />}
+        {stepsShow && onStepScreen ? (
+          // One of the show's steps: the show is already picked, so the screen has no show list of its own.
+          <div key={stepsShow.id} className="flex flex-1 overflow-hidden">
+            {tourSub === 'advance' ? <AdvanceView embedded /> : tourSub === 'travel' ? <TravelView embedded /> : tourSub === 'guests' ? <GuestListView embedded /> : <DaySheetView embedded />}
+          </div>
+        ) : (
+        <div className="flex-1 overflow-auto p-4 md:p-6">
         <div className="flex items-center justify-between mb-3 relative">
           {selected ? (
-            <button onClick={() => setSelectedShow(null)} className="text-xs text-gray-500 hover:text-gray-900 transition-colors">← Tour summary</button>
+            <button onClick={() => { setSelectedShow(null); setTourSub('tour') }} className="text-xs text-gray-500 hover:text-gray-900 transition-colors">← Tour summary</button>
           ) : <span />}
           {editable && (<>
             <button
@@ -330,7 +333,6 @@ export function TourView() {
             <div className="flex gap-2 flex-wrap mb-4">
               {[
                 ['Maps ↗', () => window.open(`https://maps.google.com/?q=${encodeURIComponent(`${selected.venue}, ${selected.city}`)}`, '_blank')],
-                ['Day Sheet', () => { setSelectedShow(selected.id); setTourSub('daysheet') }],
               ].map(([l, fn]) => (
                 <button
                   key={l as string}
@@ -363,20 +365,18 @@ export function TourView() {
             <span className="text-sm">Select a show for details</span>
           </div>
         )}
+        </div>
+        )}
       </div>
-
-      {/* Add show modal */}
-      {addOpen && <AddShowModal onClose={() => setAddOpen(false)} onAdded={id => { setSelectedShow(id); pane.openDetail() }} />}
-      {importOpen && <CalendarImportModal onClose={() => setImportOpen(false)} />}
     </div>
   )
 }
 
 // ── Add Show Modal ──────────────────────────────────────────
-export function AddShowModal({ defaultDate, onClose, onAdded }: { defaultDate?: string; onClose: () => void; onAdded?: (showId: string) => void }) {
+export function AddShowModal({ defaultDate, defaultStatus = 'hold', onClose, onAdded }: { defaultDate?: string; defaultStatus?: 'hold' | 'confirmed'; onClose: () => void; onAdded?: (showId: string) => void }) {
   const addShow = useStore(s => s.addShow)
   const [f, setF] = useState({ date: defaultDate ?? '', city: '', venue: '', time: '20:00' })
-  const [status, setStatus] = useState<'hold' | 'confirmed'>('hold')
+  const [status, setStatus] = useState<'hold' | 'confirmed'>(defaultStatus)
 
   function handleAdd() {
     if (!f.date || !f.city || !f.venue) return
