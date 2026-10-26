@@ -22,7 +22,8 @@ const CATEGORY_LABEL: Record<GuestListCategory, string> = {
   media: 'Media', family: 'Family', promo: 'Promo', sponsor: 'Sponsor',
 }
 
-export function GuestListView() {
+/** `embedded`: shown inside a show's page, which already picked the show, so there is no show list of its own. */
+export function GuestListView({ embedded = false }: { embedded?: boolean } = {}) {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('tour'))
   const { toggleGuestCheckedIn, deleteGuest } = useStore()
@@ -47,6 +48,7 @@ export function GuestListView() {
 
   return (
     <div className="flex-1 flex overflow-hidden">
+      {!embedded && (<>
       {/* ── Sidebar: show list ── */}
       <div className={`${listPaneClass(pane.detail)} w-full md:w-[220px] flex-shrink-0 border-r border-gray-100 flex-col`}>
         <div className="px-4 py-3 border-b border-gray-100">
@@ -75,10 +77,11 @@ export function GuestListView() {
           })}
         </div>
       </div>
+      </>)}
 
       {/* ── Main panel ── */}
-      <div className={`${detailPaneClass(pane.detail)} flex-1 overflow-y-auto`}>
-        <BackToList onClick={pane.closeDetail} label="All shows" />
+      <div className={`${detailPaneClass(embedded || pane.detail)} flex-1 overflow-y-auto`}>
+        {!embedded && <BackToList onClick={pane.closeDetail} label="All shows" />}
         {!show ? (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm">No shows available</div>
         ) : (

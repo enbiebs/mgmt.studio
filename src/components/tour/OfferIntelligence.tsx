@@ -151,7 +151,7 @@ export function OfferIntelligence({ client, date, city, venue, guarantee, radius
             </>
           ) : (
             <div className="text-gray-500">
-              {info.hasAnyFees ? `No confirmed shows recorded in ${city.split(',')[0].trim()} yet.` : 'No show history in the app yet. Import your past calendar (Tour → Import, with past shows ticked) to compare fees.'}
+              {info.hasAnyFees ? `No confirmed shows recorded in ${city.split(',')[0].trim()} yet.` : 'No show history in the app yet. Import your past calendar (Tour → + New gig → Add many shows from a spreadsheet, with past shows ticked) to compare fees.'}
             </div>
           )}
         </div>

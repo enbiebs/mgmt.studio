@@ -126,7 +126,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 // ── Main component ──────────────────────────────────────────
-export function AdvanceView() {
+/** `embedded`: shown inside a show's page, which already picked the show, so there is no show list of its own. */
+export function AdvanceView({ embedded = false }: { embedded?: boolean } = {}) {
   const client = useStore(s => s.getClient())
   const editable = useStore(s => s.canEdit('tour'))
   const { setTourSub, saveAdvance: persistAdvance, addVenue, updateVenue } = useStore()
@@ -318,6 +319,7 @@ export function AdvanceView() {
 
   return (
     <div className="flex-1 flex overflow-hidden">
+      {!embedded && (<>
       {/* ── Show list ── */}
       <div className={`${listPaneClass(pane.detail)} w-full md:w-[260px] flex-shrink-0 border-r border-gray-100 flex-col`}>
         <div className="px-4 py-3 border-b border-gray-100">
@@ -358,15 +360,16 @@ export function AdvanceView() {
           )}
         </div>
       </div>
+      </>)}
 
       {/* ── Advance editor ── */}
       {!advance ? (
-        <div className="hidden md:flex flex-1 items-center justify-center text-gray-400 text-sm">
+        <div className={`${embedded ? 'flex' : 'hidden md:flex'} flex-1 items-center justify-center text-gray-400 text-sm`}>
           Select a show to view or create its advance
         </div>
       ) : (
-        <div className={`${detailPaneClass(pane.detail, 'flex')} flex-1 flex-col overflow-hidden`}>
-          <BackToList onClick={pane.closeDetail} label="All shows" />
+        <div className={`${detailPaneClass(embedded || pane.detail, 'flex')} flex-1 flex-col overflow-hidden`}>
+          {!embedded && <BackToList onClick={pane.closeDetail} label="All shows" />}
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-3 border-b border-gray-100">
             <div>

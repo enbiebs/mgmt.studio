@@ -35,11 +35,12 @@ function Block({ title, children, accent }: { title: string; children: React.Rea
   )
 }
 
-export function DaySheetView() {
+/** `embedded`: shown inside a show's page, which already picked the show, so there is no show list of its own. */
+export function DaySheetView({ embedded = false }: { embedded?: boolean } = {}) {
   const client = useStore(s => s.getClient())
   const { setTourSub } = useStore()
   const sharedSelectedShowId = useStore(s => s.selectedShowId)
-  const [selectedShowId, setSelectedShowId] = useState<string | null>(null)
+  const [selectedShowId, setSelectedShowId] = useState<string | null>(() => useStore.getState().selectedShowId)
   const pane = useMobilePane()
 
   // Jumping here from elsewhere (e.g. Tour's "Day Sheet" quick link) sets the
@@ -77,6 +78,7 @@ export function DaySheetView() {
 
   return (
     <div className="flex-1 flex overflow-hidden">
+      {!embedded && (<>
       {/* Show selector sidebar */}
       <div className={`${listPaneClass(pane.detail)} w-full md:w-[200px] flex-shrink-0 border-r border-gray-100 flex-col`}>
         <div className="px-4 py-3 border-b border-gray-100">
@@ -116,10 +118,11 @@ export function DaySheetView() {
           </button>
         </div>
       </div>
+      </>)}
 
       {/* Day sheet */}
-      <div className={`${detailPaneClass(pane.detail)} flex-1 overflow-y-auto bg-gray-50`}>
-        <BackToList onClick={pane.closeDetail} label="All shows" />
+      <div className={`${detailPaneClass(embedded || pane.detail)} flex-1 overflow-y-auto bg-gray-50`}>
+        {!embedded && <BackToList onClick={pane.closeDetail} label="All shows" />}
         {!show ? (
           <div className="flex items-center justify-center h-full text-gray-400 text-sm">No shows available</div>
         ) : (

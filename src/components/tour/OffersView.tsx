@@ -48,9 +48,7 @@ export function OffersView() {
   // Booking offers are Deals & fees (not Tour): changing them needs edit access to that page.
   const editable = useStore(s => s.canEdit('deals'))
   const [tab, setTab] = useState<AgentTab>('pipeline')
-  const [addOpen, setAddOpen] = useState(false)
   const [editingOffer, setEditingOffer] = useState<TourOffer | null>(null)
-  const [pasteOpen, setPasteOpen] = useState(false)
   // The ⌘K bar can ask for the paste box from anywhere; it opens here and the request is cleared once handled.
   const pasteRequested = useStore(s => s.offerPasteRequest)
   const clearPasteRequest = useStore(s => s.clearOfferPasteRequest)
@@ -88,23 +86,6 @@ export function OffersView() {
               <StatPill label="Pending decisions" value={String(pendingCount)} color="text-amber-700" />
               <StatPill label="Settled YTD" value={fmt(settledTotal)} color="text-blue-700" />
             </div>
-            {editable && (
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setPasteOpen(true)}
-                  title="Paste an offer email or attach it, and the form fills itself in"
-                  className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
-                >
-                  Paste an offer
-                </button>
-                <button
-                  onClick={() => setAddOpen(true)}
-                  className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
-                >
-                  + Add offer
-                </button>
-              </div>
-            )}
           </div>
         </div>
         {/* Tabs */}
@@ -129,17 +110,17 @@ export function OffersView() {
         {tab === 'settled'  && <HistoryTab  settled={settled} cancelled={cancelled} />}
       </div>
 
-      {(pasteOpen || pasteRequested) && (
+      {pasteRequested && (
         <PasteOfferModal
-          onClose={() => { setPasteOpen(false); clearPasteRequest() }}
-          onRead={(offer, notices) => { setPasteOpen(false); clearPasteRequest(); setPasted({ offer, notices }) }}
+          onClose={() => clearPasteRequest()}
+          onRead={(offer, notices) => { clearPasteRequest(); setPasted({ offer, notices }) }}
         />
       )}
-      {(addOpen || addRequested || editingOffer || pasted) && (
+      {(addRequested || editingOffer || pasted) && (
         <OfferFormModal
           initial={editingOffer}
           prefill={pasted}
-          onClose={() => { setAddOpen(false); setEditingOffer(null); setPasted(null); clearAddRequest() }}
+          onClose={() => { setEditingOffer(null); setPasted(null); clearAddRequest() }}
           onSendSheet={id => setSendingOfferId(id)}
         />
       )}
