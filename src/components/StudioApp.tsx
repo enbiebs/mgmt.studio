@@ -32,6 +32,7 @@ import { RosterToday }     from '@/components/dashboard/RosterToday'
 import { ArtistPicker }    from '@/components/dashboard/ArtistPicker'
 import { RosterTour }      from '@/components/tour/RosterTour'
 import { RosterFinance }   from '@/components/business/RosterFinance'
+import { RosterLegal }     from '@/components/legal/RosterLegal'
 
 // Manager views
 import { SongsView }    from '@/components/songs/SongsView'
@@ -106,6 +107,7 @@ export function StudioApp() {
               {rosterPage === 'today' ? <RosterToday />
                 : rosterPage === 'tour' ? <RosterTour />
                 : rosterPage === 'finance' ? <RosterFinance />
+                : rosterPage === 'legal' ? <RosterLegal />
                 : <ArtistPicker page={rosterPage} />}
             </main>
           )

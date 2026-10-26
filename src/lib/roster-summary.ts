@@ -1,17 +1,15 @@
 // ──────────────────────────────────────────────────────────
-//  The one line each artist gets on the "All artists" Music and Legal pages (the pick-an-artist pages):
-//    Music -> the next release, Legal -> contracts needing attention.
+//  The one line each artist gets on the "All artists" Music page (the pick-an-artist page): the next release.
 //  Every number reuses the same helper the artist's own page uses, so the line can never disagree with the page it opens.
 //  Pure logic (no store, no screen), covered by scripts/check-roster-summary.ts.
 // ──────────────────────────────────────────────────────────
 
 import type { Album, Contract, Deposit, Invoice, Show } from '@/types'
 import { daysUntil } from '@/lib/date-state'
-import { contractAlerts, expiryLine } from '@/lib/contract-status'
 import { formatTotals, invoiceStateWithDeposits, owedByCurrency } from '@/lib/money'
 import { MONTH_SHORT } from '@/lib/utils'
 
-export type SummaryPage = 'music' | 'legal'
+export type SummaryPage = 'music'
 
 /** ok = nothing to do, todo = something to do, late = needs attention now, quiet = nothing there yet. */
 export type SummaryTone = 'ok' | 'todo' | 'late' | 'quiet'
@@ -67,19 +65,8 @@ export function owedFigures(c: Pick<SummaryClient, 'finance' | 'business'>, toda
   }
 }
 
-function legalSummary(c: SummaryClient, today: string): ArtistSummary {
-  const contracts = c.legal.contracts
-  if (contracts.length === 0) return { headline: 'No contracts', tone: 'quiet' }
-  const alerts = contractAlerts(contracts, today)
-  if (alerts.count === 0) return { headline: 'All clear', detail: plural(contracts.length, 'contract'), tone: 'ok' }
-  const worst = alerts.expired[0] ?? alerts.expiring[0] ?? alerts.flagged[0]
-  const why = worst ? [worst.title, expiryLine(worst, today) ?? (worst.flagged ? 'Flagged for review' : '')].filter(Boolean).join(' · ') : undefined
-  return { headline: `${plural(alerts.count, 'contract')} need${alerts.count === 1 ? 's' : ''} attention`, detail: why, tone: alerts.expired.length > 0 ? 'late' : 'todo' }
-}
-
 export function summarize(page: SummaryPage, client: SummaryClient, today: string): ArtistSummary {
   switch (page) {
     case 'music': return musicSummary(client, today)
-    case 'legal': return legalSummary(client, today)
   }
 }

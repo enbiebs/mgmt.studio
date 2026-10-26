@@ -1,8 +1,8 @@
-// Checks the one line each artist gets on the "All artists" Music and Legal pages, and the owed-money figures the Overview shows.
+// Checks the one line each artist gets on the "All artists" Music page, and the owed-money figures the Overview shows.
 // Run with:  npx tsx scripts/check-roster-summary.ts
 import assert from 'node:assert/strict'
 import { owedFigures, summarize, type SummaryClient } from '../src/lib/roster-summary'
-import type { Album, Contract, Deposit, Invoice, Track } from '../src/types'
+import type { Album, Deposit, Invoice, Track } from '../src/types'
 
 const TODAY = '2026-10-21'
 
@@ -12,12 +12,9 @@ const invoice = (o: Partial<Invoice> & { id: string }): Invoice => ({
   number: o.id, to: 'Promoter', category: 'Shows' as Invoice['category'], status: 'sent', issuedDate: '2026-09-01', dueDate: '2026-11-30',
   items: [{ description: 'Fee', quantity: 1, rate: 1000 }], currency: 'USD', ...o,
 })
-const contract = (o: Partial<Contract> & { id: string }): Contract => ({
-  title: 'Deal', type: 'management' as Contract['type'], status: 'signed', counterparty: 'WME', createdAt: '2026-01-01', ...o,
-})
-const client = (o: { albums?: Album[]; invoices?: Invoice[]; deposits?: Deposit[]; contracts?: Contract[] } = {}): SummaryClient => ({
+const client = (o: { albums?: Album[]; invoices?: Invoice[]; deposits?: Deposit[] } = {}): SummaryClient => ({
   tour: { shows: [] }, songs: { albums: o.albums ?? [] }, finance: { invoices: o.invoices ?? [] },
-  business: { banking: { deposits: o.deposits ?? [] } }, legal: { contracts: o.contracts ?? [] },
+  business: { banking: { deposits: o.deposits ?? [] } }, legal: { contracts: [] },
 })
 
 // ── Music: the next release, and what is not finished ──
@@ -51,23 +48,5 @@ assert.deepEqual(owedFigures(client({ invoices: [invoice({ id: 'i4', status: 'pa
 const dep = (invoiceId: string, amount: number): Deposit => ({ id: `d-${invoiceId}`, name: 'Pay', date: '2026-10-10', amount, currency: 'USD', mgmt: 0.1, lawyer: 0, taxes: 0, done: true, invoiceId })
 assert.equal(owedFigures(client({ invoices: [invoice({ id: 'i1' })], deposits: [dep('i1', 400)] }), TODAY).owed, '$600', 'part paid')
 assert.deepEqual(owedFigures(client({ invoices: [invoice({ id: 'i1' })], deposits: [dep('i1', 1000)] }), TODAY), { owed: '', open: 0, overdue: 0 }, 'fully paid by a deposit')
-
-// ── Legal: contracts needing attention, worst first ──
-assert.deepEqual(summarize('legal', client(), TODAY), { headline: 'No contracts', tone: 'quiet' })
-assert.deepEqual(summarize('legal', client({ contracts: [contract({ id: 'c1', expiryDate: '2028-01-01' }), contract({ id: 'c2' })] }), TODAY), { headline: 'All clear', detail: '2 contracts', tone: 'ok' })
-assert.deepEqual(summarize('legal', client({ contracts: [contract({ id: 'c1' })] }), TODAY), { headline: 'All clear', detail: '1 contract', tone: 'ok' })
-const l1 = summarize('legal', client({ contracts: [
-  contract({ id: 'c1', title: 'Kobalt', expiryDate: '2026-12-01' }),         // expiring in 41 days
-  contract({ id: 'c2', title: 'WME', expiryDate: '2026-10-01' }),            // expired
-  contract({ id: 'c3', title: 'Fine', expiryDate: '2030-01-01' }),
-] }), TODAY)
-assert.equal(l1.headline, '2 contracts need attention')
-assert.equal(l1.detail, 'WME · Expired Oct 1, 2026 (20 days ago)', 'the expired one is named first')
-assert.equal(l1.tone, 'late')
-const l2 = summarize('legal', client({ contracts: [contract({ id: 'c1', title: 'Kobalt', expiryDate: '2026-12-01' })] }), TODAY)
-assert.equal(l2.headline, '1 contract needs attention'); assert.equal(l2.tone, 'todo'); assert.match(l2.detail!, /^Kobalt · Expires Dec 1, 2026 \(in 41 days\)$/)
-const l3 = summarize('legal', client({ contracts: [contract({ id: 'c1', title: 'NDA', flagged: true })] }), TODAY)
-assert.deepEqual(l3, { headline: '1 contract needs attention', detail: 'NDA · Flagged for review', tone: 'todo' })
-assert.equal(summarize('legal', client({ contracts: [contract({ id: 'c1', status: 'draft', expiryDate: '2020-01-01' })] }), TODAY).headline, 'All clear', 'a draft with an old end date is still a draft')
 
 console.log('roster-summary checks passed')

@@ -44,7 +44,7 @@ export function Subnav() {
     if (section === 'finance')   return effectiveSub(bizSub, allowed) === key
     if (section === 'tour')      return groupOfSub(currentTourSub) === key
     if (section === 'analytics') return analyticsSub === key
-    if (section === 'legal')     return legalSub === key
+    if (section === 'legal')     return effectiveSub(legalSub, allowed) === key
     return false
   }
 

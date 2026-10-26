@@ -61,8 +61,8 @@ assert.deepEqual(ids(artistsForPage('finance', roster, dealsOnly)), [])
 
 // ── rows that must not show a number ──
 const none = () => false
-assert.equal(pickerNote('legal', 'a', { shareOnly: grants({ a: ['legal'] }) }), 'Shared with you', 'only sent one item')
-assert.equal(pickerNote('legal', 'a', { shareOnly: none }), null, 'a real Legal grant shows the number')
+assert.equal(pickerNote('music', 'a', { shareOnly: grants({ a: ['songs'] }) }), 'Shared with you', 'only sent one item')
+assert.equal(pickerNote('music', 'a', { shareOnly: none }), null, 'a real Music grant shows the number')
 assert.equal(pickerNote('music', 'a', { shareOnly: grants({ a: ['legal'] }) }), null, 'a shared contract says nothing about Music')
 
 console.log('nav-map checks passed')
