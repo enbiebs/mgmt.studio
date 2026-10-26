@@ -8,6 +8,7 @@ import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { ItemTodos } from '@/components/dashboard/ItemTodos'
+import { InvoiceSendModal } from './InvoiceSendModal'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { addDays, today as localToday } from '@/lib/utils'
 import { fmtMoney, formatTotals, invoiceOutstanding, invoiceStateWithDeposits, invoiceTotal as invTotal, owedByCurrency, sumByCurrency, unloggedWhenPaid } from '@/lib/money'
@@ -261,6 +262,7 @@ function InvoiceDetail({ invoice: inv, onClose }: { invoice: Invoice; onClose: (
   const { updateInvoiceStatus, deleteInvoice } = useStore()
   const total = invTotal(inv)
   const cfg   = STATUS_CONFIG[inv.status]
+  const [sending, setSending] = useState<'send' | 'reminder' | 'pdf' | null>(null)
 
   function handleDelete() {
     if (!confirm(`Delete draft invoice ${inv.number}? ${useStore.getState().trashNote('invoice')}`)) return
@@ -357,10 +359,10 @@ function InvoiceDetail({ invoice: inv, onClose }: { invoice: Invoice; onClose: (
             {inv.status === 'draft' && (
               <>
                 <button
-                  onClick={() => updateInvoiceStatus(inv.id, 'sent')}
+                  onClick={() => setSending('send')}
                   className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover transition-colors"
                 >
-                  Mark as sent
+                  Send invoice
                 </button>
                 <button onClick={handleDelete} className="ml-auto px-3 py-1.5 border border-red-200 text-red-500 text-sm rounded-lg hover:bg-red-50 transition-colors">
                   Delete draft
@@ -368,12 +370,27 @@ function InvoiceDetail({ invoice: inv, onClose }: { invoice: Invoice; onClose: (
               </>
             )}
             {(inv.status === 'sent' || inv.status === 'overdue') && (
-              <button onClick={handleVoid} className="ml-auto px-3 py-1.5 border border-gray-200 text-gray-500 text-sm rounded-lg hover:bg-gray-50 transition-colors">
-                Void invoice
-              </button>
+              <>
+                <button
+                  onClick={() => setSending('reminder')}
+                  className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover transition-colors"
+                >
+                  Send a reminder
+                </button>
+                <button onClick={handleVoid} className="ml-auto px-3 py-1.5 border border-gray-200 text-gray-500 text-sm rounded-lg hover:bg-gray-50 transition-colors">
+                  Void invoice
+                </button>
+              </>
             )}
           </div>
         )}
+        {/* Anyone who can see the invoice can get it as a PDF (editors get it inside the send windows above, except for a paid one) */}
+        {inv.status !== 'void' && (!editable || inv.status === 'paid') && (
+          <div className="px-6 py-4 border-t border-gray-100">
+            <button onClick={() => setSending('pdf')} className="px-3 py-1.5 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition-colors">Get the PDF</button>
+          </div>
+        )}
+        {sending && <InvoiceSendModal invoice={inv} mode={sending} onClose={() => setSending(null)} onMarkSent={sending === 'send' ? () => updateInvoiceStatus(inv.id, 'sent') : undefined} />}
       </div>
     </div>
   )

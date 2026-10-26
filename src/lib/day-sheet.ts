@@ -7,7 +7,7 @@
 // ──────────────────────────────────────────────────────────
 
 import type { AdvanceContact, Show, ShowAdvance } from '@/types'
-import { looksLikeEmail } from '@/lib/email-address'
+import { looksLikeEmail, MAILTO_LIMIT } from '@/lib/email-address'
 
 export interface DaySheetRow { label: string; value: string }
 export type DaySheetKey = 'schedule' | 'hotel' | 'venue' | 'catering' | 'travel' | 'contacts' | 'notes'
@@ -90,9 +90,6 @@ export function daySheetFileName(sheet: DaySheet, isoDate: string): string {
   const head = sheet.kind === 'advance' ? 'Advance' : 'Day sheet'
   return `${[head, part(sheet.artist), part(sheet.venue), isoDate.slice(0, 10)].filter(Boolean).join(' - ')}.pdf`
 }
-
-/** The most an email link can carry before some programs cut it off. */
-export const MAILTO_LIMIT = 1800
 
 /**
  * A link that opens the person's own email program with a message to the venue's contacts, so the advance really goes out by email from

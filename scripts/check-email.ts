@@ -21,6 +21,7 @@ async function main() {
     assert.equal(plainLine('see https://evil.example/x?y=1 and www.evil.example now', 80), 'see [link removed] and [link removed] now')
     assert.equal(plainLine('x'.repeat(100), 10), 'xxxxxxxxx…')
     assert.equal(plainLine('short', 10), 'short')
+    assert.doesNotThrow(() => encodeURIComponent(plainLine('😀'.repeat(50), 11)), 'an emoji is not cut in half')
     assert.equal(esc(`<a href="x">'&'</a>`), '&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;')
   })
 

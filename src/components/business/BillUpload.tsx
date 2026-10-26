@@ -12,6 +12,8 @@ import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal
 import { createClient } from '@/lib/supabase/client'
 import { normalizeVendorName, diffVendor, VENDOR_FIELD_LABEL } from '@/lib/vendors'
 import { CAT_LABELS } from '@/lib/expense-categories'
+import { findDuplicateBills } from '@/lib/bill-duplicates'
+import { fmtMoney } from '@/lib/money'
 import { uid, today } from '@/lib/utils'
 import type { Currency, ExpenseCategory, Vendor } from '@/types'
 
@@ -114,6 +116,8 @@ export function BillUploadModal({ onClose }: { onClose: () => void }) {
   const changes = matched ? diffVendor(matched, details) : []
   const amount = Number(f.amount)
   const canSave = f.vendorName.trim().length > 0 && amount > 0
+  // Do we already have this bill? Warn (never block): the person knows whether it is a second bill or the same one twice.
+  const duplicates = findDuplicateBills(client?.finance?.expenses ?? [], { vendor: matched?.name ?? f.vendorName, vendorId: matched?.id, billNumber: f.billNumber, amount, currency: f.currency, date: f.date })
 
   function handleSave() {
     if (!canSave) return
@@ -227,6 +231,21 @@ export function BillUploadModal({ onClose }: { onClose: () => void }) {
           </FormField>
         </div>
       </div>
+
+      {duplicates.length > 0 && (
+        <div className="border border-amber-200 bg-amber-50 rounded-xl p-3 space-y-1">
+          <div className="text-sm font-semibold text-amber-800">Do we already have this bill?</div>
+          <ul className="text-xs text-amber-900 space-y-0.5">
+            {duplicates.slice(0, 3).map(d => (
+              <li key={d.bill.id}>
+                {d.bill.vendor}{d.bill.billNumber ? ` · ${d.bill.billNumber}` : ''} · {fmtMoney(d.bill.amount, d.bill.currency)}{d.bill.date ? ` · ${d.bill.date}` : ''} · {d.bill.paid ? 'paid' : 'not paid yet'}
+                {d.why === 'same-number' ? ' — same bill number' : ' — same amount, a few days apart'}
+              </li>
+            ))}
+          </ul>
+          <div className="text-xs text-amber-800">If it is the same bill, cancel this one so it isn&apos;t paid twice. If it is a different bill, go ahead and save.</div>
+        </div>
+      )}
 
       <div className="pt-1">
         <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Vendor details</div>

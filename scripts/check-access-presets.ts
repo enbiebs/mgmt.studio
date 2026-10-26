@@ -15,10 +15,15 @@ for (const k of ['assistant', 'crew', 'creative', 'readonly']) {
   const l = presetByKey(k)!.levels
   assert.ok(!l.finance && !l.legal, `${k} must not see finance or legal`)
 }
-for (const k of ['crew', 'readonly']) {
+for (const k of ['crew', 'readonly', 'accountant']) {
   assert.ok(Object.values(presetByKey(k)!.levels).every(v => v === 'view'), `${k} must be look-only`)   // crew and look-only can never change anything
 }
 assert.deepEqual(presetByKey('crew')!.levels, { tour: 'view' })
+// the accountant sees the money (finance and what shows pay) and can change none of it, and sees nothing else
+assert.deepEqual(presetByKey('accountant')!.levels, { finance: 'view', deals: 'view', tour: 'view' })   // Tour to look at: a show's fee hangs off the show, so without the show there is no fee to see
+assert.equal(matchPreset([row('1', 'finance', 'a', false), row('2', 'deals', 'a', false), row('3', 'tour', 'a', false)], 'a'), 'accountant')
+assert.equal(matchPreset([row('1', 'finance', 'a', true), row('2', 'deals', 'a', false), row('3', 'tour', 'a', false)], 'a'), 'custom', 'finance that can be changed is not the accountant level')
+assert.ok(!presetByKey('accountant')!.levels.legal && !presetByKey('accountant')!.levels.profile, 'no contracts, no private profile')
 assert.ok(presetByKey('crew')!.hidden.includes('offers'))                                                // the plain-language note says offers and fees are out of reach
 assert.equal(presetByKey('full')!.levels.finance, 'edit')
 

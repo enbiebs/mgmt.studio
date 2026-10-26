@@ -1,7 +1,8 @@
 // Checks the day sheet / advance sheet: what is on it, that money never is, and the email link to the venue. (The PDF drawing itself is checked in a real browser: the PDF library does not load in this test runner.)
 // Run with:  npx tsx scripts/check-day-sheet.ts
 import assert from 'node:assert/strict'
-import { advanceMailto, buildDaySheet, daySheetFileName, MAILTO_LIMIT } from '../src/lib/day-sheet'
+import { advanceMailto, buildDaySheet, daySheetFileName } from '../src/lib/day-sheet'
+import { MAILTO_LIMIT } from '../src/lib/email-address'
 import type { AdvanceContact, Show, ShowAdvance } from '../src/types'
 
 let n = 0
