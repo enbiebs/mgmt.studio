@@ -12,6 +12,7 @@
 
 import { useStore } from '@/lib/store'
 import { effectiveSub, shareOnlyTabs } from '@/lib/item-access'
+import { contentSubFor } from '@/lib/unfinished'
 import { canOpenSection } from '@/lib/tour-tabs'
 import { useTourTabs } from '@/components/tour/useTourTabs'
 import { CompanyView } from '@/components/company/CompanyView'
@@ -67,11 +68,11 @@ import { ProfileView } from '@/components/profile/ProfileView'
 import { ARTIST_SIDE_NAME, PRODUCT_NAME } from '@/lib/brand'
 
 export function StudioApp() {
-  const { view, section, rosterPage, songsSub: rawSongsSub, contentSub: rawContentSub, bizSub: rawBizSub, tourSub: rawTourSub, clientId, data, role, hasAccess, isShareOnly, isLoading, workspaceId } = useStore()
+  const { view, section, rosterPage, songsSub: rawSongsSub, contentSub: rawContentSub, bizSub: rawBizSub, tourSub: rawTourSub, clientId, data, role, hasAccess, isShareOnly, isLoading, workspaceId, showUnfinished } = useStore()
   // Someone with only a shared item lands on a tab that shows it, not an empty one.
   const allowedTabs = isShareOnly(section) ? shareOnlyTabs(section, data.clients.find(c => c.id === clientId)) : undefined
   const songsSub = effectiveSub(rawSongsSub, allowedTabs) as typeof rawSongsSub
-  const contentSub = effectiveSub(rawContentSub, allowedTabs) as typeof rawContentSub
+  const contentSub = contentSubFor(rawContentSub, allowedTabs, showUnfinished)
   const bizSub = effectiveSub(rawBizSub, allowedTabs) as typeof rawBizSub
   // The Tour page opens for Tour, for Deals & fees alone, or both; each person lands on a tab they actually have.
   const tourTabs = useTourTabs()

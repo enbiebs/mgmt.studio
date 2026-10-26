@@ -19,7 +19,7 @@
 
 import type { Client, Currency, MainSection } from '@/types'
 import { balanceOf } from '@/lib/settlement-math'
-import { invoiceOutstanding, invoiceTotal, settlementBalancesNotOnInvoices, showNet } from '@/lib/money'
+import { fmtMoney, invoiceOutstanding, invoiceTotal, settlementBalancesNotOnInvoices, showNet } from '@/lib/money'
 import { addDays, localDateOf } from '@/lib/utils'
 
 export type ForecastKind = 'installment' | 'show' | 'invoice' | 'settlement' | 'bill'
@@ -205,7 +205,7 @@ export function buildForecast(client: Client, today: string, opts: ForecastOptio
 
 /** An amount in its own currency: whole units when there are no cents ($10,000), cents when there are ($8,500.50). */
 export function fmtAmount(amount: number, currency: Currency): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency, minimumFractionDigits: Number.isInteger(amount) ? 0 : 2, maximumFractionDigits: 2 }).format(amount)
+  return fmtMoney(amount, currency)
 }
 
 /** Unpaid bills that have no due date, so the forecast cannot place them (worth saying out loud). */

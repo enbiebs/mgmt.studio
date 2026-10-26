@@ -45,7 +45,7 @@ import { kindNoun, restoreByFor, restoreNote, screenSectionOf, type RestoreBy, t
 import { trashAndDelete, type TrashDeps } from '@/lib/trash-flow'
 import { loadTrashItem, restoreTrash, trashDelete } from '@/lib/trash-db'
 import { nextPosition, pointsFor, MAX_AGENDA_POINTS } from '@/lib/agenda'
-import { uid, defaultChecklist, addDays, ROLLOUT_TEMPLATE, today as localToday } from '@/lib/utils'
+import { uid, defaultChecklist, addDays, rolloutPosts, today as localToday } from '@/lib/utils'
 import { snapshotOf, newLine, frozenRates, makeConverter, settlementEarned, addMissingCrewFees, withoutAddedCrewFees, BUCKET_LABEL, type FxRates } from '@/lib/budget'
 import { buildBudgetFromOffer, currencyFormatter, fillFromOffer, type FillResult } from '@/lib/budget-assumptions'
 import { balanceOf } from '@/lib/settlement-math'
@@ -1404,15 +1404,7 @@ export const useStore = create<StudioState>((set, get) => ({
         if (c.id !== clientId) return c
         const album = c.songs.albums.find(a => a.id === albumId)
         if (!album) return c
-        const generated: Post[] = ROLLOUT_TEMPLATE.map(item => ({
-          id: 'post-' + uid(),
-          date: addDays(releaseDate, item.offset),
-          title: item.title(album.title),
-          time: item.time,
-          type: item.type,
-          releaseId: albumId,
-          auto: true,
-        }))
+        const generated: Post[] = rolloutPosts(album.title, releaseDate).map(p => ({ id: 'post-' + uid(), ...p, releaseId: albumId, auto: true }))
         generatedPosts = generated
         return {
           ...c,
@@ -3395,7 +3387,10 @@ export const useStore = create<StudioState>((set, get) => ({
           content: {
             posts: c.content.posts.map(p => {
               if (p.id !== postId) return p
-              updatedPost = { ...p, date: patch.date, title: patch.title, time: patch.time, type: patch.type as Post['type'] }
+              // A post someone has actually changed is theirs now: it stops being a rollout post, so moving the release date never rebuilds it
+              // away. Saving without changing anything leaves it automatic (it keeps moving with the release).
+              const changed = p.date !== patch.date || p.title !== patch.title || p.time !== patch.time || p.type !== patch.type
+              updatedPost = { ...p, date: patch.date, title: patch.title, time: patch.time, type: patch.type as Post['type'], ...(changed ? { auto: false } : {}) }
               return updatedPost
             }),
           },

@@ -121,7 +121,7 @@ export function UserMenu() {
           {authRole === 'manager' && (
             <label className="flex items-start gap-2 px-3 py-2 text-xs text-gray-500 cursor-pointer hover:bg-gray-50">
               <input type="checkbox" className="mt-0.5 rounded" checked={showUnfinished} onChange={e => setShowUnfinished(e.target.checked)} />
-              <span>Show unfinished screens<span className="block text-[10px] text-gray-400">Analytics, Content Lab. Only on this computer.</span></span>
+              <span>Show unfinished screens<span className="block text-[10px] text-gray-400">Analytics, Content Studio and Lab. Only on this computer.</span></span>
             </label>
           )}
           <button

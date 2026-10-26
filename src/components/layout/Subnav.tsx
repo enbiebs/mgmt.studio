@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useStore } from '@/lib/store'
 import { shareOnlyTabs, effectiveSub } from '@/lib/item-access'
+import { contentSubFor, contentTabVisible } from '@/lib/unfinished'
 import { TOUR_GROUP_LABEL, TOUR_TAB_HINT, gigChoices, groupOfSub, subForGroup, visibleTourGroups, type TourGroup } from '@/lib/tour-tabs'
 import { useTourTabs } from '@/components/tour/useTourTabs'
 import { NewGigModal } from '@/components/tour/NewGigModal'
@@ -35,12 +36,12 @@ export function Subnav() {
   // Tour shows four tabs (Shows, Offers, Money, Crew); the screens inside Shows are the steps of one show (see TourView).
   const subs: [string, string][] = section === 'tour'
     ? visibleTourGroups(tourTabs).map(g => [TOUR_GROUP_LABEL[g], g])
-    : (SUBNAV[section] ?? []).filter(([, key]) => (!allowed || allowed.includes(key)) && (key !== 'lab' || showUnfinished))
+    : (SUBNAV[section] ?? []).filter(([, key]) => (!allowed || allowed.includes(key)) && (section !== 'content' || contentTabVisible(key, showUnfinished)))
   const currentTourSub = effectiveSub(tourSub, tourTabs)
 
   function isActive(key: string) {
     if (section === 'songs')     return effectiveSub(songsSub, allowed) === key
-    if (section === 'content')   return effectiveSub(contentSub, allowed) === key
+    if (section === 'content')   return contentSubFor(contentSub, allowed, showUnfinished) === key
     if (section === 'finance')   return effectiveSub(bizSub, allowed) === key
     if (section === 'tour')      return groupOfSub(currentTourSub) === key
     if (section === 'analytics') return analyticsSub === key

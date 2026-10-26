@@ -7,6 +7,7 @@
 // same way src/lib/plaid.ts's callers do for bank_connections.
 import { createAdminClient } from '@/lib/supabase/admin'
 import { refreshAccessToken, pushEvent, deleteEvent, type GoogleEventInput } from '@/lib/google-calendar'
+import { showTitle } from '@/lib/ics'
 import type { Show, Post, Project } from '@/types'
 
 type RecordType = 'show' | 'post' | 'project'
@@ -116,7 +117,7 @@ export function to12h(t: string): string {
 
 export async function pushShowToGoogle(show: Show, clientId: string) {
   await pushRecord(clientId, 'show', show.id, {
-    title: `${show.venue} — ${show.city}`,
+    title: showTitle(show),
     date: show.date,
     time: show.time,
     durationMinutes: 180,

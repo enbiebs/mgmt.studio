@@ -10,7 +10,7 @@ import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { ItemTodos } from '@/components/dashboard/ItemTodos'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { addDays, today as localToday } from '@/lib/utils'
-import { formatTotals, invoiceOutstanding, invoiceStateWithDeposits, invoiceTotal as invTotal, owedByCurrency, sumByCurrency, unloggedWhenPaid } from '@/lib/money'
+import { fmtMoney, formatTotals, invoiceOutstanding, invoiceStateWithDeposits, invoiceTotal as invTotal, owedByCurrency, sumByCurrency, unloggedWhenPaid } from '@/lib/money'
 import type { Invoice, InvoiceStatus, Currency, RevenueStream, BankTransaction } from '@/types'
 
 export const STATUS_CONFIG: Record<InvoiceStatus, { label: string; color: string; bg: string }> = {
@@ -26,7 +26,7 @@ const CAT_LABELS: Record<string, string> = {
 }
 
 function fmt(n: number, currency = 'USD') {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n)
+  return fmtMoney(n, currency)
 }
 
 function fmtDate(iso: string) {
