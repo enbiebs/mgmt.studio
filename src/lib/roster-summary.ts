@@ -1,7 +1,7 @@
 // ──────────────────────────────────────────────────────────
-//  The one line each artist gets on the "All artists" Music page (the pick-an-artist page): the next release.
-//  Every number reuses the same helper the artist's own page uses, so the line can never disagree with the page it opens.
-//  Pure logic (no store, no screen), covered by scripts/check-roster-summary.ts.
+//  Small helpers the artist Overview and the "All artists" pages share: the next release, the songs not finished, what is
+//  still owed on invoices, and the plain-words date helpers. Each reuses the same rule the artist's own page uses, so two
+//  screens can never disagree. Pure logic (no store, no screen), covered by scripts/check-roster-summary.ts.
 // ──────────────────────────────────────────────────────────
 
 import type { Album, Contract, Deposit, Invoice, Show } from '@/types'
@@ -9,14 +9,7 @@ import { daysUntil } from '@/lib/date-state'
 import { formatTotals, invoiceStateWithDeposits, owedByCurrency } from '@/lib/money'
 import { MONTH_SHORT } from '@/lib/utils'
 
-export type SummaryPage = 'music'
-
-/** ok = nothing to do, todo = something to do, late = needs attention now, quiet = nothing there yet. */
-export type SummaryTone = 'ok' | 'todo' | 'late' | 'quiet'
-
-export interface ArtistSummary { headline: string; detail?: string; tone: SummaryTone }
-
-/** Only the parts of an artist the summary reads, so a test can build one in a few lines. */
+/** Only the parts of an artist these helpers (and the Overview built on them) read, so a test can build one in a few lines. */
 export interface SummaryClient {
   tour: { shows: Show[] }
   songs: { albums: Album[] }
@@ -42,15 +35,6 @@ export function nextRelease(albums: readonly Album[], today: string): Album | un
 /** Songs across every release that are not finished yet. */
 export const unfinishedSongs = (albums: readonly Album[]): number => albums.reduce((n, a) => n + a.tracks.filter(t => t.stage !== 'done').length, 0)
 
-function musicSummary(c: SummaryClient, today: string): ArtistSummary {
-  const unfinished = unfinishedSongs(c.songs.albums)
-  const inProgress = unfinished > 0 ? `${plural(unfinished, 'song')} not finished` : undefined
-  const next = nextRelease(c.songs.albums, today)
-  if (next) return { headline: `${next.title || 'Untitled'} · ${dayWord(next.releaseDate!)}`, detail: [whenWord(next.releaseDate!, today), inProgress].filter(Boolean).join(' · '), tone: unfinished > 0 ? 'todo' : 'ok' }
-  if (unfinished > 0) return { headline: 'No release date set', detail: inProgress, tone: 'todo' }
-  return { headline: c.songs.albums.length > 0 ? 'Nothing in progress' : 'No music yet', tone: 'quiet' }
-}
-
 /** What is still owed on an artist's invoices (per currency, as one line), how many invoices are open and how many are late. */
 export function owedFigures(c: Pick<SummaryClient, 'finance' | 'business'>, today: string): { owed: string; open: number; overdue: number } {
   const deposits = c.business.banking.deposits
@@ -62,11 +46,5 @@ export function owedFigures(c: Pick<SummaryClient, 'finance' | 'business'>, toda
     owed: formatTotals(owedByCurrency(open, deposits)),
     open: open.length,
     overdue: open.filter(i => invoiceStateWithDeposits(i, today, deposits) === 'overdue').length,
-  }
-}
-
-export function summarize(page: SummaryPage, client: SummaryClient, today: string): ArtistSummary {
-  switch (page) {
-    case 'music': return musicSummary(client, today)
   }
 }
