@@ -19,6 +19,7 @@ import { CompanyView } from '@/components/company/CompanyView'
 import { AppHeader }  from '@/components/layout/AppHeader'
 import { Subnav }     from '@/components/layout/Subnav'
 import { Sidebar }    from '@/components/layout/Sidebar'
+import { PhoneTabBar } from '@/components/layout/PhoneTabBar'
 import { CommandBar } from '@/components/layout/CommandBar'
 import { Toaster } from '@/components/ui/Toaster'
 import { ConfirmHost } from '@/components/ui/ConfirmHost'
@@ -81,7 +82,7 @@ export function StudioApp() {
   // Show loading spinner while Supabase data is hydrating
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-canvas">
+      <div className="flex items-center justify-center h-dvh bg-canvas">
         <div className="text-center">
           <div className="font-serif font-semibold text-xl tracking-tight mb-3">{PRODUCT_NAME}</div>
           <div className="w-5 h-5 border-2 border-gray-200 border-t-gray-500 rounded-full animate-spin mx-auto" />
@@ -91,7 +92,7 @@ export function StudioApp() {
   }
 
   return (
-    <div className="app-shell flex h-screen overflow-hidden bg-canvas text-gray-900">
+    <div className="app-shell flex h-dvh overflow-hidden bg-canvas text-gray-900 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       {role !== 'artist' && <Sidebar />}
       <div className="flex-1 min-w-0 flex flex-col">
         <AppHeader />
@@ -192,6 +193,9 @@ export function StudioApp() {
             {`${ARTIST_SIDE_NAME} · powered by ${PRODUCT_NAME}`}
           </div>
         )}
+
+        {/* Phones have no side rail either: the pages sit on a bar at the bottom, in reach of a thumb */}
+        {role !== 'artist' && <PhoneTabBar />}
       </div>
       {role !== 'artist' && <CommandBar />}
       <Toaster />

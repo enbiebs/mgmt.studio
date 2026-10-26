@@ -51,7 +51,7 @@ export function UserMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         title="Account"
-        className="w-8 h-8 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 hover:bg-gray-200 transition-colors"
+        className="w-8 h-8 max-md:w-11 max-md:h-11 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600 hover:bg-gray-200 transition-colors"
       >
         {(email[0] ?? ROLE_LABEL[role]?.[0] ?? '·').toUpperCase()}
       </button>

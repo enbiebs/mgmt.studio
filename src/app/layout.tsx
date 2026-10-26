@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { cookies } from 'next/headers'
 import { Bricolage_Grotesque, Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
@@ -13,6 +13,15 @@ const mono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
 export const metadata: Metadata = {
   title: PRODUCT_NAME,
   description: PRODUCT_TAGLINE,
+  // "Add to Home Screen" on an iPhone: the icon, the name under it, and opening full screen.
+  icons: { apple: '/icons/apple-touch-icon.png' },
+  appleWebApp: { capable: true, title: PRODUCT_NAME, statusBarStyle: 'default' },
+}
+
+// Fill the whole screen on a phone (the bottom bar keeps clear of the home-indicator itself), and colour the browser bar like the page.
+export const viewport: Viewport = {
+  viewportFit: 'cover',
+  themeColor: [{ media: '(prefers-color-scheme: light)', color: '#fbfaf7' }, { media: '(prefers-color-scheme: dark)', color: '#1d1a17' }],
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

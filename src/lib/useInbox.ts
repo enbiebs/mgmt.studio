@@ -46,7 +46,7 @@ export function useInbox() {
 
 /**
  * The number on the Today link: what needs action across all artists, or — inside one artist — just that artist's (heads-ups never count).
- * One formula for the side rail, the phone's page strip and anything else that shows the badge.
+ * One formula for the side rail, the phone's bottom bar and anything else that shows the badge.
  */
 export function useTodayBadge(inArtist: boolean, clientId: string | null): number {
   const inbox = useInbox()
