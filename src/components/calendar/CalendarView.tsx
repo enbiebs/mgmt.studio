@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { calendarDays, toDateStr, today, MONTH_NAMES, DOW_SHORT } from '@/lib/utils'
 import { getCalendarEvents, canSeeCalendarDomain, CALENDAR_DOMAIN_LABEL, CALENDAR_DOMAIN_STYLE } from '@/lib/calendar'
+import { findClashes, clashLine } from '@/lib/calendar-clashes'
 import type { CalendarEvent, CalendarEventDomain } from '@/lib/calendar'
 import type { MainSection } from '@/types'
 import { AddShowModal } from '@/components/tour/TourView'
@@ -60,6 +61,7 @@ export function CalendarView({ roster = false }: { roster?: boolean } = {}) {
   const [activeDomains, setActiveDomains] = useState<Set<CalendarEventDomain>>(new Set(ALL_DOMAINS))
   const [quickAddDay, setQuickAddDay] = useState<string | null>(null)
   const [creating, setCreating] = useState<{ type: QuickAddType; date: string } | null>(null)
+  const [allClashes, setAllClashes] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -81,10 +83,16 @@ export function CalendarView({ roster = false }: { roster?: boolean } = {}) {
   const canSee = (domain: CalendarEventDomain) => shown.some(c => canSeeCalendarDomain(domain, c.id, role, hasAccess))
   // Quick-add needs one artist to add to, so the all-artists view has none.
   const creatableTypes = roster ? [] : QUICK_ADD_TYPES.filter(t => canEdit(QUICK_ADD_CONFIG[t].section))
-  const events: RosterEvent[] = shown
+  const everything: RosterEvent[] = shown
     .flatMap(c => getCalendarEvents(c, d => canSeeCalendarDomain(d, c.id, role, hasAccess))
       .map(e => (roster ? { ...e, id: `${c.id}:${e.id}`, clientId: c.id, clientName: c.name } : e)))
-    .filter(e => activeDomains.has(e.domain))
+  const events = everything.filter(e => activeDomains.has(e.domain))
+  // Clashes are worked out from every date this person can see, so hiding a kind with the filter buttons never hides a warning.
+  const clashes = findClashes(everything, today())
+  const clashIds = new Set(clashes.flatMap(c => c.ids))
+  const CLASH_SHOWN = 3
+  const showClashes = allClashes ? clashes : clashes.slice(0, CLASH_SHOWN)
+  const showMonth = (date: string) => useStore.setState({ calYear: Number(date.slice(0, 4)), calMonth: Number(date.slice(5, 7)) - 1 })
   const eventTitle = (e: RosterEvent) => (e.clientName ? `${e.clientName} · ${e.title}` : e.title)
   const days = calendarDays(calYear, calMonth)
   const todayStr = today()
@@ -154,6 +162,22 @@ export function CalendarView({ roster = false }: { roster?: boolean } = {}) {
         {client && canEditAny && <GoogleCalendarPanel clientId={client.id} />}
       </div>
 
+      {clashes.length > 0 && (
+        <div role="status" aria-label="Dates to check" className="flex-shrink-0 border-b border-amber-100 bg-amber-50 px-3 py-2 md:px-5">
+          <div className="text-xs font-semibold text-amber-800">⚠ {clashes.length === 1 ? '1 date to check' : `${clashes.length} dates to check`}</div>
+          <ul className="mt-1 max-h-40 space-y-0.5 overflow-y-auto">
+            {showClashes.map(c => (
+              <li key={`${c.clientId ?? ''}|${c.date}`}>
+                <button onClick={() => showMonth(c.date)} className="text-left text-xs text-amber-900 hover:underline">{clashLine(c, dayLabel(c.date))}</button>
+              </li>
+            ))}
+          </ul>
+          {clashes.length > CLASH_SHOWN && (
+            <button onClick={() => setAllClashes(v => !v)} className="mt-1 text-xs font-medium text-amber-800 hover:underline">{allClashes ? 'Show fewer' : `Show the other ${clashes.length - CLASH_SHOWN}`}</button>
+          )}
+        </div>
+      )}
+
       {client && <SetupChecklist client={client} />}
 
       {/* Phone: the month as a day-by-day list */}
@@ -173,7 +197,7 @@ export function CalendarView({ roster = false }: { roster?: boolean } = {}) {
                   onClick={() => openEvent(e)}
                   className={`w-full text-left border-l-[3px] rounded-r-lg px-3 py-2 ${CALENDAR_DOMAIN_STYLE[e.domain]} ${stateClass(e)}`}
                 >
-                  <div className="text-sm font-semibold leading-snug">{eventTitle(e)}</div>
+                  <div className="text-sm font-semibold leading-snug">{clashIds.has(e.id) && <span role="img" aria-label="Check this date" title="Check this date">⚠ </span>}{eventTitle(e)}</div>
                   <div className="text-[11px] opacity-75">{CALENDAR_DOMAIN_LABEL[e.domain]}{e.subtitle ? ` · ${e.subtitle}` : ''}{stateWord(e) ? ` · ${stateWord(e)}` : ''}</div>
                 </button>
               ))}
@@ -218,9 +242,9 @@ export function CalendarView({ roster = false }: { roster?: boolean } = {}) {
                     key={e.id}
                     onClick={() => openEvent(e)}
                     className={`border-l-2 px-1.5 py-0.5 rounded-r text-[10px] font-semibold mb-0.5 cursor-pointer hover:brightness-95 transition-all truncate ${CALENDAR_DOMAIN_STYLE[e.domain]} ${stateClass(e)}`}
-                    title={`${CALENDAR_DOMAIN_LABEL[e.domain]} — ${eventTitle(e)}${stateWord(e) ? ` (${stateWord(e)})` : ''}`}
+                    title={`${CALENDAR_DOMAIN_LABEL[e.domain]} — ${eventTitle(e)}${stateWord(e) ? ` (${stateWord(e)})` : ''}${clashIds.has(e.id) ? ' — check this date: it clashes with something else' : ''}`}
                   >
-                    {eventTitle(e)}
+                    {clashIds.has(e.id) && <span role="img" aria-label="Check this date">⚠ </span>}{eventTitle(e)}
                   </div>
                 ))}
                 {creatableTypes.length > 0 && (

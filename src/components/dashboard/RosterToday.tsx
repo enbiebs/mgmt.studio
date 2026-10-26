@@ -1,6 +1,6 @@
 'use client'
 // ──────────────────────────────────────────────────────────
-//  RosterToday — "All artists" → Today: what needs this person across every artist, then the artists themselves
+//  RosterToday — "All artists" → Today: what needs this person across every artist, who needs them most, then the artists themselves
 //  (grouped by company for someone who works under several), plus the company invites, setup and cash forecast.
 // ──────────────────────────────────────────────────────────
 
@@ -10,6 +10,7 @@ import { CompanyInvitesCard, YourCompaniesCard } from '@/components/dashboard/Co
 import { ForecastCard } from '@/components/dashboard/ForecastCard'
 import { ClientCard } from '@/components/dashboard/ClientCard'
 import { TodayList } from '@/components/dashboard/TodayList'
+import { AttentionTable } from '@/components/dashboard/AttentionTable'
 
 export function RosterToday() {
   const { data, role, accessibleClientIds, openModal, goToCompany, contexts, clientWorkspace, homeWorkspaceId } = useStore()
@@ -38,6 +39,7 @@ export function RosterToday() {
       <CompanyInvitesCard />
       <CompanySetupCard />
       <TodayList />
+      <AttentionTable />
       <ForecastCard />
 
       <div className="flex items-end justify-between mb-4">
