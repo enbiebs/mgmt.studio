@@ -8,6 +8,7 @@ import { artistsForPage, type RosterPage } from '../src/lib/nav-map'
 import { tourAccessFor } from '../src/lib/roster-tour'
 import { financeAccessFor } from '../src/lib/roster-finance'
 import { legalAccessFor } from '../src/lib/roster-legal'
+import { musicAccessFor } from '../src/lib/roster-music'
 import { overviewAccessFor } from '../src/lib/artist-overview'
 import { inboxAccessFor } from '../src/lib/inbox'
 import type { Client } from '../src/types'
@@ -243,6 +244,26 @@ assert.deepEqual(legalFlags({ role: 'team', grants: [], ...sharedInvoice }), { o
 assert.deepEqual(legalFlags({ role: 'artist', authClientId: 'c1' }), { open: false, full: false })                                        // an artist's own login does not get the management view
 assert.deepEqual(legalFlags(twoCompanies, 'c1'), { open: true, full: true })                                                              // manager of one company ...
 assert.deepEqual(legalFlags(twoCompanies, 'c2'), { open: false, full: false })                                                            // ... and an artist in another
+
+// ── the All-artists Music page: what each person gets for an artist, from the real access rules ──
+function musicFlags(over: Record<string, unknown>, id = 'c1') {
+  fresh(over)
+  const st = useStore.getState()
+  return musicAccessFor((s, i) => st.hasAccess(s, i), (s, i) => st.isShareOnly(s, i), id, st.roleFor(id))
+}
+const sharedAlbum = { data: { clients: [{ ...artist('c1', 'Alpha'), itemSections: ['songs'] }, artist('c2', 'Beta')] } }
+assert.deepEqual(musicFlags({}), { open: true, full: true })                                                          // a manager
+assert.deepEqual(musicFlags({ role: 'team', grants: [{ section: 'admin', clientId: 'c1', canEdit: true }] }), { open: true, full: true })   // a Point Person for the artist
+assert.deepEqual(musicFlags({ role: 'team', grants: [grant('music')] }), { open: true, full: true })
+assert.deepEqual(musicFlags({ role: 'team', grants: [grant('finance'), grant('legal')] }), { open: false, full: false })                   // no Music
+assert.deepEqual(musicFlags({ role: 'team', grants: [], ...sharedAlbum }), { open: true, full: false })                                    // one release sent to them: listed, not counted
+assert.deepEqual(musicFlags({ role: 'team', grants: [grant('music')], ...sharedAlbum }), { open: true, full: true })                       // a real Music grant wins over a shared item
+assert.deepEqual(musicFlags({ role: 'team', grants: [], ...sharedInvoice }), { open: false, full: false })                                 // a shared invoice says nothing about Music
+assert.deepEqual(musicFlags({ role: 'artist', authClientId: 'c1' }), { open: false, full: false })                                         // an artist's own login gets the simplified portal, not this page
+assert.deepEqual(musicFlags({ role: 'team', grants: [{ section: 'music', clientId: 'c2', canEdit: false }] }), { open: false, full: false })   // a grant for another artist
+assert.deepEqual(musicFlags({ role: 'team', grants: [{ section: 'music', clientId: null, canEdit: false }] }), { open: true, full: true })     // a company-wide grant
+assert.deepEqual(musicFlags(twoCompanies, 'c1'), { open: true, full: true })                                                              // manager of one company ...
+assert.deepEqual(musicFlags(twoCompanies, 'c2'), { open: false, full: false })                                                            // ... and the artist in another company: their portal, not this page
 
 // ── an artist's own login keeps landing where it did (their portal ignores the page, but the address does not change) ──
 fresh({ role: 'artist', authClientId: 'c1' }); useStore.getState().openClient('c1'); assert.equal(useStore.getState().section, 'calendar')

@@ -1,7 +1,7 @@
-// Checks the one line each artist gets on the "All artists" Music page, and the owed-money figures the Overview shows.
+// Checks the small helpers the artist Overview and the "All artists" pages share: next release, songs not finished, money owed.
 // Run with:  npx tsx scripts/check-roster-summary.ts
 import assert from 'node:assert/strict'
-import { owedFigures, summarize, type SummaryClient } from '../src/lib/roster-summary'
+import { dayWord, nextRelease, owedFigures, plural, unfinishedSongs, whenWord, type SummaryClient } from '../src/lib/roster-summary'
 import type { Album, Deposit, Invoice, Track } from '../src/types'
 
 const TODAY = '2026-10-21'
@@ -17,20 +17,25 @@ const client = (o: { albums?: Album[]; invoices?: Invoice[]; deposits?: Deposit[
   business: { banking: { deposits: o.deposits ?? [] } }, legal: { contracts: [] },
 })
 
-// ── Music: the next release, and what is not finished ──
-assert.deepEqual(summarize('music', client(), TODAY), { headline: 'No music yet', tone: 'quiet' })
-const m1 = summarize('music', client({ albums: [
+// ── Plain-words helpers every All-artists page uses ──
+assert.deepEqual([dayWord('2026-11-14'), dayWord('2026-01-05'), dayWord('2026-12-31')], ['Nov 14', 'Jan 5', 'Dec 31'])
+assert.deepEqual([whenWord('2026-10-21', TODAY), whenWord('2026-10-22', TODAY), whenWord('2026-11-14', TODAY)], ['today', 'tomorrow', 'in 24 days'])
+assert.equal(whenWord('2026-10-01', TODAY), 'today', 'a date that has passed is not "in -20 days"')
+assert.deepEqual([plural(0, 'song'), plural(1, 'song'), plural(2, 'song'), plural(1, 'category', 'categories'), plural(2, 'category', 'categories')], ['0 songs', '1 song', '2 songs', '1 category', '2 categories'])
+
+// ── Music: the next release still ahead, and the songs not finished (the Overview shows both) ──
+assert.equal(nextRelease([], TODAY), undefined)
+const albums = [
   album({ id: 'x', title: 'Later', releaseDate: '2027-02-01', tracks: [track('t1', 'done')] }),
   album({ id: 'y', title: 'Night Shift EP', releaseDate: '2026-11-14', tracks: [track('t2', 'mix'), track('t3', 'done'), track('t4', 'track')] }),
   album({ id: 'z', title: 'Old', releaseDate: '2026-01-01', tracks: [track('t5', 'done')] }),
-] }), TODAY)
-assert.equal(m1.headline, 'Night Shift EP · Nov 14', 'the soonest release still ahead')
-assert.equal(m1.detail, 'in 24 days · 2 songs not finished')
-assert.equal(m1.tone, 'todo')
-assert.equal(summarize('music', client({ albums: [album({ id: 'y', releaseDate: '2026-11-14', tracks: [track('t', 'done')] })] }), TODAY).tone, 'ok', 'everything finished and a date set')
-assert.deepEqual(summarize('music', client({ albums: [album({ id: 'y', tracks: [track('t', 'mix')] })] }), TODAY), { headline: 'No release date set', detail: '1 song not finished', tone: 'todo' })
-assert.deepEqual(summarize('music', client({ albums: [album({ id: 'y', releaseDate: '2026-01-01', tracks: [track('t', 'done')] })] }), TODAY), { headline: 'Nothing in progress', tone: 'quiet' }, 'already released and finished')
-assert.equal(summarize('music', client({ albums: [album({ id: 'y', releaseDate: TODAY, tracks: [] })] }), TODAY).headline, 'Night Shift EP · Oct 21', 'releasing today is still ahead')
+  album({ id: 'n', title: 'No date', tracks: [track('t6', 'master')] }),
+]
+assert.equal(nextRelease(albums, TODAY)?.id, 'y', 'the soonest release still ahead (not the old one, not the undated one)')
+assert.equal(nextRelease([album({ id: 'y', releaseDate: TODAY })], TODAY)?.id, 'y', 'releasing today is still ahead')
+assert.equal(nextRelease([album({ id: 'y', releaseDate: '2026-01-01' }), album({ id: 'n' })], TODAY), undefined, 'already released, or no date: nothing ahead')
+assert.equal(unfinishedSongs(albums), 3, 'two on Night Shift EP and one on the undated release; finished songs and old releases with every song done do not count')
+assert.equal(unfinishedSongs([]), 0)
 
 // ── What is still owed on invoices (the Overview shows it): per currency, and what is late ──
 assert.deepEqual(owedFigures(client(), TODAY), { owed: '', open: 0, overdue: 0 })

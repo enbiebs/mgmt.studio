@@ -7,7 +7,7 @@
 import { useStore } from '@/lib/store'
 import { analyticsHasData } from '@/lib/unfinished'
 import { canOpenSection } from '@/lib/tour-tabs'
-import { artistsForPage, visibleRosterPages, type RosterPage } from '@/lib/nav-map'
+import { visibleRosterPages, type RosterPage } from '@/lib/nav-map'
 import type { Client, MainSection } from '@/types'
 import type { IconName } from '@/components/ui/Icon'
 
@@ -56,13 +56,6 @@ export function useRosterClients(): Client[] {
   void grants   // a change in what this person may open re-runs this
   const ids = accessibleClientIds()
   return ids === 'all' ? data.clients : data.clients.filter(c => ids.includes(c.id))
-}
-
-/** The artists a roster page can open (what each artist has shared with this person decides it). */
-export function useArtistsFor(page: RosterPage): Client[] {
-  const hasAccess = useStore(s => s.hasAccess)
-  const roster = useRosterClients()
-  return artistsForPage(page, roster, (section, id) => hasAccess(section, id))
 }
 
 /** The pages of "All artists" this person can open. Today and Calendar are always there; the rest need at least one artist to open. */

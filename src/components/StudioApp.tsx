@@ -29,10 +29,10 @@ import { OverviewView } from '@/components/overview/OverviewView'
 // Dashboard
 import { DashboardModals } from '@/components/dashboard/Modals'
 import { RosterToday }     from '@/components/dashboard/RosterToday'
-import { ArtistPicker }    from '@/components/dashboard/ArtistPicker'
 import { RosterTour }      from '@/components/tour/RosterTour'
 import { RosterFinance }   from '@/components/business/RosterFinance'
 import { RosterLegal }     from '@/components/legal/RosterLegal'
+import { RosterMusic }     from '@/components/songs/RosterMusic'
 
 // Manager views
 import { SongsView }    from '@/components/songs/SongsView'
@@ -108,7 +108,7 @@ export function StudioApp() {
                 : rosterPage === 'tour' ? <RosterTour />
                 : rosterPage === 'finance' ? <RosterFinance />
                 : rosterPage === 'legal' ? <RosterLegal />
-                : <ArtistPicker page={rosterPage} />}
+                : <RosterMusic />}
             </main>
           )
         )}

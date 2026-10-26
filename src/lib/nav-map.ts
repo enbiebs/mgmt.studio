@@ -66,8 +66,3 @@ export function artistsForPage<C extends { id: string }>(page: RosterPage, clien
 export function visibleRosterPages(clients: readonly { id: string }[], has: Has): RosterPage[] {
   return ROSTER_PAGES.filter(p => p === 'today' || p === 'calendar' || artistsForPage(p, clients, has).length > 0)
 }
-
-/** Why a pick-an-artist row shows no numbers, or null when it can: someone sent a single item sees only that item, so a total worked out from it would mislead. */
-export function pickerNote(page: RosterPage, clientId: string, access: { shareOnly: Has }): string | null {
-  return access.shareOnly(SECTION_OF_PAGE[page], clientId) ? 'Shared with you' : null
-}

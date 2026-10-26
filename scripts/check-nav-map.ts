@@ -1,7 +1,7 @@
 // Checks how the artist switcher keeps you on the same page when you move between "All artists" and one artist (and between artists).
 // Run with:  npx tsx scripts/check-nav-map.ts
 import assert from 'node:assert/strict'
-import { ROSTER_PAGES, ROSTER_PAGE_LABEL, SECTION_OF_PAGE, artistsForPage, isRosterPage, pageForSection, pickerNote, scopeTarget, visibleRosterPages, type RosterPage } from '../src/lib/nav-map'
+import { ROSTER_PAGES, ROSTER_PAGE_LABEL, SECTION_OF_PAGE, artistsForPage, isRosterPage, pageForSection, scopeTarget, visibleRosterPages, type RosterPage } from '../src/lib/nav-map'
 import type { MainSection } from '../src/types'
 
 const SECTIONS: MainSection[] = ['overview', 'today', 'calendar', 'profile', 'songs', 'tour', 'deals', 'content', 'finance', 'projects', 'analytics', 'team', 'legal', 'activity']
@@ -58,11 +58,5 @@ const dealsOnly = grants({ a: ['deals'] })
 assert.deepEqual(ids(artistsForPage('tour', roster, dealsOnly)), ['a'], 'Deals & fees alone opens the Tour page')
 assert.deepEqual(visibleRosterPages(roster, dealsOnly), ['today', 'calendar', 'tour'])
 assert.deepEqual(ids(artistsForPage('finance', roster, dealsOnly)), [])
-
-// ── rows that must not show a number ──
-const none = () => false
-assert.equal(pickerNote('music', 'a', { shareOnly: grants({ a: ['songs'] }) }), 'Shared with you', 'only sent one item')
-assert.equal(pickerNote('music', 'a', { shareOnly: none }), null, 'a real Music grant shows the number')
-assert.equal(pickerNote('music', 'a', { shareOnly: grants({ a: ['legal'] }) }), null, 'a shared contract says nothing about Music')
 
 console.log('nav-map checks passed')
