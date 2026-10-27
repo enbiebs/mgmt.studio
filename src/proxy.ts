@@ -20,14 +20,26 @@ export async function proxy(request: NextRequest) {
   }
 
   // Vercel Cron triggers this with no browser session either — it checks
-  // its own CRON_SECRET (see src/app/api/google-calendar/sync/route.ts),
-  // same reasoning as the calendar feed bypass above.
+  // its own CRON_SECRET (see src/app/api/google-calendar/sync/route.ts, the
+  // old home of the morning job, still callable by hand), same reasoning as
+  // the calendar feed bypass above.
   if (request.nextUrl.pathname === '/api/google-calendar/sync') {
+    return NextResponse.next({ request })
+  }
+
+  // The morning job (Google Calendar pull, then the morning email and contract reminders) is the same cron slot, now at its own address;
+  // it checks CRON_SECRET itself, like the two above.
+  if (request.nextUrl.pathname === '/api/cron/daily') {
     return NextResponse.next({ request })
   }
 
   // The daily clean-up of the trash is a Vercel Cron job too: same reasoning, and the route checks CRON_SECRET itself.
   if (request.nextUrl.pathname === '/api/trash/purge') {
+    return NextResponse.next({ request })
+  }
+
+  // The "Stop these emails" link in a reminder sent to someone outside the company: they have no login. The route checks a signed link.
+  if (request.nextUrl.pathname === '/api/email/unsubscribe') {
     return NextResponse.next({ request })
   }
 

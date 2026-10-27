@@ -870,6 +870,7 @@ export interface Contract {
   noticeDays?:  number     // days of written notice needed before the term ends to stop it renewing or to end it
   terms?:       Record<string, string>   // the key terms for this kind of contract (see lib/contract-terms.ts)
   files?:       ContractFile[]
+  reminderEmails?: string[]   // outside people (a lawyer, an assistant) emailed as the contract's key dates come up; they need no login
 }
 
 // ── Finance / Business Manager Replacement ──────────────────

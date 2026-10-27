@@ -51,6 +51,17 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 ```
 When these are absent, the proxy (`src/proxy.ts`) and `AuthProvider` both short-circuit — the app runs fully off `localStorage` + demo data.
 
+**Server settings for the morning email and contract reminders (all optional; set in Vercel; see `src/lib/email.ts`, `src/lib/daily-email-server.ts`):**
+```
+CRON_SECRET=...            # lets the scheduled jobs in (without it every cron route answers 401)
+RESEND_API_KEY=...         # email is OFF until this and EMAIL_FROM are both set
+EMAIL_FROM="Mgmt Path <notices@your-verified-domain>"
+EMAIL_ONLY_TO=a@x.com,b@x.com   # while trying it out: ONLY these addresses get mail (remove to go live)
+CONTRACT_REMINDERS_ON=1    # a second switch: reminders to people OUTSIDE the company (a lawyer, an assistant)
+APP_URL=https://www.mgmtpath.com   # links in emails; must start with https://
+```
+Try it safely: set EMAIL_ONLY_TO to your own address, call `/api/cron/daily?dryRun=1` (header `Authorization: Bearer $CRON_SECRET`; it sends nothing and answers with counts only), then remove EMAIL_ONLY_TO. Migration 071 must be applied first.
+
 ## Architecture
 
 > These notes are older than the navigation rework, the URL routing and the finance layer. Check the code before relying on a detail here.

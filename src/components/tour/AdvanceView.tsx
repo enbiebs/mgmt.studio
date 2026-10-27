@@ -12,6 +12,10 @@ import type { ShowAdvance, AdvanceStatus, AdvanceContact, AdvanceSchedule, Show,
 import { uid, shiftTime, fromDateStr, today as localToday } from '@/lib/utils'
 import { defaultShow, orderShows } from '@/lib/date-state'
 import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
+import { advanceMailto, buildDaySheet } from '@/lib/day-sheet'
+import { downloadDaySheetPdf } from '@/lib/day-sheet-download'
+import { notify } from '@/lib/notify'
+import { PRODUCT_NAME } from '@/lib/brand'
 
 // Fields shared between a Venue and a ShowAdvance — copied straight across
 // in both directions when saving to or loading from the venue library.
@@ -136,6 +140,7 @@ export function AdvanceView({ embedded = false }: { embedded?: boolean } = {}) {
   const [advance, setAdvance] = useState<ShowAdvance | null>(null)
   const [tab, setTab] = useState<Tab>('schedule')
   const [sendOpen, setSendOpen] = useState(false)
+  const [pdfBusy, setPdfBusy] = useState(false)
   const [saved, setSaved] = useState(false)
   const [bumpFrom, setBumpFrom] = useState('')
   const [bumpCustom, setBumpCustom] = useState('')
@@ -270,6 +275,22 @@ export function AdvanceView({ embedded = false }: { embedded?: boolean } = {}) {
     setAdvance({ ...advance, status, sentAt: status === 'sent' ? localToday() : advance.sentAt })
   }
 
+  // "Mark as sent" in the send window saves right away (the team reads this status), along with anything typed since the last save.
+  function markSent() {
+    if (!advance) return
+    const next = { ...advance, status: 'sent' as const, sentAt: localToday() }
+    setAdvance(next)
+    persistAdvance(next)
+  }
+
+  function makePdf(sheet: ReturnType<typeof buildDaySheet>, isoDate: string) {
+    if (pdfBusy) return
+    setPdfBusy(true)
+    downloadDaySheetPdf(sheet, isoDate)
+      .catch(e => { console.error(e); notify('The PDF could not be made. Please try again.') })
+      .finally(() => setPdfBusy(false))
+  }
+
   const selectedShow = shows.find(s => s.id === selectedShowId)
   const matchingVenue = selectedShow
     ? venues.find(v => v.name.trim().toLowerCase() === selectedShow.venue.trim().toLowerCase())
@@ -401,7 +422,7 @@ export function AdvanceView({ embedded = false }: { embedded?: boolean } = {}) {
                   onClick={() => setSendOpen(true)}
                   className="px-3 py-1.5 text-xs font-semibold bg-gray-900 text-canvas rounded-lg hover:bg-gray-700 transition-colors"
                 >
-                  Send to Venue ↗
+                  Send to venue
                 </button>
               )}
               <button
@@ -682,49 +703,72 @@ export function AdvanceView({ embedded = false }: { embedded?: boolean } = {}) {
       )}
 
       {/* ── Send Modal ── */}
-      {sendOpen && advance && selectedShow && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSendOpen(false)}>
-          <div className="bg-canvas rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900">Send Advance to Venue</h2>
-              <button onClick={() => setSendOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
-            </div>
-            <p className="text-sm text-gray-500">
-              This will send the advance template to the following contacts at <strong>{selectedShow.venue}</strong>. They'll receive a link to fill in their sections.
-            </p>
-            <div className="space-y-2">
-              {advance.contacts.filter(c => c.email).map(c => (
-                <div key={c.id} className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2">
-                  <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-[10px] font-bold text-blue-600">
-                    {c.name.charAt(0)}
+      {sendOpen && advance && selectedShow && (() => {
+        const sheet = buildDaySheet(client.name, selectedShow, advance, 'advance')
+        const withEmail = advance.contacts.filter(c => c.email)
+        const mailto = advanceMailto(sheet, withEmail)
+        return (
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSendOpen(false)}>
+            <div className="bg-canvas rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold text-gray-900">Send the advance to {selectedShow.venue}</h2>
+                <button onClick={() => setSendOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+              </div>
+              <p className="text-sm text-gray-500">
+                {PRODUCT_NAME} doesn&apos;t email this for you. It goes out from your own email, so replies come back to you:
+              </p>
+              <ol className="list-decimal space-y-1 pl-5 text-sm text-gray-700">
+                <li>Download the advance as a PDF.</li>
+                <li>Open the email below and attach the PDF.</li>
+                <li>Come back and mark it as sent, so the team knows.</li>
+              </ol>
+              {sheet.hasAdvance && <p className="text-xs text-gray-400">The PDF includes: {sheet.sections.map(s => s.title).join(', ')}. Anything you don&apos;t want the venue to see, take out of the advance first.</p>}
+              <div className="space-y-2">
+                {withEmail.map(c => (
+                  <div key={c.id} className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2">
+                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-[10px] font-bold text-blue-600">
+                      {c.name.charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-gray-800">{c.name}</div>
+                      <div className="text-xs text-gray-400">{c.role} · {c.email}</div>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-gray-800">{c.name}</div>
-                    <div className="text-xs text-gray-400">{c.role} · {c.email}</div>
+                ))}
+                {withEmail.length === 0 && (
+                  <div className="text-sm text-gray-400 py-2 text-center">
+                    No contacts with email addresses. Add emails in the Contacts tab first.
                   </div>
-                </div>
-              ))}
-              {advance.contacts.filter(c => c.email).length === 0 && (
-                <div className="text-sm text-gray-400 py-2 text-center">
-                  No contacts with email addresses. Add emails in the Contacts tab first.
-                </div>
-              )}
-            </div>
-            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
-              <strong>Note:</strong> Google Calendar sync and email delivery require connecting your Google account. Coming soon.
-            </div>
-            <div className="flex gap-2 pt-1">
-              <button onClick={() => setSendOpen(false)} className="flex-1 py-2 text-sm font-medium border border-gray-200 rounded-xl hover:bg-gray-50">Cancel</button>
-              <button
-                onClick={() => { markStatus('sent'); setSendOpen(false) }}
-                className="flex-1 py-2 text-sm font-semibold bg-gray-900 text-canvas rounded-xl hover:bg-gray-700 transition-colors"
-              >
-                Mark as Sent
-              </button>
+                )}
+                {withEmail.length > 0 && !mailto && (
+                  <div className="text-xs text-amber-600">None of those email addresses look right, so the email can&apos;t be opened. Check them in the Contacts tab.</div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => makePdf(sheet, selectedShow.date)}
+                  disabled={pdfBusy}
+                  className="flex-1 py-2 text-sm font-semibold border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {pdfBusy ? 'Making the PDF…' : 'Download PDF'}
+                </button>
+                {mailto
+                  ? <a href={mailto} className="flex-1 py-2 text-center text-sm font-semibold border border-gray-200 rounded-xl hover:bg-gray-50">Open the email</a>
+                  : <span className="flex-1 py-2 text-center text-sm font-semibold border border-gray-100 rounded-xl text-gray-300">Open the email</span>}
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setSendOpen(false)} className="flex-1 py-2 text-sm font-medium border border-gray-200 rounded-xl hover:bg-gray-50">Cancel</button>
+                <button
+                  onClick={() => { markSent(); setSendOpen(false) }}
+                  className="flex-1 py-2 text-sm font-semibold bg-gray-900 text-canvas rounded-xl hover:bg-gray-700 transition-colors"
+                >
+                  Mark as sent
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

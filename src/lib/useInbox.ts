@@ -43,3 +43,13 @@ export function useInbox() {
     return { visible, hidden, byClient, total: visible.filter(i => i.severity !== 'info').length }
   }, [data, role, grants, previewMemberId, inboxState, hasAccess, isShareOnly, accessibleClientIds])
 }
+
+/**
+ * The number on the Today link: what needs action across all artists, or — inside one artist — just that artist's (heads-ups never count).
+ * One formula for the side rail, the phone's page strip and anything else that shows the badge.
+ */
+export function useTodayBadge(inArtist: boolean, clientId: string | null): number {
+  const inbox = useInbox()
+  const mine = clientId ? inbox.byClient[clientId] : undefined
+  return inArtist && clientId ? (mine?.urgent ?? 0) + (mine?.soon ?? 0) : inbox.total
+}

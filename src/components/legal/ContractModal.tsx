@@ -129,7 +129,7 @@ export function ContractModal({ clientId, contract, initial, attachOnOpen, edita
   }, [])
 
   // A problem is shown where the person is looking: scrolled into view, with the box it is about ready to type in.
-  const BOX: Partial<Record<keyof ContractDraft, string>> = { title: 'contract-title', counterparty: 'contract-counterparty', expiryDate: 'contract-ends', noticeDays: 'contract-notice', renewalMonths: 'contract-renewal', value: 'contract-value' }
+  const BOX: Partial<Record<keyof ContractDraft, string>> = { title: 'contract-title', counterparty: 'contract-counterparty', expiryDate: 'contract-ends', noticeDays: 'contract-notice', renewalMonths: 'contract-renewal', value: 'contract-value', reminders: 'contract-reminders' }
   function showProblem(message: string, field?: keyof ContractDraft) {
     setError(message)
     window.setTimeout(() => {
@@ -312,6 +312,12 @@ export function ContractModal({ clientId, contract, initial, attachOnOpen, edita
           </div>
         </details>
       )}
+
+      <FormField label="Also remind (optional)">
+        <textarea id="contract-reminders" className={`${inputClass} resize-none`} rows={2} value={draft.reminders} onChange={e => set('reminders', e.target.value)} disabled={disabled}
+          placeholder="e.g. your lawyer's email, your assistant's email" />
+        <div className="mt-1 text-[11px] leading-snug text-gray-400">Once the contract is marked Signed, these people get an email 90, 30 and 7 days before the date that matters (the last day to give notice, or the renewal or end). They don&apos;t need a login. They see the artist&apos;s name, the contract&apos;s name, who it is with and the date, not the money or the terms, and each email has a link that stops them. Up to 5 addresses.</div>
+      </FormField>
 
       <FormField label="Notes">
         <textarea id="contract-notes" className={`${inputClass} resize-none`} rows={3} value={draft.notes} onChange={e => set('notes', e.target.value)} disabled={disabled} />

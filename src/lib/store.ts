@@ -2214,17 +2214,18 @@ export const useStore = create<StudioState>((set, get) => ({
     const { data, clientId, workspaceId } = get()
     if (!clientId) return Promise.resolve(false)
     let saved: Contract | undefined
+    let hadReminders = false
     const updated = {
       clients: data.clients.map(c => c.id !== clientId ? c : {
         ...c,
-        legal: { ...c.legal, contracts: (c.legal?.contracts ?? []).map(x => { if (x.id !== contractId) return x; saved = { ...contract, id: x.id, createdAt: x.createdAt }; return saved }) },
+        legal: { ...c.legal, contracts: (c.legal?.contracts ?? []).map(x => { if (x.id !== contractId) return x; hadReminders = (x.reminderEmails?.length ?? 0) > 0; saved = { ...contract, id: x.id, createdAt: x.createdAt }; return saved }) },
       }),
     }
     if (!saved) return Promise.resolve(false)
     set({ data: updated })
     saveData(updated)
     if (!workspaceId) return Promise.resolve(true)
-    return upsertContract(saved, clientId).then(() => true).catch(e => { console.error(e); notify('That change could not be saved. Please try again.'); return false })
+    return upsertContract(saved, clientId, hadReminders).then(() => true).catch(e => { console.error(e); notify('That change could not be saved. Please try again.'); return false })
   },
 
   deleteContract: (contractId) => {

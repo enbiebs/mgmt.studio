@@ -12,7 +12,15 @@ import { fromDateStr, today } from '@/lib/utils'
 import { defaultShow, orderShows } from '@/lib/date-state'
 import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
 import type { ShowAdvance, Show } from '@/types'
+import { buildDaySheet, type DaySheetKey } from '@/lib/day-sheet'
+import { downloadDaySheetPdf } from '@/lib/day-sheet-download'
+import { notify } from '@/lib/notify'
 import { PRODUCT_NAME } from '@/lib/brand'
+
+const ACCENT: Record<DaySheetKey, string> = {
+  schedule: 'border-accent text-accent', hotel: 'border-purple-400 text-purple-500', venue: 'border-orange-400 text-orange-500',
+  catering: 'border-green-400 text-green-600', travel: 'border-sky-400 text-sky-600', contacts: 'border-red-400 text-red-500', notes: 'border-gray-300 text-gray-400',
+}
 
 function Row({ label, value }: { label: string; value?: string }) {
   if (!value) return null
@@ -42,6 +50,7 @@ export function DaySheetView({ embedded = false }: { embedded?: boolean } = {}) 
   const sharedSelectedShowId = useStore(s => s.selectedShowId)
   const [selectedShowId, setSelectedShowId] = useState<string | null>(() => useStore.getState().selectedShowId)
   const pane = useMobilePane()
+  const [pdfBusy, setPdfBusy] = useState(false)
 
   // Jumping here from elsewhere (e.g. Tour's "Day Sheet" quick link) sets the
   // shared selectedShowId — adopt it once, without disturbing this view's own
@@ -73,8 +82,15 @@ export function DaySheetView({ embedded = false }: { embedded?: boolean } = {}) 
     ? advances.find(a => a.showId === show.id)
     : undefined
 
-  const showDate = show ? fromDateStr(show.date) : new Date()
-  const dateStr = showDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+  const sheet = show ? buildDaySheet(client.name, show, advance) : null
+
+  function makePdf() {
+    if (!sheet || !show || pdfBusy) return
+    setPdfBusy(true)
+    downloadDaySheetPdf(sheet, show.date)
+      .catch(e => { console.error(e); notify('The PDF could not be made. Please try again.') })
+      .finally(() => setPdfBusy(false))
+  }
 
   return (
     <div className="flex-1 flex overflow-hidden">
@@ -137,142 +153,34 @@ export function DaySheetView({ embedded = false }: { embedded?: boolean } = {}) 
                   <div className="text-sm text-gray-400">{show.city}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm font-semibold text-gray-300">{dateStr}</div>
-                  {advance?.weatherNotes && (
-                    <div className="text-xs text-gray-400 mt-1">{advance.weatherNotes}</div>
+                  <div className="text-sm font-semibold text-gray-300">{sheet?.dateLine}</div>
+                  {sheet?.weather && (
+                    <div className="text-xs text-gray-400 mt-1">{sheet.weather}</div>
                   )}
+                  <button onClick={makePdf} disabled={pdfBusy} className="mt-3 rounded-lg border border-gray-700 px-3 py-1 text-xs font-semibold text-gray-200 hover:bg-gray-800 disabled:opacity-50">
+                    {pdfBusy ? 'Making the PDF…' : 'Download PDF'}
+                  </button>
+                  <div className="mt-1 text-[10px] text-gray-500">Shows no fees or payments.</div>
                 </div>
               </div>
             </div>
 
-            {/* Schedule */}
-            {advance?.schedule && Object.values(advance.schedule).some(Boolean) && (
-              <div className="bg-canvas rounded-2xl px-6 py-5 mb-4 shadow-sm">
-                <Block title="Schedule" accent="border-accent text-accent">
-                  <Row label="Bus Call"         value={advance.schedule.busCall} />
-                  <Row label="Lobby Call"       value={advance.schedule.lobbyCall} />
-                  <Row label="Load In"          value={advance.schedule.loadIn} />
-                  <Row label="Line Check"       value={advance.schedule.lineCheck} />
-                  <Row label="Soundcheck"       value={advance.schedule.soundcheck} />
-                  <Row label="Artist SC"        value={advance.schedule.artistSoundcheck} />
-                  <Row label="Doors"            value={advance.schedule.doorsOpen} />
-                  <Row label="Support On"       value={advance.schedule.supportOn} />
-                  <Row label="Support Off"      value={advance.schedule.supportOff} />
-                  <Row label="Headline On"      value={advance.schedule.headlineOn} />
-                  <Row label="Curfew"           value={advance.schedule.curfew} />
-                  <Row label="Load Out"         value={advance.schedule.loadOut} />
-                  <Row label="Bus Departure"    value={advance.schedule.departureTime} />
-                  {advance.schedule.notes && (
-                    <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-500 italic">{advance.schedule.notes}</div>
-                  )}
+            {/* The sections: only what is known for this show (the same sheet the PDF is made from) */}
+            {sheet?.sections.map(sec => (
+              <div key={sec.key} className="bg-canvas rounded-2xl px-6 py-5 mb-4 shadow-sm">
+                <Block title={sec.title} accent={ACCENT[sec.key]}>
+                  {sec.rows.map((r, i) => <Row key={i} label={r.label} value={r.value} />)}
+                  {sec.note && <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-500 whitespace-pre-line">{sec.note}</div>}
                 </Block>
               </div>
-            )}
+            ))}
 
-            {/* Hotel */}
-            {advance?.hospitality?.hotel && (
-              <div className="bg-canvas rounded-2xl px-6 py-5 mb-4 shadow-sm">
-                <Block title="Hotel" accent="border-purple-400 text-purple-500">
-                  <Row label="Hotel"        value={advance.hospitality.hotel} />
-                  <Row label="Address"      value={advance.hospitality.hotelAddress} />
-                  <Row label="Phone"        value={advance.hospitality.hotelPhone} />
-                  <Row label="Confirmation" value={advance.hospitality.hotelConfirmation} />
-                  <Row label="Check-In"     value={advance.hospitality.checkIn} />
-                  <Row label="Check-Out"    value={advance.hospitality.checkOut} />
-                  <Row label="Rooms"        value={advance.hospitality.roomCount} />
-                  {advance.hospitality.roomNotes && (
-                    <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-500">{advance.hospitality.roomNotes}</div>
-                  )}
-                </Block>
-              </div>
-            )}
-
-            {/* Venue / Production */}
-            {advance?.production && Object.values(advance.production).some(Boolean) && (
-              <div className="bg-canvas rounded-2xl px-6 py-5 mb-4 shadow-sm">
-                <Block title="Venue / Production" accent="border-orange-400 text-orange-500">
-                  <Row label="Address"      value={advance.logistics?.loadingDockAddress} />
-                  <Row label="Stage"        value={[advance.production.stageWidth, advance.production.stageDepth, advance.production.roofHeight].filter(Boolean).join(' × ')} />
-                  <Row label="FOH"          value={advance.production.fohPosition} />
-                  <Row label="Monitors"     value={advance.production.monPosition} />
-                  <Row label="Power"        value={advance.production.powerSupply} />
-                  <Row label="Local Crew"   value={advance.production.localCrewCount} />
-                  <Row label="Parking"      value={advance.logistics?.parkingInstructions} />
-                  <Row label="Bus Parking"  value={advance.logistics?.busParking} />
-                  {advance.production.backlineNotes && (
-                    <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-500">{advance.production.backlineNotes}</div>
-                  )}
-                </Block>
-              </div>
-            )}
-
-            {/* Catering */}
-            {(advance?.hospitality?.cateringCompany || advance?.hospitality?.mealTimes) && (
-              <div className="bg-canvas rounded-2xl px-6 py-5 mb-4 shadow-sm">
-                <Block title="Catering" accent="border-green-400 text-green-600">
-                  <Row label="Catering"     value={advance.hospitality.cateringCompany} />
-                  <Row label="Meal Times"   value={advance.hospitality.mealTimes} />
-                  <Row label="Dietary"      value={advance.hospitality.dietaryNotes} />
-                  <Row label="Runner"       value={advance.hospitality.runnerName ? `${advance.hospitality.runnerName} ${advance.hospitality.runnerPhone ?? ''}`.trim() : undefined} />
-                  <Row label="Dressing Rm"  value={advance.hospitality.dressingRooms} />
-                </Block>
-              </div>
-            )}
-
-            {/* Travel */}
-            {(advance?.logistics?.flights || advance?.logistics?.groundTransport) && (
-              <div className="bg-canvas rounded-2xl px-6 py-5 mb-4 shadow-sm">
-                <Block title="Travel" accent="border-sky-400 text-sky-600">
-                  <Row label="Flights"      value={advance.logistics.flights} />
-                  <Row label="Airport"      value={advance.logistics.nearestAirport} />
-                  <Row label="Ground"       value={advance.logistics.groundTransport} />
-                </Block>
-              </div>
-            )}
-
-            {/* Contacts */}
-            {advance?.contacts && advance.contacts.length > 0 && (
-              <div className="bg-canvas rounded-2xl px-6 py-5 mb-4 shadow-sm">
-                <Block title="Contacts" accent="border-red-400 text-red-500">
-                  {advance.contacts.map(c => (
-                    <div key={c.id} className="flex py-1.5 border-b border-gray-100 last:border-0">
-                      <span className="w-36 flex-shrink-0 text-xs font-semibold text-gray-400 uppercase tracking-wide">{c.role}</span>
-                      <div>
-                        <div className="text-sm text-gray-800">{c.name}</div>
-                        {(c.phone || c.email) && (
-                          <div className="text-xs text-gray-400">{[c.phone, c.email].filter(Boolean).join(' · ')}</div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </Block>
-              </div>
-            )}
-
-            {/* Notes */}
-            {(advance?.wifi || advance?.guestListCap || advance?.generalNotes) && (
-              <div className="bg-canvas rounded-2xl px-6 py-5 mb-4 shadow-sm">
-                <Block title="Notes" accent="border-gray-300 text-gray-400">
-                  {advance?.wifi && (
-                    <Row label="WiFi" value={`${advance.wifi}${advance.wifiPassword ? ` / ${advance.wifiPassword}` : ''}`} />
-                  )}
-                  <Row label="Guest List" value={advance?.guestListCap ? `Cap: ${advance.guestListCap}` : undefined} />
-                  {advance?.guestListNotes && (
-                    <div className="text-xs text-gray-500 mt-1">{advance.guestListNotes}</div>
-                  )}
-                  {advance?.generalNotes && (
-                    <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-600 leading-relaxed">{advance.generalNotes}</div>
-                  )}
-                </Block>
-              </div>
-            )}
-
-            {/* No advance data */}
-            {!advance && (
+            {/* Nothing to show yet */}
+            {sheet && !sheet.hasAdvance && (
               <div className="bg-canvas rounded-2xl px-6 py-10 text-center text-gray-400 shadow-sm">
-                <div className="text-sm mb-2">No advance data for this show yet.</div>
+                <div className="text-sm mb-2">{advance ? 'Nothing is filled in on the advance yet.' : 'No advance data for this show yet.'}</div>
                 <button onClick={() => setTourSub('advance')} className="text-sm text-accent hover:underline">
-                  Create advance →
+                  {advance ? 'Fill in the advance →' : 'Create advance →'}
                 </button>
               </div>
             )}

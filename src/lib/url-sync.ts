@@ -10,6 +10,7 @@ import { useStore } from '@/lib/store'
 import { canOpenSection } from '@/lib/tour-tabs'
 import { parsePath, pathFor, titleFor, type Nav, type Route } from '@/lib/routes'
 import { PRODUCT_NAME } from '@/lib/brand'
+import { setBaseTitle } from '@/lib/tab-title'
 
 type State = ReturnType<typeof useStore.getState>
 
@@ -68,7 +69,7 @@ export function startUrlSync(win: BrowserLike): () => void {
   function setTitle() {
     const s = useStore.getState()
     const name = s.data.clients.find(c => c.id === s.clientId)?.name
-    win.document.title = `${titleFor(navOf(s), name)} · ${PRODUCT_NAME}`
+    setBaseTitle(win.document, `${titleFor(navOf(s), name)} · ${PRODUCT_NAME}`)
   }
 
   function writeUrl(mode: 'push' | 'replace') {
