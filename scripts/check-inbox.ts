@@ -1,13 +1,14 @@
 // Checks every rule that puts something on Home ("needs you"), and who may see it.  Run with:  npx tsx scripts/check-inbox.ts
 import assert from 'node:assert/strict'
 import { buildInbox, isHidden, type InboxAccess, type InboxItem, type InboxRule } from '../src/lib/inbox'
-import type { Client, Contract, Expense, Invoice, OfferSheet, Project, Settlement, Show, TourOffer } from '../src/types'
+import { defaultChecklist } from '../src/lib/utils'
+import type { Album, Client, Contract, Expense, Invoice, OfferSheet, Project, Settlement, Show, TourOffer } from '../src/types'
 
 const TODAY = '2026-10-19'
-const ALL: InboxAccess = { finance: true, tour: true, deals: true, legal: true, projects: true }
-const NONE: InboxAccess = { finance: false, tour: false, deals: false, legal: false, projects: false }
+const ALL: InboxAccess = { finance: true, tour: true, deals: true, legal: true, projects: true, music: true }
+const NONE: InboxAccess = { finance: false, tour: false, deals: false, legal: false, projects: false, music: false }
 
-interface Parts { shows?: Show[]; invoices?: Invoice[]; expenses?: Expense[]; settlements?: Settlement[]; offers?: TourOffer[]; contracts?: Contract[]; projects?: Project[]; sheets?: OfferSheet[]; deposits?: unknown[]; budgets?: unknown[]; isDemo?: boolean }
+interface Parts { shows?: Show[]; invoices?: Invoice[]; expenses?: Expense[]; settlements?: Settlement[]; offers?: TourOffer[]; contracts?: Contract[]; projects?: Project[]; sheets?: OfferSheet[]; deposits?: unknown[]; budgets?: unknown[]; albums?: Album[]; isDemo?: boolean }
 function client(p: Parts = {}): Client {
   return {
     id: 'c1', name: 'Artist', isDemo: p.isDemo,
@@ -17,6 +18,7 @@ function client(p: Parts = {}): Client {
     business: { banking: { deposits: p.deposits ?? [] } },
     legal: { contracts: p.contracts ?? [] },
     projects: p.projects ?? [],
+    songs: { albums: p.albums ?? [] },
   } as unknown as Client
 }
 const run = (p: Parts, rule: InboxRule, access: InboxAccess = ALL): InboxItem[] => buildInbox(client(p), TODAY, access).filter(i => i.rule === rule)
@@ -143,10 +145,55 @@ assert.equal(run({ projects: [project({ dueDate: '2026-12-22' })] }, 'project').
 assert.equal(run({ projects: [project({ status: 'done' })] }, 'project').length, 0)
 assert.equal(run({ projects: [project({ dueDate: undefined })] }, 'project').length, 0)
 
+// ── a release that is falling behind its own timeline ──
+const album = (daysOut: number, o: Partial<Album> = {}): Album => ({ id: 'al1', title: 'New Single', releaseDate: new Date(Date.parse(TODAY + 'T00:00:00Z') + daysOut * 86_400_000).toISOString().slice(0, 10), tracks: [{ id: 't1' } as never], checklist: defaultChecklist().map(i => (['artwork', 'isrc', 'upc'].includes(i.key) ? { ...i, done: true } : i)), ...o })
+it = one({ albums: [album(12)] }, 'release')
+assert.equal(it.severity, 'urgent', 'two weeks out and behind: needs you now'); assert.match(it.title, /"New Single" comes out in 12 days and \d+ steps are behind/); assert.deepEqual(it.go, { section: 'songs', sub: 'checklist' })
+assert.match(it.detail ?? '', /\(\d+ days late\)/); assert.equal(it.entityId, 'al1', 'it is about this release (Open lands on it)')
+assert.deepEqual(sev({ albums: [album(50)] }, 'release'), ['soon'])                     // far off, only the rights steps are a few days behind
+assert.deepEqual(sev({ albums: [album(40)] }, 'release'), ['soon'])                     // two steps are late, but nothing critical yet
+assert.deepEqual(sev({ albums: [album(33)] }, 'release'), ['soon'])                     // the final master is 2 days late: not a week yet
+assert.deepEqual(sev({ albums: [album(25)] }, 'release'), ['urgent'])                   // the final master is 10 days late
+assert.equal(run({ albums: [album(25)] }, 'release').length, 1)
+assert.equal(run({ albums: [album(12, { checklist: undefined })] }, 'release').length, 0)     // nobody has started the checklist: it would only say everything is late
+assert.equal(run({ albums: [album(12, { checklist: defaultChecklist().map(i => (i.key === 'upc' ? { ...i, done: true } : i)) })] }, 'release').length, 0)   // one tick is not "using it"
+assert.equal(run({ albums: [album(12, { checklist: defaultChecklist().map(i => ({ ...i, done: true })) })] }, 'release').length, 0)
+assert.equal(run({ albums: [album(80)] }, 'release').length, 0)                         // too far away to nag about
+assert.equal(run({ albums: [album(-3)] }, 'release').length, 0)                         // already out
+assert.equal(run({ albums: [album(12, { releaseDate: undefined })] }, 'release').length, 0)
+assert.equal(run({ albums: [album(12)] }, 'release', { ...ALL, music: false }).length, 0)
+assert.equal(one({ albums: [album(0)] }, 'release').title.includes('comes out today'), true)
+
+// ── a version waiting on the artist, or sent back by them ──
+const withRounds = (rounds: unknown[], extra: Partial<Album> = {}): Album => ({ id: 'al2', title: 'Debut', tracks: [{ id: 't1', title: 'One', rounds }] as never, ...extra })
+const ask = (daysAgo: number) => ({ id: 'v1', label: 'V2', stage: 'mix', notes: [], createdAt: '2026-10-01T00:00:00Z', approval: { status: 'awaiting', askedAt: new Date(Date.parse(TODAY + 'T12:00:00Z') - daysAgo * 86_400_000).toISOString() } })
+assert.equal(run({ albums: [withRounds([ask(1)])] }, 'approval').length, 0)                                    // asked yesterday: give them time
+assert.deepEqual(sev({ albums: [withRounds([ask(3)])] }, 'approval'), ['soon'])
+assert.deepEqual(sev({ albums: [withRounds([ask(12)])] }, 'approval'), ['urgent'])
+it = one({ albums: [withRounds([ask(5)])] }, 'approval')
+assert.match(it.title, /Artist hasn't answered on "One" \(V2\) yet/); assert.equal(it.detail, 'Asked 5 days ago'); assert.deepEqual(it.go, { section: 'songs', sub: 'tracks' })
+const sentBack = { id: 'v1', label: 'V2', stage: 'mix', notes: [], createdAt: '2026-10-01T00:00:00Z', approval: { status: 'changes', at: '2026-10-24T10:00:00Z', note: 'More low end' } }
+it = one({ albums: [withRounds([sentBack])] }, 'approval')
+assert.equal(it.severity, 'soon'); assert.match(it.title, /wants changes to "One" \(V2\)/); assert.equal(it.detail, 'More low end')
+assert.equal(run({ albums: [withRounds([sentBack, { id: 'v2', label: 'V3', stage: 'mix', notes: [], createdAt: '2026-10-25T00:00:00Z' }])] }, 'approval').length, 0)   // a newer version answers it
+assert.equal(run({ albums: [withRounds([{ ...sentBack, approval: { status: 'approved' } }])] }, 'approval').length, 0)
+assert.equal(run({ albums: [withRounds([ask(12)])] }, 'approval', { ...ALL, music: false }).length, 0)
+// "Done" on one request must not hide a later one on the same version
+const keyOf = (r: unknown) => one({ albums: [withRounds([r])] }, 'approval').key
+const waitKey = keyOf(ask(5))
+assert.notEqual(waitKey, keyOf({ ...(ask(5) as object), approval: { status: 'awaiting', askedAt: '2026-10-10T10:00:00Z' } }), 'asking again is a new request')
+assert.notEqual(waitKey, keyOf(sentBack), 'waiting and "wants changes" are different things')
+assert.notEqual(keyOf(sentBack), keyOf({ ...sentBack, approval: { ...sentBack.approval, at: '2026-10-25T10:00:00Z' } }), 'a second "wants changes" is a new item')
+// the artist's words come through as one plain line, without links
+it = one({ albums: [withRounds([{ ...sentBack, approval: { status: 'changes', at: '2026-10-24T10:00:00Z', note: 'See https://evil.example/x\nand <b>this</b>' } }])] }, 'approval')
+assert.ok(!/evil\.example|<|\n/.test(it.detail ?? ''), it.detail)
+// only the newest version of a track counts as waiting
+assert.equal(run({ albums: [withRounds([ask(12), { id: 'v9', label: 'V3', stage: 'mix', notes: [], createdAt: '2026-10-25T00:00:00Z' }])] }, 'approval').length, 0)
+
 // ── who sees what ──
 const everything: Parts = {
   invoices: [invoice()], expenses: [bill()], settlements: [settlement({ preparedOn: '2026-08-01' })], deposits: [{ done: false }],
-  offers: [offer({ status: 'hold', date: '2026-10-30' })], shows: [played(25), ahead(10, { id: 's2' })], contracts: [contract({ expiryDate: '2026-10-01' })], projects: [project()],
+  offers: [offer({ status: 'hold', date: '2026-10-30' })], shows: [played(25), ahead(10, { id: 's2' })], contracts: [contract({ expiryDate: '2026-10-01' })], projects: [project()], albums: [album(12)],
 }
 const rulesFor = (a: InboxAccess) => new Set(buildInbox(client(everything), TODAY, a).map(i => i.rule))
 assert.deepEqual([...rulesFor(NONE)], [])
@@ -154,6 +201,7 @@ assert.deepEqual([...rulesFor({ ...NONE, finance: true })].sort(), ['balance', '
 assert.deepEqual([...rulesFor({ ...NONE, deals: true })], ['offer_hold'])
 assert.deepEqual([...rulesFor({ ...NONE, legal: true })], ['contract'])
 assert.deepEqual([...rulesFor({ ...NONE, projects: true })], ['project'])
+assert.deepEqual([...rulesFor({ ...NONE, music: true })], ['release'])
 assert.deepEqual([...rulesFor({ ...NONE, tour: true })], [])                                               // show money items need Tour AND Finance
 assert.ok(rulesFor({ ...NONE, tour: true, finance: true }).has('no_settlement'))
 

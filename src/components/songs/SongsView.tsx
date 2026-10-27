@@ -3,11 +3,12 @@ import { useEffect, useState } from 'react'
 import { useStore } from '@/lib/store'
 import { ItemAccessButton } from '@/components/sharing/ItemAccess'
 import { ItemTodos } from '@/components/dashboard/ItemTodos'
-import { stageLabel, stageBadgeClass, isStale, uid, noteAuthorName, RELEASE_TYPE_LABEL } from '@/lib/utils'
+import { stageLabel, stageBadgeClass, isStale, uid, noteAuthorName, today, RELEASE_TYPE_LABEL } from '@/lib/utils'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { TrackWaveform } from './TrackWaveform'
 import { getTrackAudioUrl } from '@/lib/db'
-import type { Stage, Track, TrackPriority, TrackCredit, TrackNote, Album, ReleaseType } from '@/types'
+import { approvalLine } from '@/lib/round-approval'
+import type { Stage, Track, TrackPriority, TrackCredit, TrackNote, TrackRound, Album, ReleaseType } from '@/types'
 
 const PRIORITY_LABEL: Record<TrackPriority, string> = {
   'lead-single': 'Lead Single',
@@ -222,6 +223,15 @@ function ReleaseSection({ album, editable, filter, onOpenTrack, onAddTrack, onDe
                         {openNotes} open
                       </span>
                     )}
+                    {/* Where the newest version stands with the artist (older versions no longer matter) */}
+                    {(() => {
+                      const last = (t.rounds ?? [])[(t.rounds ?? []).length - 1]
+                      const s = last?.approval?.status
+                      if (s === 'awaiting') return <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0 bg-blue-50 text-blue-600">Waiting on artist</span>
+                      if (s === 'changes') return <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0 bg-amber-50 text-amber-700">Artist wants changes</span>
+                      if (s === 'approved') return <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0 bg-green-50 text-green-700">Artist approved</span>
+                      return null
+                    })()}
                   </div>
                 </td>
                 <td className="px-2.5 py-2.5">
@@ -486,6 +496,26 @@ function TrackDetailModal({ track, onClose }: { track: Track; onClose: () => voi
   )
 }
 
+/** Where this version stands with the artist, and (for people who can edit) the buttons to ask or take the request back. The artist's own answer is given in their portal. */
+function ApprovalBar({ round, artist, editable, onAsk }: { round: TrackRound; artist: string; editable: boolean; onAsk: (ask: boolean) => void }) {
+  const line = approvalLine(round, artist, today())
+  const status = round.approval?.status
+  const tone = status === 'approved' ? 'border-green-200 bg-green-50 text-green-800' : status === 'changes' ? 'border-amber-200 bg-amber-50 text-amber-800' : status === 'awaiting' ? 'border-blue-200 bg-blue-50 text-blue-800' : 'border-gray-100 bg-gray-50 text-gray-500'
+  if (!line && (!editable || !round.audioPath)) return null          // nothing to say, nothing to ask (the artist cannot listen to a version with no audio)
+  return (
+    <div className={`flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs ${tone}`}>
+      <span className="min-w-[10rem] flex-1">
+        {line ?? `Not sent to ${artist} for approval yet.`}
+        {editable && status === 'approved' && <span className="block opacity-80">An approved version stays approved. To get another look, upload a new version and ask about that one.</span>}
+        {editable && status === 'changes' && <span className="block opacity-80">Upload a new version and ask about that one, or ask about this one again.</span>}
+      </span>
+      {editable && status === undefined && round.audioPath && <button onClick={() => onAsk(true)} className="rounded-md bg-gray-900 px-2.5 py-1 text-[11px] font-semibold text-canvas hover:bg-gray-700">Ask {artist} to approve this version</button>}
+      {editable && status === 'awaiting' && <button onClick={() => onAsk(false)} className="rounded-md border border-blue-200 px-2.5 py-1 text-[11px] font-medium hover:bg-blue-100">Cancel the request</button>}
+      {editable && status === 'changes' && <button onClick={() => onAsk(true)} className="rounded-md border border-amber-300 px-2.5 py-1 text-[11px] font-medium hover:bg-amber-100">Ask {artist} again</button>}
+    </div>
+  )
+}
+
 // ── Rounds tab — upload audio, review with a real waveform, leave
 // timestamped notes, thread replies, mark resolved.
 function RoundsTab({ track, editable }: { track: Track; editable: boolean }) {
@@ -501,7 +531,8 @@ function RoundsTab({ track, editable }: { track: Track; editable: boolean }) {
 
   const role = useStore(s => s.role)
   const myName = useStore(s => s.workspacePeople.find(p => p.memberId === s.myMemberId)?.label)
-  const { deleteTrackRound, addTrackNote, toggleTrackNoteResolved, deleteTrackNote, addTrackNoteReply } = useStore()
+  const { deleteTrackRound, addTrackNote, toggleTrackNoteResolved, deleteTrackNote, addTrackNoteReply, askRoundApproval } = useStore()
+  const artistName = useStore(s => s.getClient()?.name ?? 'the artist')
 
   // Falls back to the newest round whenever nothing (or a since-deleted
   // round) is selected — no effect needed to keep selectedId in sync.
@@ -583,6 +614,7 @@ function RoundsTab({ track, editable }: { track: Track; editable: boolean }) {
 
       {selected && (
         <>
+          <ApprovalBar round={selected} artist={artistName} editable={editable} onAsk={ask => askRoundApproval(selected.id, ask)} />
           <TrackWaveform audioUrl={audioUrl} notes={sortedNotes} onAddNoteAt={editable ? handleAddNoteAt : () => {}} />
 
           {composing !== null && (

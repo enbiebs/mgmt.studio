@@ -3,7 +3,7 @@
 
 import { useStore } from '@/lib/store'
 import type { InboxItem } from '@/lib/inbox'
-import type { BizSub, LegalSub, TourSub } from '@/types'
+import type { BizSub, LegalSub, SongsSub, TourSub } from '@/types'
 
 export function openInboxItem(item: InboxItem): void {
   const s = useStore.getState()
@@ -12,4 +12,6 @@ export function openInboxItem(item: InboxItem): void {
   if (item.go.section === 'finance' && item.go.sub) s.setBizSub(item.go.sub as BizSub)
   if (item.go.section === 'tour' && item.go.sub) s.setTourSub(item.go.sub as TourSub)
   if (item.go.section === 'legal' && item.go.sub) s.setLegalSub(item.go.sub as LegalSub)
+  if (item.go.section === 'songs' && item.go.sub) s.setSongsSub(item.go.sub as SongsSub)
+  if (item.rule === 'release') s.setSelectedAlbum(item.entityId)          // the release this alert is about, not whichever is listed first
 }

@@ -172,17 +172,17 @@ const forPerson = (over: Record<string, unknown>) => {
 const sharedInvoice = { data: { clients: [{ ...artist('c1', 'Alpha'), itemSections: ['finance'] }, artist('c2', 'Beta')] } }
 const sharedShow = { data: { clients: [{ ...artist('c1', 'Alpha'), itemSections: ['tour'] }, artist('c2', 'Beta')] } }
 let p = forPerson({})                                                                                 // a manager
-assert.deepEqual(p.overview, { tour: true, offers: true, music: true, finance: true, legal: true }); assert.deepEqual(p.inbox, { finance: true, tour: true, deals: true, legal: true, projects: true })
+assert.deepEqual(p.overview, { tour: true, offers: true, music: true, finance: true, legal: true }); assert.deepEqual(p.inbox, { finance: true, tour: true, deals: true, legal: true, projects: true, music: true })
 p = forPerson({ role: 'team', grants: [{ section: 'admin', clientId: 'c1', canEdit: true }] })        // a Point Person for this artist
 assert.deepEqual(p.overview, { tour: true, offers: true, music: true, finance: true, legal: true })
 p = forPerson({ role: 'team', grants: [{ section: 'deals', clientId: 'c1', canEdit: false }] })       // Deals & fees only: offers, never shows
-assert.deepEqual(p.overview, { ...NO, offers: true }); assert.deepEqual(p.inbox, { finance: false, tour: false, deals: true, legal: false, projects: false })
+assert.deepEqual(p.overview, { ...NO, offers: true }); assert.deepEqual(p.inbox, { finance: false, tour: false, deals: true, legal: false, projects: false, music: false })
 p = forPerson({ role: 'team', grants: [{ section: 'finance', clientId: 'c1', canEdit: false }] })     // Finance only
 assert.deepEqual(p.overview, { ...NO, finance: true }); assert.equal(p.inbox.finance, true); assert.equal(p.inbox.tour, false)
 p = forPerson({ role: 'team', grants: [{ section: 'tour', clientId: 'c1', canEdit: false }], ...sharedInvoice })   // Tour, plus one invoice sent to them
-assert.deepEqual(p.overview, { ...NO, tour: true }); assert.deepEqual(p.inbox, { finance: false, tour: true, deals: false, legal: false, projects: false })   // no settlement alerts: those need all of Finance
+assert.deepEqual(p.overview, { ...NO, tour: true }); assert.deepEqual(p.inbox, { finance: false, tour: true, deals: false, legal: false, projects: false, music: false })   // no settlement alerts: those need all of Finance
 p = forPerson({ role: 'team', grants: [], ...sharedInvoice })                                         // one invoice sent to them, nothing else
-assert.deepEqual(p.overview, NO); assert.deepEqual(p.inbox, { finance: false, tour: false, deals: false, legal: false, projects: false })   // not even an "overdue" alert worked out without the deposits
+assert.deepEqual(p.overview, NO); assert.deepEqual(p.inbox, { finance: false, tour: false, deals: false, legal: false, projects: false, music: false })   // not even an "overdue" alert worked out without the deposits
 p = forPerson({ role: 'team', grants: [], ...sharedShow })                                            // one show sent to them
 assert.deepEqual(p.overview, NO)
 
