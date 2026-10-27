@@ -17,7 +17,7 @@ import { ItemTodos } from '@/components/dashboard/ItemTodos'
 import { CAT_LABELS } from '@/lib/expense-categories'
 import { VENDOR_FIELD_LABEL } from '@/lib/vendors'
 import { today, today as localToday } from '@/lib/utils'
-import { formatTotals, sumByCurrency } from '@/lib/money'
+import { fmtMoney, formatTotals, sumByCurrency } from '@/lib/money'
 import { RowMenu } from '@/components/ui/RowMenu'
 import { askConfirm } from '@/lib/confirm'
 import { billImpact } from '@/lib/delete-effects'
@@ -35,7 +35,7 @@ const CAT_COLORS: Record<ExpenseCategory, string> = {
 }
 
 function fmt(n: number, currency = 'USD') {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n)
+  return fmtMoney(n, currency)
 }
 
 function fmtDate(iso: string) {
@@ -308,7 +308,7 @@ export function PaymentsView() {
                   {filterCat === 'all' ? 'Total' : CAT_LABELS[filterCat]}
                 </td>
                 <td className="px-4 py-2 text-right font-bold">
-                  {fmt(sorted.reduce((s, e) => s + e.amount, 0))}
+                  {totalOf(sorted)}
                 </td>
                 <td />
                 {editable && <td />}

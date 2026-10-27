@@ -208,7 +208,10 @@ export function PostModal({ post, defaultDate, onClose }: { post?: Post; default
         </select>
       </FormField>
       {post?.auto && (
-        <div className="text-xs text-gray-400">Auto-generated from the release rollout template.</div>
+        <div className="text-xs text-gray-400">Auto-generated from the release rollout template. It moves with the release date until you change it.</div>
+      )}
+      {post && !post.auto && post.releaseId && (
+        <div className="text-xs text-gray-400">Edited by hand, so it stays where it is if the release date moves.</div>
       )}
     </Modal>
   )

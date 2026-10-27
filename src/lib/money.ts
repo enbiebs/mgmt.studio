@@ -116,14 +116,14 @@ export function sumByCurrency<T>(items: readonly T[], amount: (item: T) => numbe
 export interface DepositSplit { mgmt: number; lawyer: number; taxes: number; stays: number }
 
 /**
- * How a deposit divides up: each share is its fraction of the amount (a fraction is 0.10 for 10%), rounded to a whole unit, and what
+ * How a deposit divides up: each share is its fraction of the amount (a fraction is 0.10 for 10%), rounded to the cent, and what
  * is left stays in the operating account. The four always add back up to the amount.
  */
 export function splitDeposit(amount: number, shares: { mgmt: number; lawyer: number; taxes: number }): DepositSplit {
-  const mgmt = Math.round(amount * shares.mgmt)
-  const lawyer = Math.round(amount * shares.lawyer)
-  const taxes = Math.round(amount * shares.taxes)
-  return { mgmt, lawyer, taxes, stays: amount - mgmt - lawyer - taxes }
+  const mgmt = r2(amount * shares.mgmt)
+  const lawyer = r2(amount * shares.lawyer)
+  const taxes = r2(amount * shares.taxes)
+  return { mgmt, lawyer, taxes, stays: r2(amount - mgmt - lawyer - taxes) }
 }
 
 /** What a show is expected to pay out: the fee less the agency's and management's cuts when it was booked through an agency. */
@@ -161,12 +161,15 @@ export function invoiceStateWithDeposits(
 export const royaltiesOwed = (streams: readonly Pick<RoyaltyStream, 'amount' | 'currency'>[]): Record<string, number> =>
   sumByCurrency(streams, s => s.amount, s => s.currency)
 
-const wholeUnits = (amount: number, currency: string) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount)
+/** "$1,250" for a whole amount, "$1,250.50" when there are cents: money is never rounded on screen. */
+export const fmtMoney = (amount: number, currency: string) => {
+  const v = r2(amount) + 0   // to the cent (so 3.0000000000000004 is $3), and "+ 0" turns -0 into 0 (so it never prints "-$0")
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency, minimumFractionDigits: Number.isInteger(v) ? 0 : 2, maximumFractionDigits: 2 }).format(v)
+}
 const CURRENCY_ORDER = ['USD', 'GBP', 'EUR']
 
 /** Per-currency totals as one line: "$1,500 · £250 · €80". Zero amounts are left out; nothing at all gives "". */
-export function formatTotals(totals: Record<string, number>, format: (amount: number, currency: string) => string = wholeUnits): string {
+export function formatTotals(totals: Record<string, number>, format: (amount: number, currency: string) => string = fmtMoney): string {
   const rank = (c: string) => (CURRENCY_ORDER.includes(c) ? CURRENCY_ORDER.indexOf(c) : CURRENCY_ORDER.length)
   return Object.keys(totals)
     .filter(c => Math.abs(totals[c]) > 0.005)
