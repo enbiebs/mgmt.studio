@@ -1,6 +1,9 @@
 // The small pure helpers every email feature shares: is this an address, make text safe to put in an email. No sending code in here, so
 // screens (which check what a person typed) can import it without pulling the sender into the browser.
 
+/** The most an email link (mailto:) can carry before some mail programs cut it off. */
+export const MAILTO_LIMIT = 1800
+
 /** A plain ASCII address, the kind a person types: letters, digits and . _ + - before the @, dotted letter/digit/hyphen labels after it. */
 export function looksLikeEmail(s: string): boolean {
   if (s.length > 254) return false
@@ -26,5 +29,6 @@ export function plainLine(s: string, max: number): string {
     .replace(/\b(?:https?:\/\/|ftp:\/\/|www\.)\S+/gi, '[link removed]')
     .replace(/\s+/g, ' ')
     .trim()
-  return clean.length > max ? `${clean.slice(0, max - 1).trimEnd()}…` : clean
+  const chars = Array.from(clean)                     // whole characters, so an emoji is never cut in half
+  return chars.length > max ? `${chars.slice(0, max - 1).join('').trimEnd()}…` : clean
 }

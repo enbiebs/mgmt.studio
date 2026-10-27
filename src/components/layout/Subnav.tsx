@@ -8,6 +8,7 @@ import { useTourTabs } from '@/components/tour/useTourTabs'
 import { NewGigModal } from '@/components/tour/NewGigModal'
 import { SECTION_FOLDER, folderLabel, folderLink } from '@/lib/drive-links'
 import { Icon } from '@/components/ui/Icon'
+import { ExportMenu } from '@/components/business/ExportMenu'
 
 const SUBNAV: Record<string, [string, string][]> = {
   songs:     [['Tracks', 'tracks'], ['Label Copy', 'labelcopy'], ['Checklist', 'checklist'], ['Status', 'status']],
@@ -31,6 +32,8 @@ export function Subnav() {
   const shareOnly = useStore(s => s.isShareOnly(section))
   const allowed = shareOnly ? shareOnlyTabs(section, client ?? undefined) : undefined
   const showUnfinished = useStore(s => s.showUnfinished)
+  // Anyone who may open the money in full (even just to look) may download it: it is only what they can already see.
+  const canExport = useStore(s => s.hasAccess('finance') && !s.isShareOnly('finance'))
   // The Tour page is Tour (schedule side) + Deals & fees (Offers) + Finance (budgets, settlements): each person gets the tabs they have.
   const tourTabs = useTourTabs()
   // Tour shows four tabs (Shows, Offers, Money, Crew); the screens inside Shows are the steps of one show (see TourView).
@@ -87,6 +90,7 @@ export function Subnav() {
             + New gig
           </button>
         )}
+        {section === 'finance' && client && canExport && <ExportMenu clients={[client]} scopeName={client.name} statementFor={client} />}
         {folder && folderKey && (
           <a
             href={folder} target="_blank" rel="noopener noreferrer" title={`Open the ${folderLabel(folderKey)} folder`}

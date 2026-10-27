@@ -96,6 +96,12 @@ export const PRESETS: AccessPreset[] = [
     levels: { finance: 'edit', tour: 'view', deals: 'edit' },
   },
   {
+    key: 'accountant', label: 'Accountant',
+    blurb: 'Looks at all of the money: invoices, bills, budgets, settlements, banking, vendors (with their tax details), crew pay, and the fees on shows and booking offers. Can look at the shows they relate to (the fees are attached to the shows). Can download it all as spreadsheets, but can\u2019t change anything.',
+    hidden: 'Contracts, music, content, projects and the profile',
+    levels: { finance: 'view', deals: 'view', tour: 'view' },
+  },
+  {
     key: 'creative', label: 'Creative team',
     blurb: 'Works on music and content, and can see the projects and analytics.',
     hidden: 'Money, touring, contracts and the profile',

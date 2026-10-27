@@ -15,6 +15,7 @@ import { buildRosterFinance, filterFinance, financeAccessFor, financeStats, scop
 import type { BizSub, TourSub } from '@/types'
 import { Badge } from '@/components/ui/Badge'
 import { useRosterClients } from '@/components/layout/nav'
+import { ExportMenu } from './ExportMenu'
 
 const WINDOWS: { key: FinanceWindow; label: string }[] = [
   { key: 'late', label: 'Late' }, { key: '30', label: 'Next 30 days' }, { key: '90', label: 'Next 90 days' }, { key: 'all', label: 'Everything' },
@@ -111,11 +112,15 @@ export function RosterFinance() {
 
   return (
     <>
-      <div className="mb-5">
-        <h1 className="font-serif text-[26px] font-medium leading-tight">Finance</h1>
-        <p className="text-sm text-gray-400 mt-0.5">
-          Money coming in and going out across your artists. Open a line to go to that artist&apos;s page.
-        </p>
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-serif text-[26px] font-medium leading-tight">Finance</h1>
+          <p className="text-sm text-gray-400 mt-0.5">
+            Money coming in and going out across your artists. Open a line to go to that artist&apos;s page.
+          </p>
+        </div>
+        {/* Practice (demo) artists are left out of the files, like they are left out of the email. */}
+        <ExportMenu clients={scoped.filter(i => i.access.finance && !i.client.isDemo).map(i => i.client)} scopeName={nameOf(company)} />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">

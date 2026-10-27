@@ -35,7 +35,7 @@ export function daySheetDocument(sheet: DaySheet) {
   const advance = sheet.kind === 'advance'
   return (
     <Document title={t(`${advance ? 'Advance' : 'Day sheet'} - ${sheet.artist} - ${sheet.venue}`)} author={PRODUCT_NAME}>
-      <Page size="A4" style={styles.page}>
+      <Page size="LETTER" style={styles.page}>
         <Text style={styles.eyebrow}>{advance ? 'ADVANCE · PLEASE CHECK AND CORRECT' : 'DAY SHEET'}</Text>
         <Text style={styles.artist}>{t(sheet.artist)}</Text>
         <Text style={styles.venue}>{t(sheet.venue)}</Text>

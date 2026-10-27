@@ -134,6 +134,18 @@ export function showNet(show: Pick<Show, 'guarantee' | 'viaAgency' | 'agencyComm
 }
 
 /**
+ * How a show's fee divides: the agency's cut, management's cut and what is left for the artist. Cuts only apply to a show booked through an
+ * agency (the same rule as showNet, which this agrees with to the cent). A show with no fee has nothing to divide.
+ */
+export function showCommissions(show: Pick<Show, 'guarantee' | 'viaAgency' | 'agencyCommissionPct' | 'managementCommissionPct'>): { fee: number; agency: number; management: number; net: number } {
+  const fee = show.guarantee ?? 0
+  if (!fee) return { fee: 0, agency: 0, management: 0, net: 0 }
+  const net = showNet(show)
+  const agency = show.viaAgency ? r2(fee * (show.agencyCommissionPct ?? 0) / 100) : 0
+  return { fee: r2(fee), agency, management: r2(fee - net - agency), net }
+}
+
+/**
  * Where an invoice stands today. The date decides, so every screen agrees: a sent invoice past its due date is overdue (whatever
  * the stored status says), and one marked overdue whose due date has not arrived is simply sent.
  */
