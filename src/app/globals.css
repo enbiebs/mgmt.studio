@@ -542,7 +542,7 @@ html[data-look="glass"] .glass-sheet {
 /* Quiet scrollbars that match the paper. */
 * { scrollbar-width: thin; scrollbar-color: var(--color-gray-200) transparent; }
 
-/* For rows that scroll sideways (the phone section strip, the tab rows): no bar, you just swipe. */
+/* For rows that scroll sideways (the tab rows): no bar, you just swipe. */
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 

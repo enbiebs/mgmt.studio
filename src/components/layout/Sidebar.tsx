@@ -18,7 +18,7 @@ function Badge({ n }: { n: number }) {
 
 /**
  * The sidebar: one artist switcher on top ("All artists" or one artist), then the same pages either way. Picking an artist
- * narrows every page to them. Hidden on phones, where the top bar carries the switcher and the same links.
+ * narrows every page to them. Hidden on phones, where the top bar carries the switcher and the bottom bar carries the same links.
  */
 export function Sidebar() {
   const view = useStore(s => s.view)

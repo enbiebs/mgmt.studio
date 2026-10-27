@@ -78,7 +78,7 @@ export function ClientSwitcher({ variant }: { variant: 'rail' | 'compact' }) {
         aria-label={`Showing ${label}. Change artist`}
         className={rail
           ? 'flex items-center gap-2.5 w-full text-left p-2 rounded-xl border border-gray-100 bg-canvas hover:border-gray-200 transition-colors'
-          : 'flex items-center gap-2 px-2.5 py-1 rounded-full bg-gray-50 border border-gray-200 text-sm font-medium hover:bg-gray-100 transition-colors'}
+          : 'flex min-h-11 items-center gap-2 px-3 py-1 rounded-full bg-gray-50 border border-gray-200 text-sm font-medium hover:bg-gray-100 transition-colors'}
       >
         {client
           ? <ArtistAvatar client={client} className={rail ? 'w-8 h-8' : 'w-5 h-5'} textClass={rail ? 'text-[11px]' : 'text-[9px]'} />

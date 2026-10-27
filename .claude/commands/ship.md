@@ -25,7 +25,7 @@ Run them and read the output; do not assume.
 
 1. `npx tsc --noEmit -p .`
 2. `npm test`
-3. `npx eslint .` must be no worse than the baseline in `CLAUDE.md` (5 errors, 17 warnings). If it is worse, find the new ones with `npx eslint <changed files>` and fix them.
+3. `npx eslint .` must be no worse than the baseline in `CLAUDE.md` (4 errors, 17 warnings). If it is worse, find the new ones with `npx eslint <changed files>` and fix them.
 4. `npm run build`
 
 If one fails, fix the cause and re-run. If the cause is not clear after a real attempt, stop and tell Eli what is stuck. Never skip a check, weaken a test, or lower the baseline to make it pass.

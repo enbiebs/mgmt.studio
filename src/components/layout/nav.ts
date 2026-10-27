@@ -1,6 +1,6 @@
 'use client'
 // The app's pages, in the order and grouping they appear in the sidebar
-// (and, on a phone, in the strip under the top bar).
+// (and, on a phone, on the bar along the bottom).
 //   - "All artists": the roster pages (see lib/nav-map.ts), each shown when at least one artist can be opened there.
 //   - One artist picked: Overview and Profile, then the same pages narrowed to that artist, then "More" (what only exists inside an artist), then Company.
 

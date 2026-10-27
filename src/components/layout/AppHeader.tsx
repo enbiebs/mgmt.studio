@@ -1,7 +1,6 @@
 'use client'
 import { useEffect, useSyncExternalStore } from 'react'
 import { useStore } from '@/lib/store'
-import { useTodayBadge } from '@/lib/useInbox'
 import { SHOW_UNFINISHED_KEY, analyticsHasData } from '@/lib/unfinished'
 import { ARTIST_SIDE_NAME, PRODUCT_NAME } from '@/lib/brand'
 import { BrandMark, Icon } from '@/components/ui/Icon'
@@ -9,7 +8,7 @@ import { ClientSwitcher } from './ClientSwitcher'
 import { OPEN_COMMAND_BAR } from './CommandBar'
 import { UserMenu } from './UserMenu'
 import { ROSTER_PAGE_LABEL } from '@/lib/nav-map'
-import { sectionLabel, useVisibleNav, useVisibleRosterPages } from './nav'
+import { sectionLabel } from './nav'
 
 const ROLE_LABEL: Record<string, string> = { manager: 'Manager', artist: 'Artist', agent: 'Agent', lawyer: 'Lawyer', team: 'Team' }
 
@@ -25,14 +24,10 @@ export function AppHeader() {
   } = useStore()
   const client = useStore(s => s.getClient())
   const showUnfinished = useStore(s => s.showUnfinished)
-  const groups = useVisibleNav()
-  const rosterPages = useVisibleRosterPages()
   const mac = useSyncExternalStore(noSubscribe, onMac, () => true)
   const analyticsVisible = showUnfinished || analyticsHasData(client)
   const isArtist = role === 'artist'
   const inStudio = view === 'studio' && !isArtist
-  const openArtistId = useStore(s => s.clientId)
-  const todayBadge = useTodayBadge(inStudio, openArtistId)   // the number on the phone's Today link, same as the side rail's
 
   // Remember the "show unfinished screens" choice on this computer.
   useEffect(() => {
@@ -66,7 +61,7 @@ export function AppHeader() {
           <button
             onClick={() => switchScope('all')}
             aria-label="All artists"
-            className="md:hidden flex items-center text-gray-500 hover:text-gray-900 hover:bg-gray-50 px-2 py-1 rounded-lg transition-colors"
+            className="md:hidden flex min-h-11 min-w-11 items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-50 px-2 py-1 rounded-lg transition-colors"
           >
             ←
           </button>
@@ -111,7 +106,7 @@ export function AppHeader() {
             <button
               onClick={() => window.dispatchEvent(new Event(OPEN_COMMAND_BAR))}
               aria-label="Search or jump to"
-              className="flex items-center gap-2 px-2.5 py-1.5 md:w-[280px] rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-400 hover:border-gray-300 transition-colors"
+              className="flex items-center justify-center gap-2 px-2.5 py-1.5 max-md:min-h-11 max-md:min-w-11 md:w-[280px] rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-400 hover:border-gray-300 transition-colors"
             >
               <Icon name="search" className="w-4 h-4" />
               <span className="hidden md:inline">Search or jump to…</span>
@@ -130,7 +125,7 @@ export function AppHeader() {
           {view === 'dashboard' && role === 'manager' && (
             <button
               onClick={() => useStore.getState().openModal('add-client')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-accent hover:bg-accent-hover text-white text-sm font-medium rounded-lg transition-colors"
+              className="flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 max-md:min-h-11 bg-accent hover:bg-accent-hover text-white text-sm font-medium rounded-lg transition-colors"
             >
               <Icon name="plus" className="w-4 h-4" /> Add client
             </button>
@@ -138,30 +133,6 @@ export function AppHeader() {
 
           <UserMenu />
         </div>
-
-        {/* Phone: the pages, as a scrolling strip (the sidebar is not shown on small screens) */}
-        {!isArtist && view !== 'company' && (
-          <nav aria-label="Pages" className="md:hidden flex gap-0.5 order-last basis-full pb-1.5 overflow-x-auto no-scrollbar">
-            {(inStudio
-              ? groups.flatMap(g => g.items).map(i => ({ key: i.key as string, label: i.label, on: section === i.key, go: () => setSection(i.key) }))
-              : rosterPages.map(p => ({ key: p as string, label: ROSTER_PAGE_LABEL[p], on: rosterPage === p, go: () => goToRoster(p) }))
-            ).map(i => (
-              <button
-                key={i.key}
-                onClick={i.go}
-                aria-current={i.on ? 'page' : undefined}
-                className={`px-2.5 py-1 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                  i.on ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-                }`}
-              >
-                {i.label}
-                {i.key === 'today' && todayBadge > 0 && (
-                  <span className="ml-1.5 px-1.5 rounded-full bg-accent text-white text-[10px] font-semibold leading-4 align-middle">{todayBadge}<span className="sr-only"> need action</span></span>
-                )}
-              </button>
-            ))}
-          </nav>
-        )}
       </header>
     </>
   )

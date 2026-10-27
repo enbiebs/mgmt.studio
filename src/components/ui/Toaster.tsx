@@ -30,7 +30,7 @@ export function Toaster() {
   }
 
   return (
-    <div role="status" aria-live="polite" className="pointer-events-none fixed bottom-5 left-1/2 z-[70] flex -translate-x-1/2 flex-col items-center gap-2 px-4">
+    <div role="status" aria-live="polite" className="pointer-events-none fixed bottom-[calc(72px+env(safe-area-inset-bottom))] md:bottom-5 left-1/2 z-[70] flex -translate-x-1/2 flex-col items-center gap-2 px-4">
       {notices.map(n => (
         <div key={n.id} className="pointer-events-auto flex max-w-[92vw] items-center gap-3 rounded-2xl bg-gray-900 px-4 py-2.5 text-sm text-canvas shadow-lg animate-in fade-in slide-in-from-bottom-3 duration-200">
           <span>{n.text}</span>

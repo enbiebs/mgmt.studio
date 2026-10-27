@@ -43,6 +43,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next({ request })
   }
 
+  // The home-screen "manifest" (name, icon, colours) is fetched by the browser without a sign-in, and holds nothing private.
+  if (request.nextUrl.pathname === '/manifest.webmanifest') {
+    return NextResponse.next({ request })
+  }
+
   // Browsers post content-policy reports with no sign-in; the route is tiny, capped, and rate limited.
   if (request.nextUrl.pathname === '/api/csp-report') {
     return NextResponse.next({ request })
