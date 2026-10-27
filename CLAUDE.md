@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Before any PR, all four must pass** (`/ship` runs them):
 1. `npx tsc --noEmit -p .` (also covers `scripts/`)
 2. `npm test` (runs every `scripts/check-*.ts`)
-3. `npx eslint .` must show **no more than the baseline: 5 errors, 17 warnings**. Do not add any. If you remove some, lower this number in this file.
+3. `npx eslint .` must show **no more than the baseline: 4 errors, 17 warnings**. Do not add any. If you remove some, lower this number in this file.
 4. `npm run build`
 
 **Building new logic.** Put the rule in a pure module under `src/lib/` and prove it with a `scripts/check-*.ts`. Then mutation-test the check: break the rule on purpose and confirm the check fails. Keep views thin.
