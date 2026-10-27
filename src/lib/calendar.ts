@@ -8,7 +8,7 @@
 //  already reads (client.tour.shows, client.songs.albums, etc.).
 // ──────────────────────────────────────────────────────────
 
-import type { Client, MainSection, UserRole } from '@/types'
+import type { Client, MainSection, ShowStatus, UserRole } from '@/types'
 import { dueState, eventState, type DateState } from '@/lib/date-state'
 import { effectiveStatus } from '@/lib/contract-status'
 import { currentTermEnd, dateToAct } from '@/lib/contract-dates'
@@ -53,6 +53,8 @@ export interface CalendarEvent {
   albumId?: string
   offerId?: string
   state: DateState       // upcoming / soon / overdue / done, worked out from the date (see date-state.ts)
+  status?: ShowStatus    // shows only: confirmed, hold or cancelled (what the clash warnings tell apart)
+  historyOnly?: boolean  // shows only: already happened, kept for comparisons
   cancelled?: boolean    // a cancelled show stays on the calendar, struck through, and is never counted as upcoming
 }
 
@@ -66,7 +68,7 @@ export function getCalendarEvents(
   if (canSee('show')) {
     for (const s of client.tour.shows) {
       const cancelled = s.status === 'cancelled'
-      events.push({ id: `show-${s.id}`, date: s.date, domain: 'show', title: s.venue, subtitle: s.city, showId: s.id, cancelled, state: cancelled ? 'done' : eventState(s.date, today) })
+      events.push({ id: `show-${s.id}`, date: s.date, domain: 'show', title: s.venue, subtitle: s.city, showId: s.id, status: s.status, historyOnly: s.historyOnly, cancelled, state: cancelled ? 'done' : eventState(s.date, today) })
     }
   }
 
