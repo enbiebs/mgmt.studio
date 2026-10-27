@@ -14,54 +14,25 @@ import { Modal, FormField, inputClass } from '@/components/ui/Modal'
 import { uid, today as todayStr } from '@/lib/utils'
 import { effectiveSub, shareOnlyTabs } from '@/lib/item-access'
 import { contractAlerts, daysToExpiry, effectiveStatus, expiryLine, type ContractDisplayStatus } from '@/lib/contract-status'
-import { extractPlaceholders, fillClauses, guessDefault, downloadRtf } from '@/lib/legal-doc-gen'
+import { STATUS_CONFIG, TYPE_ICONS, TYPE_LABELS, fmt } from '@/components/legal/contract-labels'
+import { ContractModal } from '@/components/legal/ContractModal'
+import { currentTermEnd, dateToAct, noticeLine } from '@/lib/contract-dates'
+import { counterpartyFromBlanks, typeFromName, type ContractDraft } from '@/lib/contract-form'
+import { buildRtf, extractPlaceholders, fillClauses, guessDefault, downloadRtf } from '@/lib/legal-doc-gen'
 import type { Contract, ContractStatus, ContractType, LegalTemplate, LegalTemplateClause } from '@/types'
-
-export const STATUS_CONFIG: Record<ContractDisplayStatus, { label: string; color: string; bg: string; dot: string }> = {
-  draft:       { label: 'Draft',       color: 'text-gray-500',   bg: 'bg-gray-100',   dot: 'bg-gray-400'   },
-  review:      { label: 'In Review',   color: 'text-amber-700',  bg: 'bg-amber-50',   dot: 'bg-amber-400'  },
-  negotiation: { label: 'Negotiating', color: 'text-purple-700', bg: 'bg-purple-50',  dot: 'bg-purple-400' },
-  signed:      { label: 'Signed',      color: 'text-green-700',  bg: 'bg-green-50',   dot: 'bg-green-500'  },
-  expiring:    { label: 'Expiring',    color: 'text-amber-700',  bg: 'bg-amber-50',   dot: 'bg-amber-500'  },
-  expired:     { label: 'Expired',     color: 'text-red-600',    bg: 'bg-red-50',     dot: 'bg-red-400'    },
-  terminated:  { label: 'Terminated',  color: 'text-red-800',    bg: 'bg-red-100',    dot: 'bg-red-600'    },
-}
-
-const TYPE_ICONS: Record<ContractType, string> = {
-  recording:  '🎙️',
-  publishing: '✍️',
-  sync:       '🎬',
-  brand:      '🤝',
-  touring:    '🎤',
-  nda:        '🔒',
-  merch:      '👕',
-  other:      '📄',
-}
-
-export const TYPE_LABELS: Record<ContractType, string> = {
-  recording:  'Recording',
-  publishing: 'Publishing',
-  sync:       'Sync License',
-  brand:      'Brand / Endorsement',
-  touring:    'Touring / Agency',
-  nda:        'NDA',
-  merch:      'Merchandise',
-  other:      'Other',
-}
 
 function fmtDate(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-export function fmt(n: number, currency = 'USD') {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n)
-}
 
 export function LegalView() {
   const client = useStore(s => s.getClient())
   const rawTab = useStore(s => s.legalSub)
   const shareOnly = useStore(s => s.isShareOnly('legal'))
   const [filterType, setFilterType] = useState<ContractType | 'all'>('all')
+  const editable = useStore(s => s.canEdit('legal'))
+  const [modal, setModal] = useState<{ contract?: Contract; initial?: Partial<ContractDraft>; attach?: File } | null>(null)
 
   if (!client) return null
   const tab = effectiveSub(rawTab, shareOnly ? shareOnlyTabs('legal', client) : undefined)   // someone sent single contracts has the pipeline tab only
@@ -69,7 +40,7 @@ export function LegalView() {
 
   // What state each contract is in is worked out from today's date (contract-status.ts), never taken from the stored status alone.
   const today = todayStr()
-  const { flagged, expiring, expired, count: alertCount } = contractAlerts(contracts, today)
+  const { flagged, notice, expiring, expired, count: alertCount } = contractAlerts(contracts, today)
   const pending   = contracts.filter(c => c.status === 'draft' || c.status === 'review' || c.status === 'negotiation')
 
   const types = Array.from(new Set(contracts.map(c => c.type))) as ContractType[]
@@ -80,12 +51,13 @@ export function LegalView() {
     <div className="flex-1 overflow-auto">
       {/* Header */}
       <div className="px-6 pt-6 pb-4 border-b border-gray-100">
-        <div className="flex items-end justify-between mb-4">
+        <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Legal</div>
             <h2 className="text-xl font-semibold">{client.name} — Contracts</h2>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap items-end gap-3">
+            {editable && tab !== 'templates' && <button onClick={() => setModal({})} className="mb-0.5 px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">+ Add contract</button>}
             <StatPill label="Total contracts" value={String(contracts.length)} color="text-gray-700" />
             <StatPill label="Pending action" value={String(pending.length)} color="text-amber-700" />
             {alertCount > 0 && <StatPill label="Alerts" value={String(alertCount)} color="text-red-600" />}
@@ -94,11 +66,32 @@ export function LegalView() {
       </div>
 
       <div className="p-6">
-        {tab === 'pipeline'  && <PipelineTab contracts={contracts} today={today} />}
-        {tab === 'alerts'    && <AlertsTab flagged={flagged} expiring={expiring} expired={expired} today={today} />}
-        {tab === 'register'  && <RegisterTab contracts={contracts} types={types} filterType={filterType} setFilterType={setFilterType} filtered={filtered} today={today} />}
-        {tab === 'templates' && <TemplatesTab />}
+        {tab !== 'templates' && contracts.length === 0 && (
+          <div className="mb-6 rounded-2xl border border-dashed border-gray-200 p-8 text-center">
+            <div className="font-serif text-lg font-medium">No contracts yet</div>
+            <p className="mx-auto mt-1 max-w-md text-sm text-gray-400">
+              {editable ? 'Add a contract to keep its dates, notice period and a copy of the document in one place. You can start from a PDF or Word file and the form fills itself in.' : 'Nothing has been added for this artist.'}
+            </p>
+            {editable && <button onClick={() => setModal({})} className="mt-4 px-4 py-2 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">+ Add the first contract</button>}
+          </div>
+        )}
+        {tab === 'pipeline'  && contracts.length > 0 && <PipelineTab contracts={contracts} today={today} onOpen={c => setModal({ contract: c })} />}
+        {tab === 'alerts'    && contracts.length > 0 && <AlertsTab flagged={flagged} notice={notice} expiring={expiring.filter(c => !notice.some(n => n.id === c.id))} expired={expired} today={today} onOpen={c => setModal({ contract: c })} />}
+        {tab === 'register'  && contracts.length > 0 && <RegisterTab contracts={contracts} types={types} filterType={filterType} setFilterType={setFilterType} filtered={filtered} today={today} onOpen={c => setModal({ contract: c })} />}
+        {tab === 'templates' && <TemplatesTab onSaveDraft={(initial, attach) => setModal({ initial, attach })} />}
       </div>
+
+      {modal && (
+        <ContractModal
+          key={modal.contract?.id ?? 'new'}
+          clientId={client.id}
+          contract={modal.contract}
+          initial={modal.initial}
+          attachOnOpen={modal.attach}
+          editable={editable}
+          onClose={() => setModal(null)}
+        />
+      )}
     </div>
   )
 }
@@ -113,7 +106,7 @@ function StatPill({ label, value, color }: { label: string; value: string; color
 }
 
 // ── Pipeline ────────────────────────────────────────────────
-function PipelineTab({ contracts, today }: { contracts: Contract[]; today: string }) {
+function PipelineTab({ contracts, today, onOpen }: { contracts: Contract[]; today: string; onOpen: (c: Contract) => void }) {
   const STAGES: ContractStatus[] = ['draft', 'review', 'negotiation', 'signed']
   // A signed contract still sits in Signed while it is expiring, but once it has expired it leaves for its own red section.
   const inStage = (c: Contract, s: ContractStatus) => { const e = effectiveStatus(c, today); return s === 'signed' ? e === 'signed' || e === 'expiring' : e === s }
@@ -146,7 +139,7 @@ function PipelineTab({ contracts, today }: { contracts: Contract[]; today: strin
               {items.length === 0 && (
                 <div className="border-2 border-dashed border-gray-100 rounded-xl p-6 text-center text-xs text-gray-300">—</div>
               )}
-              {items.map(c => <ContractCard key={c.id} contract={c} today={today} />)}
+              {items.map(c => <ContractCard key={c.id} contract={c} today={today} onOpen={onOpen} />)}
             </div>
           )
         })}
@@ -157,7 +150,7 @@ function PipelineTab({ contracts, today }: { contracts: Contract[]; today: strin
         <div className="mt-6 pt-6 border-t border-gray-100">
           <div className="text-[10px] font-bold uppercase tracking-widest text-red-500 mb-3">Expired, needs a decision</div>
           <div className="space-y-2">
-            {expired.map(c => <ContractRow key={c.id} contract={c} today={today} />)}
+            {expired.map(c => <ContractRow key={c.id} contract={c} today={today} onOpen={onOpen} />)}
           </div>
         </div>
       )}
@@ -166,7 +159,7 @@ function PipelineTab({ contracts, today }: { contracts: Contract[]; today: strin
         <div className="mt-6 pt-6 border-t border-gray-100">
           <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Closed</div>
           <div className="space-y-2">
-            {closed.map(c => <ContractRow key={c.id} contract={c} today={today} />)}
+            {closed.map(c => <ContractRow key={c.id} contract={c} today={today} onOpen={onOpen} />)}
           </div>
         </div>
       )}
@@ -174,7 +167,7 @@ function PipelineTab({ contracts, today }: { contracts: Contract[]; today: strin
   )
 }
 
-function ContractCard({ contract: c, today }: { contract: Contract; today: string }) {
+function ContractCard({ contract: c, today, onOpen }: { contract: Contract; today: string; onOpen: (c: Contract) => void }) {
   const status = effectiveStatus(c, today)
   const line = expiryLine(c, today)
   return (
@@ -182,7 +175,7 @@ function ContractCard({ contract: c, today }: { contract: Contract; today: strin
       <div className="flex items-start gap-1.5 mb-1">
         <span className="text-base">{TYPE_ICONS[c.type]}</span>
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-xs leading-snug">{c.title}</div>
+          <button onClick={() => onOpen(c)} className="block text-left font-medium text-xs leading-snug hover:underline">{c.title}</button>
           <div className="text-[11px] text-gray-400 mt-0.5">{c.counterparty}</div>
         </div>
         {c.flagged && <span className="text-red-500 flex-shrink-0">⚑</span>}
@@ -197,6 +190,7 @@ function ContractCard({ contract: c, today }: { contract: Contract; today: strin
           {line}
         </div>
       )}
+      {dateToAct(c, today) && <div className="mt-1 text-[10px] font-medium text-amber-700">{noticeLine(c, today)}</div>}
       {c.notes && <div className="mt-2 text-[10px] text-gray-400 italic line-clamp-2">{c.notes}</div>}
       <div className="mt-2 flex flex-wrap gap-2">
         <ItemTodos link={{ type: 'contract', id: c.id }} suggest={`Follow up on ${c.title}`} />
@@ -206,14 +200,14 @@ function ContractCard({ contract: c, today }: { contract: Contract; today: strin
   )
 }
 
-function ContractRow({ contract: c, today }: { contract: Contract; today: string }) {
+function ContractRow({ contract: c, today, onOpen }: { contract: Contract; today: string; onOpen: (c: Contract) => void }) {
   const status = effectiveStatus(c, today)
   const line = expiryLine(c, today)
   return (
     <div className={`flex items-center gap-3 p-3 border rounded-xl ${status === 'expired' ? 'border-red-200 bg-red-50/40' : 'border-gray-100 opacity-60'}`}>
       <span className="text-sm">{TYPE_ICONS[c.type]}</span>
       <div className="flex-1">
-        <div className="text-sm font-medium">{c.title}</div>
+        <button onClick={() => onOpen(c)} className="block text-left text-sm font-medium hover:underline">{c.title}</button>
         <div className="text-xs text-gray-400">{c.counterparty}</div>
         {status === 'expired' && line && <div className="text-xs text-red-600 mt-0.5">{line}</div>}
       </div>
@@ -224,8 +218,8 @@ function ContractRow({ contract: c, today }: { contract: Contract; today: string
 }
 
 // ── Alerts ──────────────────────────────────────────────────
-function AlertsTab({ flagged, expiring, expired, today }: { flagged: Contract[]; expiring: Contract[]; expired: Contract[]; today: string }) {
-  if (flagged.length === 0 && expiring.length === 0 && expired.length === 0) {
+function AlertsTab({ flagged, notice, expiring, expired, today, onOpen }: { flagged: Contract[]; notice: Contract[]; expiring: Contract[]; expired: Contract[]; today: string; onOpen: (c: Contract) => void }) {
+  if (flagged.length === 0 && notice.length === 0 && expiring.length === 0 && expired.length === 0) {
     return (
       <div className="text-center py-16 text-gray-400">
         <div className="text-3xl mb-2">✓</div>
@@ -244,6 +238,7 @@ function AlertsTab({ flagged, expiring, expired, today }: { flagged: Contract[];
           contracts={flagged}
           today={today}
           getNote={c => c.notes}
+          onOpen={onOpen}
         />
       )}
       {expired.length > 0 && (
@@ -254,6 +249,18 @@ function AlertsTab({ flagged, expiring, expired, today }: { flagged: Contract[];
           contracts={expired}
           today={today}
           getNote={c => expiryLine(c, today) ?? undefined}
+          onOpen={onOpen}
+        />
+      )}
+      {notice.length > 0 && (
+        <AlertSection
+          title="Notice dates"
+          icon="📅"
+          color="text-amber-700"
+          contracts={notice}
+          today={today}
+          getNote={c => noticeLine(c, today) ?? undefined}
+          onOpen={onOpen}
         />
       )}
       {expiring.length > 0 && (
@@ -264,15 +271,16 @@ function AlertsTab({ flagged, expiring, expired, today }: { flagged: Contract[];
           contracts={expiring}
           today={today}
           getNote={c => expiryLine(c, today) ?? undefined}
+          onOpen={onOpen}
         />
       )}
     </div>
   )
 }
 
-function AlertSection({ title, icon, color, contracts, today, getNote }: {
+function AlertSection({ title, icon, color, contracts, today, getNote, onOpen }: {
   title: string; icon: string; color: string;
-  contracts: Contract[]; today: string; getNote: (c: Contract) => string | undefined
+  contracts: Contract[]; today: string; getNote: (c: Contract) => string | undefined; onOpen: (c: Contract) => void
 }) {
   return (
     <div>
@@ -283,7 +291,7 @@ function AlertSection({ title, icon, color, contracts, today, getNote }: {
             <div className="flex items-start gap-3">
               <span className="text-lg">{TYPE_ICONS[c.type]}</span>
               <div className="flex-1">
-                <div className="font-semibold text-sm">{c.title}</div>
+                <button onClick={() => onOpen(c)} className="block text-left font-semibold text-sm hover:underline">{c.title}</button>
                 <div className="text-xs text-gray-400 mt-0.5">{c.counterparty} · {TYPE_LABELS[c.type]}</div>
                 {getNote(c) && <div className={`mt-2 text-xs ${color}`}>{getNote(c)}</div>}
               </div>
@@ -297,13 +305,14 @@ function AlertSection({ title, icon, color, contracts, today, getNote }: {
 }
 
 // ── Rights Register ─────────────────────────────────────────
-function RegisterTab({ contracts, types, filterType, setFilterType, filtered, today }: {
+function RegisterTab({ contracts, types, filterType, setFilterType, filtered, today, onOpen }: {
   contracts: Contract[]
   types: ContractType[]
   filterType: ContractType | 'all'
   setFilterType: (t: ContractType | 'all') => void
   filtered: Contract[]
   today: string
+  onOpen: (c: Contract) => void
 }) {
   const sortedFiltered = [...filtered].sort((a, b) => a.type.localeCompare(b.type) || a.title.localeCompare(b.title))
 
@@ -349,7 +358,7 @@ function RegisterTab({ contracts, types, filterType, setFilterType, filtered, to
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       {c.flagged && <span className="text-red-500 text-xs">⚑</span>}
-                      <span className="font-medium text-sm">{c.title}</span>
+                      <button onClick={() => onOpen(c)} className="text-left font-medium text-sm hover:underline">{c.title}</button>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500">{TYPE_ICONS[c.type]} {TYPE_LABELS[c.type]}</td>
@@ -359,8 +368,8 @@ function RegisterTab({ contracts, types, filterType, setFilterType, filtered, to
                   </td>
                   <td className="px-4 py-3 text-xs">
                     {c.expiryDate ? (
-                      <span className={daysLeft !== null && daysLeft < 0 ? 'text-red-500 font-medium' : daysLeft !== null && daysLeft <= 90 ? 'text-amber-600 font-medium' : 'text-gray-500'}>
-                        {fmtDate(c.expiryDate)}
+                      <span className={daysLeft !== null && daysLeft < 0 ? 'text-red-500 font-medium' : daysLeft !== null && daysLeft <= 90 && !(c.autoRenews && c.status === 'signed') ? 'text-amber-600 font-medium' : 'text-gray-500'}>
+                        {c.autoRenews && c.status === 'signed' ? 'Renews ' : ''}{fmtDate(currentTermEnd(c, today) ?? c.expiryDate)}
                       </span>
                     ) : <span className="text-gray-300">—</span>}
                   </td>
@@ -378,7 +387,7 @@ function RegisterTab({ contracts, types, filterType, setFilterType, filtered, to
 }
 
 // ── Templates ───────────────────────────────────────────────
-function TemplatesTab() {
+function TemplatesTab({ onSaveDraft }: { onSaveDraft: (initial: Partial<ContractDraft>, attach?: File) => void }) {
   const editable = useStore(s => s.canEdit('legal'))
   const templates = useStore(s => s.legalTemplates)
   const [openId, setOpenId] = useState<string | null>(null)
@@ -433,7 +442,7 @@ function TemplatesTab() {
 
       {open && <TemplateModal template={open} onClose={() => setOpenId(null)} />}
       {addOpen && <NewTemplateModal onClose={() => setAddOpen(false)} />}
-      {generating && <GenerateDocumentModal template={generating} onClose={() => setGenerateId(null)} />}
+      {generating && <GenerateDocumentModal template={generating} onClose={() => setGenerateId(null)} onSaveDraft={(initial, attach) => { setGenerateId(null); onSaveDraft(initial, attach) }} editable={editable} />}
     </div>
   )
 }
@@ -614,7 +623,7 @@ function assembleText(templateName: string, clauses: LegalTemplateClause[]): str
 // Fills a template's [BRACKETED] placeholders in one pass, then shows the
 // finished document before it ever leaves the browser — Peak-End: the last
 // thing someone sees should be the actual result, not a black-box download.
-function GenerateDocumentModal({ template, onClose }: { template: LegalTemplate; onClose: () => void }) {
+function GenerateDocumentModal({ template, onClose, onSaveDraft, editable }: { template: LegalTemplate; onClose: () => void; onSaveDraft: (initial: Partial<ContractDraft>, attach?: File) => void; editable: boolean }) {
   const client = useStore(s => s.getClient())
   const [step, setStep] = useState<'fill' | 'preview'>('fill')
   const [copied, setCopied] = useState(false)
@@ -644,6 +653,13 @@ function GenerateDocumentModal({ template, onClose }: { template: LegalTemplate;
 
   function handleDownload() {
     downloadRtf(template.name.replace(/[^\w -]/g, ''), template.name, filledClauses)
+  }
+
+  // Keep what was just made: a draft contract with the document attached, ready to send to the other side.
+  function handleSaveDraft() {
+    const rtf = buildRtf(template.name, filledClauses)
+    const file = new File([rtf], `${template.name.replace(/[^\w -]/g, '').trim() || 'Contract'}.rtf`, { type: 'application/rtf' })
+    onSaveDraft({ title: template.name, type: typeFromName(template.name), status: 'draft', counterparty: counterpartyFromBlanks(values) }, file)
   }
 
   return (
@@ -699,9 +715,14 @@ function GenerateDocumentModal({ template, onClose }: { template: LegalTemplate;
               <button onClick={handleCopy} className="ml-auto px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">
                 {copied ? 'Copied ✓' : 'Copy text'}
               </button>
-              <button onClick={handleDownload} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">
+              <button onClick={handleDownload} className={`px-3 py-1.5 text-sm font-medium rounded-lg ${editable ? 'border border-gray-200 hover:bg-gray-50' : 'bg-accent text-white hover:bg-accent-hover'}`}>
                 Download (.rtf)
               </button>
+              {editable && (
+                <button onClick={handleSaveDraft} className="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-lg hover:bg-accent-hover">
+                  Save as a draft contract
+                </button>
+              )}
             </div>
           </>
         )}

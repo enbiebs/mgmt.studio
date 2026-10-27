@@ -22,6 +22,10 @@ export const secureSaveBody = z.object({
 
 export const clientOnly = z.object({ clientId: clientIdSchema })
 export const clientAndPath = z.object({ clientId: clientIdSchema, path: storagePath })
+export const contractUploadBody = z.object({ clientId: clientIdSchema, kind: z.enum(['pdf', 'docx', 'rtf']) })
+// A contract read from a file already in storage (path) or from pasted words (text): at least one of them.
+export const contractExtractBody = z.object({ clientId: clientIdSchema, path: storagePath.optional(), text: z.string().max(200_000).optional() })
+  .refine(b => !!b.path || !!b.text?.trim(), { message: 'nothing to read' })
 export const trashIdBody = z.object({ trashId: clientIdSchema })
 const brandingKind = z.enum(['photo', 'logo'])
 export const brandingUploadBody = z.object({ clientId: clientIdSchema, kind: brandingKind, ext: z.string().max(8) })

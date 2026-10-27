@@ -1,6 +1,6 @@
 // Checks what deleting a show or an offer takes with it (and what it must leave alone), and the plain words shown before it.  Run with:  npx tsx scripts/check-delete-effects.ts
 import assert from 'node:assert/strict'
-import { afterOfferDeleted, afterShowDeleted, billImpact, budgetsAfterOfferDeleted, clientImpact, insertAt, offerImpact, showImpact, staysLine, travelImpact } from '../src/lib/delete-effects'
+import { afterOfferDeleted, afterShowDeleted, billImpact, contractImpact, budgetsAfterOfferDeleted, clientImpact, insertAt, offerImpact, showImpact, staysLine, travelImpact } from '../src/lib/delete-effects'
 import { askConfirm } from '../src/lib/confirm'
 import type { Client } from '../src/types'
 
@@ -94,6 +94,14 @@ assert.deepEqual(insertAt(['a', 'b'], 'c', 5), ['a', 'b', 'c'])        // the li
 assert.deepEqual(insertAt(['b'], 'a', 0), ['a', 'b'])
 assert.deepEqual(insertAt(['b'], 'a', -3), ['a', 'b'])
 assert.deepEqual(insertAt([], 'a', 0), ['a'])
+
+// ── a contract ──
+assert.deepEqual(contractImpact({ title: 'Mgmt deal' }).items, ['the contract "Mgmt deal"'])
+assert.deepEqual(contractImpact({ title: 'Mgmt deal', expiryDate: '2027-01-01' }).items, ['the contract "Mgmt deal"', 'its end date and the reminders that come from it'])
+assert.deepEqual(contractImpact({ title: 'NDA', noticeDays: 0 }).items, ['the contract "NDA"', 'its end date and the reminders that come from it'], 'zero days of notice is still a notice date')
+assert.deepEqual(contractImpact({ title: 'NDA', files: [{ id: 'f', path: 'c/f.pdf', name: 'f.pdf', label: 'x', addedAt: '2026-10-26' }] }).items, ['the contract "NDA"', 'the copy of the contract kept with it'])
+assert.equal(contractImpact({ title: 'NDA', files: [{ id: 'f', path: 'c/f.pdf', name: 'f.pdf', label: 'x', addedAt: '' }, { id: 'g', path: 'c/g.pdf', name: 'g.pdf', label: 'y', addedAt: '' }] }).items[1], 'the 2 copies of the contract kept with it')
+assert.deepEqual(contractImpact({ title: 'x' }).stays, [])
 
 // ── with no confirm box on screen the question still gets asked (the browser's own) and answered ──
 async function confirmChecks() {

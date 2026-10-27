@@ -11,6 +11,7 @@ import type { OfferReading } from '@/lib/offer-paste'
 
 export const MAX_OFFER_FILE_BYTES = 3.5 * 1024 * 1024   // a request body is capped at about 4.5MB
 export const MAX_OFFER_TEXT_CHARS = 40_000
+const MAX_DOCX_XML_BYTES = 25 * 1024 * 1024   // the text of a long contract is far under this
 export const offerReadingConfigured = billReadingConfigured
 
 export type OfferFileKind = 'pdf' | 'docx'
@@ -21,7 +22,8 @@ export function offerFileKind(name: string): OfferFileKind | null {
 
 // A Word file is a zip; its words are in word/document.xml.
 export function docxText(buf: Uint8Array): string {
-  const files = unzipSync(buf, { filter: f => f.name === 'word/document.xml' })
+  // The size a zip file SAYS it will unpack to is checked before anything is unpacked: a tiny file can claim gigabytes.
+  const files = unzipSync(buf, { filter: f => f.name === 'word/document.xml' && f.originalSize <= MAX_DOCX_XML_BYTES })
   const doc = files['word/document.xml']
   if (!doc) throw new Error('That does not look like a Word file')
   return strFromU8(doc)

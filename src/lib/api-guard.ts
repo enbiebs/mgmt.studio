@@ -63,7 +63,7 @@ export async function requireUser(limit: LimitName = 'api') {
   return { user, supabase }
 }
 
-type Section = 'finance' | 'tour' | 'deals' | 'content' | 'projects' | 'profile' | 'vault'
+type Section = 'finance' | 'tour' | 'deals' | 'content' | 'projects' | 'profile' | 'vault' | 'legal'
 
 /**
  * The signed-in person, checked against ONE artist: they need access to the section (edit access when

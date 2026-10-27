@@ -17,6 +17,7 @@ import { buildForecast } from '@/lib/forecast'
 import { mayOpenFully } from '@/lib/section-access'
 import { invoiceOutstanding, settlementBalancesNotOnInvoices } from '@/lib/money'
 import { daysToExpiry, effectiveStatus } from '@/lib/contract-status'
+import { dateToAct, noticeLine } from '@/lib/contract-dates'
 
 export type InboxSeverity = 'urgent' | 'soon' | 'info'
 export type InboxRule =
@@ -206,6 +207,14 @@ export function buildInbox(client: Client, today: string, access: InboxAccess): 
       const go = { section: 'legal' as const, sub: 'alerts' }
       if (status === 'expired') {
         add('contract', c.id, 'urgent', { title: left !== null ? `${c.title} expired ${plural(-left, 'day')} ago` : `${c.title} has expired`, detail: `${c.counterparty} · renew it, or close it`, date: c.expiryDate, go })
+      } else if (dateToAct(c, today)) {
+        // The date to act on is the notice date, not the end: that is when a contract that renews by itself can still be stopped.
+        const n = dateToAct(c, today)!
+        const severity: InboxSeverity = n.passed ? 'urgent' : n.daysLeft <= 7 ? 'urgent' : 'soon'
+        const title = n.renewalOnly ? (n.daysLeft === 0 ? `${c.title} renews today` : `${c.title} renews ${when(n.daysLeft)}`)
+          : n.passed ? `${c.title} will renew: the notice date has passed`
+          : n.daysLeft === 0 ? `Notice on ${c.title} is due today` : `Notice on ${c.title} is due ${when(n.daysLeft)}`
+        add('contract', c.id, severity, { title, detail: `${c.counterparty} · ${noticeLine(c, today)}`, date: n.date, go })
       } else if (status === 'expiring' && left !== null) {
         add('contract', c.id, left <= 30 ? 'soon' : 'info', { title: left === 0 ? `${c.title} ends today` : `${c.title} ends ${when(left)}`, detail: `${c.counterparty} · decide whether to renew`, date: c.expiryDate, go })
       } else if (c.flagged && c.status !== 'terminated') {

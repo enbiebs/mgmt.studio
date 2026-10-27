@@ -841,7 +841,16 @@ export interface TourOffer {
 
 // ── Legal / Contracts ───────────────────────────────────────
 export type ContractStatus = 'draft' | 'review' | 'negotiation' | 'signed' | 'expired' | 'terminated'
-export type ContractType   = 'recording' | 'publishing' | 'sync' | 'brand' | 'touring' | 'nda' | 'merch' | 'other'
+export type ContractType   = 'management' | 'recording' | 'publishing' | 'sync' | 'brand' | 'touring' | 'nda' | 'merch' | 'other'
+
+/** A copy of the contract itself (a PDF or Word file), kept in private storage: "signed copy", "v2 from lawyer". */
+export interface ContractFile {
+  id:      string
+  path:    string      // where it is stored: "<clientId>/<id>.pdf"
+  name:    string      // the name it was uploaded with
+  label:   string
+  addedAt: string      // ISO date
+}
 
 export interface Contract {
   id:           string
@@ -852,10 +861,15 @@ export interface Contract {
   value?:       number
   currency?:    Currency
   signedDate?:  string
-  expiryDate?:  string
+  expiryDate?:  string          // when the current term ends; for an automatically renewing contract, when the FIRST term ended
   notes?:       string
   createdAt:    string
   flagged?:     boolean    // attorney has flagged for review
+  autoRenews?:  boolean    // renews by itself at the end of each term unless someone gives notice
+  renewalMonths?: number   // how long each automatic renewal runs (12 when not said)
+  noticeDays?:  number     // days of written notice needed before the term ends to stop it renewing or to end it
+  terms?:       Record<string, string>   // the key terms for this kind of contract (see lib/contract-terms.ts)
+  files?:       ContractFile[]
 }
 
 // ── Finance / Business Manager Replacement ──────────────────

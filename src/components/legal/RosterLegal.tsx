@@ -12,7 +12,7 @@ import {
   buildRosterLegal, defaultFilter, filterContracts, legalAccessFor, legalCapabilities, legalStats,
   type ContractRow, type LegalFilter,
 } from '@/lib/roster-legal'
-import { STATUS_CONFIG, TYPE_LABELS, fmt } from '@/components/legal/LegalView'
+import { STATUS_CONFIG, TYPE_LABELS, fmt } from '@/components/legal/contract-labels'
 import { useRosterClients } from '@/components/layout/nav'
 
 const FILTERS: { key: LegalFilter; label: string }[] = [
@@ -142,7 +142,10 @@ export function RosterLegal() {
                   {r.value && <span className="block truncate text-xs text-gray-400 tabular-nums">{fmt(r.value.amount, r.value.currency)}</span>}
                 </span>
                 <span><span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${st.bg} ${st.color}`}>{st.label}</span></span>
-                <span className={`basis-full lg:basis-auto min-w-0 block truncate text-xs ${r.state === 'expired' ? 'text-red-600 font-medium' : r.state === 'expiring' ? 'text-amber-700' : 'text-gray-500'}`}>{r.endLine ?? (r.live ? 'No end date' : '\u2014')}</span>
+                <span className="basis-full lg:basis-auto min-w-0 block">
+                  <span className={`block truncate text-xs ${r.state === 'expired' ? 'text-red-600 font-medium' : r.state === 'expiring' ? 'text-amber-700' : 'text-gray-500'}`}>{r.endLine ?? (r.live ? 'No end date' : '\u2014')}</span>
+                  {r.noticeLine && <span className="block truncate text-xs font-medium text-amber-700">{r.noticeLine}</span>}
+                </span>
               </button>
             )
           })}
