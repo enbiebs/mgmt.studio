@@ -16,6 +16,7 @@ import type { Client, MainSection, UserRole } from '@/types'
 import type { AccessGrant } from '@/lib/db'
 import { taskSection } from '@/lib/tasks'
 import { withoutDeal } from '@/lib/show-deals'
+import { withoutOwner } from '@/lib/item-owner'
 
 export type ItemType = 'show' | 'album' | 'post' | 'project' | 'invoice' | 'contract' | 'expense'
 export type ItemEffect = 'hide' | 'share'
@@ -143,7 +144,7 @@ export function filterClientForViewer(c: Client, v: Viewer, exceptions: ItemExce
   // A show's money (fee, deposit, commissions) and the booking offers need Deals & fees, not just Tour: the database keeps them in tables that
   // only that grant opens. A person with Tour (or Finance) but without Deals sees the show, never what it pays. Never the artist's own login.
   const dealsAccess = v.role !== 'artist' && hasSectionGrant(v, 'deals', c.id)
-  const shows = c.tour.shows.filter(s => sees('show', s.id)).map(s => (dealsAccess ? s : withoutDeal(s)))
+  const shows = c.tour.shows.filter(s => sees('show', s.id)).map(s => (dealsAccess ? s : withoutDeal(s))).map(s => (v.role === 'artist' ? withoutOwner(s) : s))
   const showIds = new Set(shows.map(s => s.id))
   const tourAccess = hasSectionGrant(v, 'tour', c.id)
 

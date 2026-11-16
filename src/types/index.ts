@@ -227,6 +227,7 @@ export interface Show {
   driveUrl?: string       // link to this show's folder in Drive (or wherever the team keeps its files)
   runId?: string          // → Run this show belongs to (one run per show)
   historyOnly?: boolean   // already happened; kept for fee comparisons, never raises to-dos (no "settlement missing" etc.)
+  ownerId?: string        // the teammate handling this show (a WorkspacePerson.userId); none = nobody yet. Never shown to the artist's own login
 }
 
 export interface Post {
@@ -850,6 +851,7 @@ export interface TourOffer {
   agencyCommissionPct?: number      // agency's cut, only deducted when viaAgency
   managementCommissionPct?: number  // management's cut, only deducted when viaAgency
   terms?: OfferTerms
+  ownerId?: string                  // the teammate handling this offer (a WorkspacePerson.userId); none = nobody yet. Never put on an offer sheet
 }
 
 // ── Legal / Contracts ───────────────────────────────────────

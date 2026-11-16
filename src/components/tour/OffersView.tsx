@@ -16,6 +16,9 @@ import { OfferTermsFields } from '@/components/tour/OfferTermsFields'
 import { draftFromTerms, termsFromDraft, maxPotential, replyStatus } from '@/lib/offer-terms'
 import { latestSheet, longDate, SHEET_STATUS_LABEL, SHEET_STATUS_STYLE } from '@/lib/offer-sheet'
 import { RowMenu } from '@/components/ui/RowMenu'
+import { JustMineToggle, OwnerChip, OwnerFormField, useStartingOwner } from '@/components/tour/OwnerField'
+import { justMine, offerNeedsOwner, ownerPatch } from '@/lib/item-owner'
+import { useMe } from '@/lib/useToday'
 import { askConfirm } from '@/lib/confirm'
 import { offerImpact, staysLine } from '@/lib/delete-effects'
 import type { TourOffer, OfferStatus } from '@/types'
@@ -57,11 +60,16 @@ export function OffersView() {
   // An offer that was read from pasted text: the form opens with it filled in.
   const [pasted, setPasted] = useState<{ offer: OfferPrefill; notices: string[] } | null>(null)
   const [sendingOfferId, setSendingOfferId] = useState<string | null>(null)
+  const [mineOnly, setMineOnly] = useState(false)
+  const people = useStore(s => s.workspacePeople)
+  const me = useMe()
 
   if (!client) return null
   const offers = client.agentData?.offers ?? []
+  // "Just mine" narrows the pipeline and the routing calendar; the stats and the history stay whole.
+  const shown = mineOnly && people.length > 0 ? justMine(offers, me, people, client.id) : offers   // (no teammates loaded = no switch on screen, so the filter must not stay on)
 
-  const pipeline   = offers.filter(o => PIPELINE_STAGES.includes(o.status))
+  const pipeline   = shown.filter(o => PIPELINE_STAGES.includes(o.status))
   const settled    = offers.filter(o => o.status === 'settled')
   const cancelled  = offers.filter(o => o.status === 'cancelled')
   const confirmed  = offers.filter(o => o.status === 'confirmed')
@@ -88,25 +96,28 @@ export function OffersView() {
             </div>
           </div>
         </div>
-        {/* Tabs */}
-        <div className="flex gap-0.5 overflow-x-auto">
-          {([['pipeline', 'Active Pipeline'], ['routing', 'Routing Calendar'], ['settled', 'Settled / History']] as const).map(([t, label]) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
-                tab === t ? 'bg-gray-900 text-canvas' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+        {/* Tabs (they scroll sideways on a phone; the "Just mine" switch stays put beside them) */}
+        <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto">
+            {([['pipeline', 'Active Pipeline'], ['routing', 'Routing Calendar'], ['settled', 'Settled / History']] as const).map(([t, label]) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
+                  tab === t ? 'bg-gray-900 text-canvas' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {tab !== 'settled' && <span className="flex-shrink-0"><JustMineToggle on={mineOnly} onChange={setMineOnly} /></span>}
         </div>
       </div>
 
       <div className="p-4 md:p-6">
         {tab === 'pipeline' && <PipelineTab offers={pipeline} editable={editable} onEdit={setEditingOffer} />}
-        {tab === 'routing'  && <RoutingTab  offers={offers.filter(o => o.status !== 'cancelled')} editable={editable} onEdit={setEditingOffer} />}
+        {tab === 'routing'  && <RoutingTab  offers={shown.filter(o => o.status !== 'cancelled')} editable={editable} onEdit={setEditingOffer} />}
         {tab === 'settled'  && <HistoryTab  settled={settled} cancelled={cancelled} />}
       </div>
 
@@ -154,6 +165,9 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
     agencyCommissionPct: String(seed?.agencyCommissionPct ?? ''),
     managementCommissionPct: String(seed?.managementCommissionPct ?? ''),
   })
+  const startingOwner = useStartingOwner(seed?.ownerId, client?.id ?? '')
+  const [ownerChoice, setOwnerChoice] = useState<string | null>(null)   // null = untouched: keep what it had
+  const owner = ownerChoice ?? startingOwner
   const [terms, setTerms] = useState(() => draftFromTerms(seed?.terms))
   const [triedSave, setTriedSave] = useState(false)
   const missing = [
@@ -170,6 +184,7 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
       agencyCommissionPct: f.viaAgency && f.agencyCommissionPct ? Number(f.agencyCommissionPct) : undefined,
       managementCommissionPct: f.viaAgency && f.managementCommissionPct ? Number(f.managementCommissionPct) : undefined,
       terms: termsFromDraft(terms),
+      ...ownerPatch(ownerChoice),   // untouched = not mentioned, so saving a typo fix never changes who owns it
     }
     if (initial) updateOffer(initial.id, patch)
     else addOffer(patch)
@@ -272,6 +287,7 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
           excludeOfferId={initial?.id} excludeShowId={initial?.showId}
         />
       )}
+      {client && <OwnerFormField clientId={client.id} value={owner} startedWith={seed?.ownerId} onChange={setOwnerChoice} />}
       <FormField label="Venue"><input type="text" className={inputClass} value={f.venue} onChange={e => setF(p => ({...p, venue: e.target.value}))} /></FormField>
       <FormField label="City"><input type="text" className={inputClass} value={f.city} onChange={e => setF(p => ({...p, city: e.target.value}))} /></FormField>
       <FormField label="Country"><input type="text" className={inputClass} value={f.country} onChange={e => setF(p => ({...p, country: e.target.value}))} /></FormField>
@@ -350,6 +366,7 @@ function PipelineTab({ offers, editable, onEdit }: { offers: TourOffer[]; editab
 
 function OfferCard({ offer: o, editable, onEdit }: { offer: TourOffer; editable: boolean; onEdit: (o: TourOffer) => void }) {
   const cfg = STATUS_CONFIG[o.status]
+  const clientId = useStore(s => s.getClient()?.id)
   const sheet = useStore(s => latestSheet(s.getClient()?.tour.offerSheets, o.id))
   const reply = replyStatus(o.terms?.respondBy, localToday())
   const upTo = o.terms?.bonuses?.length ? maxPotential(o.guarantee, o.terms) : undefined
@@ -389,7 +406,10 @@ function OfferCard({ offer: o, editable, onEdit }: { offer: TourOffer; editable:
       {o.notes && (
         <div className="mt-2 text-xs text-amber-600 bg-amber-50 rounded-lg px-2 py-1">{o.notes}</div>
       )}
-      <div className="mt-2"><ItemTodos link={{ type: 'offer', id: o.id }} suggest={`Reply to ${o.venue || 'the promoter'}`} /></div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <ItemTodos link={{ type: 'offer', id: o.id }} suggest={`Reply to ${o.venue || 'the promoter'}`} />
+        {clientId && <OwnerChip clientId={clientId} ownerId={o.ownerId} live={offerNeedsOwner(o)} />}
+      </div>
       {sheet && sheet.status !== 'superseded' && (
         <div className="mt-2 flex items-center gap-1.5 text-[11px]">
           <span className="text-gray-400">Sheet V{sheet.version}</span>

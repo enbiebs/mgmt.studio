@@ -19,6 +19,7 @@ import { money2 } from '@/lib/settlement-math'
 import { addDays, fromDateStr, today } from '@/lib/utils'
 import { openInboxItem } from '@/lib/inbox-open'
 import type { Project, Task } from '@/types'
+import { useOwnerLabel } from '@/components/tour/OwnerField'
 import { AddTodo } from './AddTodo'
 import { AssigneeSelect, ChipName, ROW, TaskRow } from './todo-parts'
 
@@ -230,13 +231,14 @@ function DoneRow({ task, clientId, clientName }: { task: Task; clientId: string;
 function AutoRow({ item, hiddenRow = false }: { item: InboxItem; hiddenRow?: boolean }) {
   const { markInboxDone, snoozeInboxItem, restoreInboxItem } = useStore()
   const open = () => openInboxItem(item)
+  const owner = useOwnerLabel(item.ownerId, item.clientId)   // alerts about an offer or show say who is handling it
 
   return (
     <div className={ROW}>
       <div className={`w-2 h-2 rounded-full mt-1.5 mx-[5px] flex-shrink-0 ${DOT[item.severity]}`} title="Worked out automatically" />
       <div className="flex-1 min-w-0 basis-[calc(100%-2rem)] md:basis-auto">
         <div className="text-sm"><ChipName name={item.clientName} /><span className="font-medium">{item.title}</span></div>
-        {item.detail && <div className="text-xs text-gray-400 mt-0.5">{item.detail}</div>}
+        {(item.detail || owner) && <div className="text-xs text-gray-400 mt-0.5">{[item.detail, owner && `Owner: ${owner}`].filter(Boolean).join(' · ')}</div>}
       </div>
       {item.amount !== undefined && item.currency && (
         <div className="text-sm font-semibold tabular-nums flex-shrink-0 ml-5 md:ml-0">{money2(item.amount, item.currency)}</div>

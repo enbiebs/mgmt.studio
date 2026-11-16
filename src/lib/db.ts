@@ -422,7 +422,7 @@ export function assembleWorkspace(rows: WorkspaceRows): AppData {
 
     const cShows = (shows.data ?? [])
       .filter((s: { client_id: string }) => s.client_id === c.id)
-      .map((s: { id: string; date: string; city: string; venue: string; time: string; status: string; notes?: string; tour_offer_id?: string; run_id?: string; history_only?: boolean; drive_url?: string }) => ({
+      .map((s: { id: string; date: string; city: string; venue: string; time: string; status: string; notes?: string; tour_offer_id?: string; run_id?: string; history_only?: boolean; drive_url?: string; owner_user?: string | null }) => ({
         id: s.id, date: s.date, city: s.city,
         venue: s.venue, time: s.time,
         status: s.status as Show['status'], notes: s.notes,
@@ -432,6 +432,7 @@ export function assembleWorkspace(rows: WorkspaceRows): AppData {
         runId: s.run_id ?? undefined,
         historyOnly: s.history_only ? true : undefined,
         driveUrl: s.drive_url ?? undefined,
+        ownerId: s.owner_user ?? undefined,
       }))
       // The database returns rows in no particular order; keep shows in date order so every screen starts from the same order.
       .sort((a: { date: string; time: string }, b: { date: string; time: string }) => a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? ''))
@@ -601,7 +602,7 @@ export function assembleWorkspace(rows: WorkspaceRows): AppData {
 
     const cOffers = (tourOffers.data ?? [])
       .filter((o: { client_id: string }) => o.client_id === c.id)
-      .map((o: { id: string; venue: string; city: string; country: string; date: string; promoter: string; guarantee: number; door?: number; buyout?: number; status: string; notes?: string; settled_at?: string; net_payout?: number; show_id?: string; via_agency?: boolean; agency_name?: string; agency_commission_pct?: number; management_commission_pct?: number; terms?: OfferTerms | null }) => ({
+      .map((o: { id: string; venue: string; city: string; country: string; date: string; promoter: string; guarantee: number; door?: number; buyout?: number; status: string; notes?: string; settled_at?: string; net_payout?: number; show_id?: string; via_agency?: boolean; agency_name?: string; agency_commission_pct?: number; management_commission_pct?: number; terms?: OfferTerms | null; owner_user?: string | null }) => ({
         id: o.id, venue: o.venue, city: o.city, country: o.country,
         date: o.date, promoter: o.promoter, guarantee: o.guarantee,
         door: o.door, buyout: o.buyout, status: o.status as TourOffer['status'],
@@ -611,6 +612,7 @@ export function assembleWorkspace(rows: WorkspaceRows): AppData {
         agencyCommissionPct: o.agency_commission_pct ?? undefined,
         managementCommissionPct: o.management_commission_pct ?? undefined,
         terms: o.terms ?? undefined,
+        ownerId: o.owner_user ?? undefined,
       }))
 
     const cContracts = (contracts.data ?? [])
@@ -1436,9 +1438,13 @@ export async function deletePerson(personId: string) {
 }
 
 // ── Show ───────────────────────────────────────────────────
-export async function upsertShow(show: Show, clientId: string) {
-  const supabase = createClient()
-  const { error } = await supabase.from('shows').upsert({
+/**
+ * The columns a save of a show writes. Who OWNS the show is deliberately not here: a save from a screen holding an old copy would
+ * overwrite a newer owner (and a save of an unrelated field would erase one whose access was removed). The owner has its own narrow
+ * write, setItemOwner, used only when the owner is changed.
+ */
+export function showRow(show: Show, clientId: string) {
+  return {
     id: show.id, client_id: clientId,
     date: show.date, city: show.city,
     venue: show.venue, time: show.time,
@@ -1448,8 +1454,24 @@ export async function upsertShow(show: Show, clientId: string) {
     history_only: show.historyOnly ?? false,
     drive_url: show.driveUrl ?? null,
     updated_at: new Date().toISOString(),
-  })
+  }
+}
+
+export async function upsertShow(show: Show, clientId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('shows').upsert(showRow(show, clientId))
   if (error) throw error
+}
+
+/**
+ * Gives a show or an offer to a teammate (their login id), or to nobody (null). It writes only that one column, so saving anything
+ * else on the row never touches the owner. The database refuses someone who cannot open the artist, in plain words.
+ */
+export async function setItemOwner(table: 'shows' | 'tour_offers', id: string, ownerId: string | null): Promise<void> {
+  // .select('id') so a write that matched no row (not there yet, or no longer allowed) is an error, not a quiet success.
+  const { data, error } = await createClient().from(table).update({ owner_user: ownerId }).eq('id', id).select('id')
+  if (error) throw new Error(error.message)
+  if (!data || data.length === 0) throw new Error('No row was changed')
 }
 
 /** Saves a show's money to its own table (show_deals). Needs Deals & fees edit access; the show itself must already exist. */
@@ -1465,9 +1487,9 @@ export async function deleteShow(showId: string) {
 }
 
 // ── Tour Offer ───────────────────────────────────────────────
-export async function upsertOffer(offer: TourOffer, clientId: string) {
-  const supabase = createClient()
-  const { error } = await supabase.from('tour_offers').upsert({
+/** The columns a save of an offer writes. The owner is not here, for the reason given on showRow: see setItemOwner. */
+export function offerRow(offer: TourOffer, clientId: string) {
+  return {
     id: offer.id, client_id: clientId,
     venue: offer.venue, city: offer.city, country: offer.country,
     date: offer.date, promoter: offer.promoter, guarantee: offer.guarantee,
@@ -1479,7 +1501,12 @@ export async function upsertOffer(offer: TourOffer, clientId: string) {
     agency_commission_pct: offer.agencyCommissionPct ?? null,
     management_commission_pct: offer.managementCommissionPct ?? null,
     terms: offer.terms ?? null,
-  })
+  }
+}
+
+export async function upsertOffer(offer: TourOffer, clientId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('tour_offers').upsert(offerRow(offer, clientId))
   // A refused save used to look like a successful one on screen.
   if (error) throw error
 }
