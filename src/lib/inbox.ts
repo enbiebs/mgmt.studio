@@ -163,9 +163,10 @@ export function buildInbox(client: Client, today: string, access: InboxAccess): 
       if (holdEnd) {
         const left = days(holdEnd, today)
         const go = { section: 'tour' as const, sub: 'offers' }
-        if (left < 0) add('hold_expiry', o.id, 'urgent', { title: `The hold at ${o.venue} ran out ${plural(-left, 'day')} ago`, detail: `${o.city} · confirm it, ask for more time, or let it go`, date: holdEnd, go, ...ownerField(o) })
-        else if (left <= 2) add('hold_expiry', o.id, 'urgent', { title: `The hold at ${o.venue} runs out ${when(left)}`, detail: `${o.city} · ${o.promoter}`, date: holdEnd, go, ...ownerField(o) })
-        else if (left <= 7) add('hold_expiry', o.id, 'soon', { title: `The hold at ${o.venue} runs out ${when(left)}`, detail: `${o.city} · ${o.promoter}`, date: holdEnd, go, ...ownerField(o) })
+        // The date is part of what the alert is about (like the approval alerts): "Done" on one hold date must not hide the alert for a new date after an extension, nor the one for a hold that has since run out.
+        if (left < 0) add('hold_expiry', `${o.id}:${holdEnd}:ran-out`, 'urgent', { title: `The hold at ${o.venue} ran out ${plural(-left, 'day')} ago`, detail: `${o.city} · confirm it, ask for more time, or let it go`, date: holdEnd, go, ...ownerField(o) })
+        else if (left <= 2) add('hold_expiry', `${o.id}:${holdEnd}`, 'urgent', { title: `The hold at ${o.venue} runs out ${when(left)}`, detail: `${o.city} · ${o.promoter}`, date: holdEnd, go, ...ownerField(o) })
+        else if (left <= 7) add('hold_expiry', `${o.id}:${holdEnd}`, 'soon', { title: `The hold at ${o.venue} runs out ${when(left)}`, detail: `${o.city} · ${o.promoter}`, date: holdEnd, go, ...ownerField(o) })
       }
 
       // A hold that's close and still not confirmed.

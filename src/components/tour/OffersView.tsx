@@ -20,7 +20,7 @@ import { JustMineToggle, OwnerChip, OwnerFormField, useStartingOwner } from '@/c
 import { justMine, offerNeedsOwner, ownerPatch } from '@/lib/item-owner'
 import { useMe } from '@/lib/useToday'
 import { HoldChips, HoldFormFields } from '@/components/tour/HoldFields'
-import { holdPlaces, type HoldPlace } from '@/lib/holds'
+import { holdPlaces, otherHoldsOnDate, type HoldPlace } from '@/lib/holds'
 import { askConfirm } from '@/lib/confirm'
 import { offerImpact, staysLine } from '@/lib/delete-effects'
 import type { TourOffer, OfferStatus } from '@/types'
@@ -188,7 +188,8 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
       viaAgency: f.viaAgency, agencyName: f.viaAgency ? (f.agencyName || undefined) : undefined,
       agencyCommissionPct: f.viaAgency && f.agencyCommissionPct ? Number(f.agencyCommissionPct) : undefined,
       managementCommissionPct: f.viaAgency && f.managementCommissionPct ? Number(f.managementCommissionPct) : undefined,
-      terms: termsFromDraft(terms),
+      // Our place in line only means something while another promoter holds the same date: with the question hidden, it is not saved.
+      terms: termsFromDraft(otherHoldsOnDate(client?.agentData?.offers ?? [], f.date, localToday(), initial?.id).length > 0 ? terms : { ...terms, holdPosition: '' }),
       ...ownerPatch(ownerChoice),   // untouched = not mentioned, so saving a typo fix never changes who owns it
     }
     if (initial) updateOffer(initial.id, patch)
@@ -199,6 +200,8 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
   function handleStatusChange(status: OfferStatus) {
     if (!initial) return
     updateOffer(initial.id, { status })
+    // Leaving hold takes the hold details off the offer, so the open form must not keep them (saving would put them back); going back on hold starts with none.
+    if (status !== 'hold') setTerms(t => ({ ...t, holdUntil: '', holdPosition: '' }))
   }
 
   async function handleDelete() {

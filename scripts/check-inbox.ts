@@ -93,6 +93,27 @@ assert.equal(run({ offers: [holdEnds('2026-10-15', { status: 'inquiry' })] }, 'h
 assert.equal(run({ offers: [holdEnds('2026-10-15', { status: 'confirmed' })] }, 'hold_expiry').length, 0)
 assert.equal(run({ offers: [holdEnds('2026-10-15', { date: '2026-10-10' })] }, 'hold_expiry').length, 0)              // the show date has passed: the hold is moot
 assert.equal(run({ offers: [holdEnds('2026-10-15')] }, 'hold_expiry', { ...ALL, deals: false }).length, 0)            // offers need Deals & fees
+// "Done" is remembered by the alert's key: it must not outlive the hold date it was said about
+const holdKey = (holdUntil: string) => one({ offers: [holdEnds(holdUntil)] }, 'hold_expiry').key
+assert.notEqual(holdKey('2026-10-21'), holdKey('2026-10-20'), 'an extended hold is a new alert')
+assert.notEqual(holdKey('2026-10-21'), holdKey('2026-10-15'), 'the alert for a hold that has run out is not the one for a hold about to')
+assert.equal(holdKey('2026-10-21'), holdKey('2026-10-21'))                                                                   // and stays the same from one morning to the next
+{
+  const done = { [holdKey('2026-10-21')]: { state: 'done' as const } }
+  assert.equal(isHidden(done[holdKey('2026-10-21')], TODAY), true)
+  assert.equal(isHidden(done[holdKey('2026-10-20')], TODAY), false, 'Done on the old date does not hide the new one')
+  assert.equal(isHidden(done[holdKey('2026-10-15')], TODAY), false, 'Done while it was running out does not hide it once it has run out')
+}
+
+{
+  // the SAME hold date, two mornings apart: about to run out, then run out. Done on the first must not hide the second.
+  const c = client({ offers: [holdEnds('2026-10-21')] })
+  const before = buildInbox(c, '2026-10-19', ALL).find(i => i.rule === 'hold_expiry')!
+  const after = buildInbox(c, '2026-10-23', ALL).find(i => i.rule === 'hold_expiry')!
+  assert.equal(before.severity, 'urgent'); assert.equal(after.severity, 'urgent')
+  assert.notEqual(before.key, after.key, 'a hold that ran out is a new alert, even on the same date')
+  assert.equal(isHidden({ state: 'done' }, '2026-10-23'), true)        // (sanity: Done does hide what it was said about)
+}
 
 // ── sheet: the artist's answer to an offer sheet ──
 assert.deepEqual(sev({ offers: [offer()], sheets: [sheet({ status: 'approved', respondedAt: '2026-10-18T10:00:00Z' })] }, 'sheet'), ['soon'])
