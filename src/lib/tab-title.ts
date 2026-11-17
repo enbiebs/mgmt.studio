@@ -1,4 +1,4 @@
-// The number of things that need action, shown in the browser tab's title — "(3) Today · Mgmt Path" — so it shows even when the tab is
+// The number of things that need action, shown in the browser tab's title — "(3) Today · Artist Path" — so it shows even when the tab is
 // behind others. Pure apart from the two remembered values (the page's own title and the number), so the address-bar glue (url-sync)
 // and the screen can share them.
 
@@ -14,7 +14,7 @@ export const stripCount = (title: string) => title.replace(/^\(\d+\+?\) /, '')
 /** The title the tab should show right now, or null before the page has said what it is called. */
 export const wantedTitle = () => (base ? withCount(base, count) : null)
 
-/** The page's own title ("Today · Mascolo · Mgmt Path"), shown with the number in front. */
+/** The page's own title ("Today · Mascolo · Artist Path"), shown with the number in front. */
 export function setBaseTitle(doc: { title: string }, title: string) {
   base = title.replace(/\s+/g, ' ').trim()          // a browser reads the title back with runs of spaces squeezed to one: keep it that way so the two can be compared
   doc.title = withCount(base, count)

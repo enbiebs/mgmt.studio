@@ -1,5 +1,5 @@
 'use client'
-// The window for getting an invoice (or a reminder about one) to the person who owes it. Mgmt Path does not email for you: the invoice is
+// The window for getting an invoice (or a reminder about one) to the person who owes it. Artist Path does not email for you: the invoice is
 // made as a PDF, the email opens in the person's own mail program with the words already written, and they send it themselves, so it
 // comes from their own address and replies come back to them. (Writing the words and the PDF are in lib/invoice-doc.ts.)
 

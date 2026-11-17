@@ -1,5 +1,5 @@
 // ──────────────────────────────────────────────────────────
-//  Links from Mgmt Path to the team's Drive folders. Nothing here talks to Google: a link is just an address
+//  Links from Artist Path to the team's Drive folders. Nothing here talks to Google: a link is just an address
 //  someone pasted once, and every screen can then offer an "Open folder" button.
 //  Pure logic (no screens, no database), so it is easy to test.
 // ──────────────────────────────────────────────────────────

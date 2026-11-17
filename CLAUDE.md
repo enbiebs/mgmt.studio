@@ -55,7 +55,7 @@ When these are absent, the proxy (`src/proxy.ts`) and `AuthProvider` both short-
 ```
 CRON_SECRET=...            # lets the scheduled jobs in (without it every cron route answers 401)
 RESEND_API_KEY=...         # email is OFF until this and EMAIL_FROM are both set
-EMAIL_FROM="Mgmt Path <notices@your-verified-domain>"
+EMAIL_FROM="Artist Path <notices@your-verified-domain>"
 EMAIL_ONLY_TO=a@x.com,b@x.com   # while trying it out: ONLY these addresses get mail (remove to go live)
 CONTRACT_REMINDERS_ON=1    # a second switch: reminders to people OUTSIDE the company (a lawyer, an assistant)
 APP_URL=https://www.mgmtpath.com   # links in emails; must start with https://

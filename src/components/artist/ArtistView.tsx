@@ -27,7 +27,7 @@ import { STATUS_CONFIG } from '@/components/manager/ProjectsView'
 import { OfferSheetsCard } from '@/components/artist/OfferSheets'
 import { ApprovalsCard } from '@/components/artist/ApprovalsCard'
 import { analyticsHasData } from '@/lib/unfinished'
-import { ARTIST_SIDE_NAME } from '@/lib/brand'
+import { PRODUCT_NAME } from '@/lib/brand'
 import { ArtistAvatar } from '@/components/ui/ArtistAvatar'
 import { BrandingCard } from '@/components/profile/BrandingCard'
 import { portalStyle } from '@/lib/portal-theme'
@@ -121,7 +121,7 @@ export function ArtistView() {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
           <ArtistAvatar client={client} className="w-14 h-14" textClass="text-lg" rounded="rounded-2xl" />
           <div>
-            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">{ARTIST_SIDE_NAME}</div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">{PRODUCT_NAME}</div>
             <h1 className="font-serif text-2xl font-medium">{client.name}</h1>
             <p className="text-sm text-gray-400 mt-0.5">{client.genre}</p>
           </div>

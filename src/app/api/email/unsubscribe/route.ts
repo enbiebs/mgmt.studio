@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { addressKey, rateLimit } from '@/lib/api-guard'
 import { checkUnsubscribe } from '@/lib/email-unsubscribe'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { PRODUCT_NAME } from '@/lib/brand'
 
 export const runtime = 'nodejs'
 
@@ -21,7 +22,7 @@ async function stop(req: NextRequest) {
 }
 
 function page(message: string, status: number) {
-  const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mgmt Path</title>` +
+  const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${PRODUCT_NAME}</title>` +
     `<body style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:420px;margin:15vh auto;padding:0 16px;color:#1f1d1a"><p style="font-size:18px">${message}</p></body>`
   return new NextResponse(html, { status, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' } })
 }

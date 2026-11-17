@@ -66,7 +66,7 @@ import { OffersView }    from '@/components/tour/OffersView'
 import { TodayList } from '@/components/dashboard/TodayList'
 import { ActivityView } from '@/components/activity/ActivityView'
 import { ProfileView } from '@/components/profile/ProfileView'
-import { ARTIST_SIDE_NAME, PRODUCT_NAME } from '@/lib/brand'
+import { PRODUCT_NAME } from '@/lib/brand'
 
 export function StudioApp() {
   const { view, section, rosterPage, songsSub: rawSongsSub, contentSub: rawContentSub, bizSub: rawBizSub, tourSub: rawTourSub, clientId, data, role, hasAccess, isShareOnly, isLoading, workspaceId, showUnfinished } = useStore()
@@ -190,7 +190,7 @@ export function StudioApp() {
         {/* Artists have no side rail, so their credit line sits at the foot of the page */}
         {role === 'artist' && (
           <div className="flex-shrink-0 text-center py-1.5 text-[10px] uppercase tracking-widest text-gray-400 border-t border-gray-100">
-            {`${ARTIST_SIDE_NAME} · powered by ${PRODUCT_NAME}`}
+            {PRODUCT_NAME}
           </div>
         )}
 

@@ -10,6 +10,7 @@
 
 import type { Client, Contract } from '@/types'
 import { currentTermEnd, dateWord, noticeInfo } from '@/lib/contract-dates'
+import { PRODUCT_NAME } from '@/lib/brand'
 import { daysUntil } from '@/lib/date-state'
 import { esc, looksLikeEmail, plainLine } from '@/lib/email-address'
 
@@ -77,8 +78,8 @@ function write(o: { company: string; artist: string; c: Contract; k: KeyDate; un
   const d = dateWord(o.k.date)
   const title = plainLine(o.c.title, 120), counterparty = plainLine(o.c.counterparty, 80), artist = plainLine(o.artist, 60), company = plainLine(o.company, 60)
   const line = `${WHAT[o.k.kind].line(d)} That is ${inDays(o.k.daysLeft)}.`
-  const who = company || 'a Mgmt Path customer'
-  const why = `You are getting this because ${who} added your address to a contract's reminders in Mgmt Path. If that is a mistake, use the link below and these emails stop.`
+  const who = company || 'a customer'
+  const why = `You are getting this because ${who} added your address to a contract's reminders in ${PRODUCT_NAME}. If that is a mistake, use the link below and these emails stop.`
   const text = [`${title} (${artist}, with ${counterparty})`, line, '', why, ...(o.unsubscribeUrl ? [`Stop these emails: ${o.unsubscribeUrl}`] : [])].join('\n')
   const html =
     `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f1d1a;max-width:560px;margin:0 auto;padding:16px">` +

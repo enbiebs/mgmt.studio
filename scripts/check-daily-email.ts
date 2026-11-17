@@ -95,7 +95,7 @@ function world(): World {
   }
 }
 
-const ON = { RESEND_API_KEY: 'k', EMAIL_FROM: 'Mgmt Path <n@example.com>', CONTRACT_REMINDERS_ON: '1', SUPABASE_SERVICE_ROLE_KEY: 'server-secret' }
+const ON = { RESEND_API_KEY: 'k', EMAIL_FROM: 'Artist Path <n@example.com>', CONTRACT_REMINDERS_ON: '1', SUPABASE_SERVICE_ROLE_KEY: 'server-secret' }
 type Env = Record<string, string | undefined>
 
 async function run(w: World, o: { dryRun?: boolean; send?: Deps['send']; clients?: Client[]; env?: Env; now?: Date } = {}) {

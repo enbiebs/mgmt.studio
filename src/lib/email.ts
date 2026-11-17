@@ -2,7 +2,7 @@
 // nothing by itself: no key, no email. Uses Resend's HTTP interface with plain fetch (no new package).
 //
 //   RESEND_API_KEY   the sending key                       (server only; never sent to the browser)
-//   EMAIL_FROM       "Mgmt Path <notices@your-domain>"     (the domain must be verified with Resend first)
+//   EMAIL_FROM       "Artist Path <notices@your-domain>"     (the domain must be verified with Resend first)
 //   EMAIL_ONLY_TO    optional, comma-separated: when set, mail goes ONLY to these addresses (everyone else is skipped). For trying it out.
 
 import { looksLikeEmail } from '@/lib/email-address'
