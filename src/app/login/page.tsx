@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { hasAuthHash } from '@/lib/auth-hash'
-import { PRODUCT_NAME, PRODUCT_TAGLINE } from '@/lib/brand'
+import { MANAGER_LOGIN_NAME, PRODUCT_NAME, PRODUCT_TAGLINE } from '@/lib/brand'
 import { safeNextPath } from '@/lib/safe-redirect'
 
 type Mode = 'login' | 'signup' | 'magic' | 'reset'
@@ -88,7 +88,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-canvas flex flex-col items-center justify-center px-4">
       {/* Logo */}
       <div className="mb-8 text-center">
-        <div className="font-serif font-semibold text-2xl tracking-tight mb-1">{PRODUCT_NAME}</div>
+        <div className="font-serif font-semibold text-2xl tracking-tight mb-1">{MANAGER_LOGIN_NAME}</div>
         <div className="text-sm text-gray-400">{PRODUCT_TAGLINE}</div>
       </div>
 
@@ -112,7 +112,7 @@ export default function LoginPage() {
         {mode === 'signup' && (
           <p className="text-xs text-gray-500 mb-3 -mt-2 leading-relaxed">
             Starting a management company? Create it here and you will be its owner, then add your artists and invite your team.
-            <strong className="font-semibold text-gray-600"> Joining a team that already uses Mgmt Path?</strong> You do not need to sign up: ask your admin to invite you, and the invitation email takes you straight in.
+            <strong className="font-semibold text-gray-600"> Joining a team that already uses {PRODUCT_NAME}?</strong> You do not need to sign up: ask your admin to invite you, and the invitation email takes you straight in.
           </p>
         )}
 
@@ -216,7 +216,7 @@ export default function LoginPage() {
 
       {/* Footer */}
       <div className="mt-12 text-[10px] uppercase tracking-widest text-gray-300">
-        {PRODUCT_NAME} · Music Management · v0.1
+        {MANAGER_LOGIN_NAME} is part of {PRODUCT_NAME} · v0.1
       </div>
     </div>
   )

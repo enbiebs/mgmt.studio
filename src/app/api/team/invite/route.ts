@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       }
       // A login that belongs to another company (or none yet): the invitation waits for them to accept it in the app, and
       // the answer on screen is exactly the same as for anyone else, so an invitation can never be used to find out who
-      // else is on Mgmt Path.
+      // else is on Artist Path.
       await nudgeExistingLogin(address, new URL(req.url).origin)
       return NextResponse.json({ ok: true })
     }

@@ -103,7 +103,7 @@ check('the email says what and when, and why they got it, and how to stop it', (
 })
 check('a company with no name does not read like "your company"', () => {
   const r = remindersDue([client([contract({ expiryDate: '2026-12-01', reminderEmails: LAWYER })])], TODAY, '', STOP)[0]
-  assert.match(r.text, /because a Mgmt Path customer added your address/)
+  assert.match(r.text, /because a customer added your address to a contract's reminders in Artist Path\./)
 })
 check('nothing private goes in the email: no fees, terms, notes or files', () => {
   const secret = 'SECRET-FEE-12345'

@@ -186,7 +186,7 @@ check('a to-do for an artist the person cannot open is not in their email', () =
 check('the email says what it is about, once per artist, with a link that opens in the app', () => {
   const d = digestFor(person({ role: 'manager' }), BOTH, ctx())!
   const mail = renderDigest(d, { appUrl: 'https://www.mgmtpath.com' })
-  assert.equal(mail.subject, 'Mgmt Path: 4 things for you today')
+  assert.equal(mail.subject, 'Artist Path: 4 things for you today')
   assert.match(mail.text, /Artist One/); assert.match(mail.text, /Artist Two/)
   assert.match(mail.text, /switch off "Morning email"/)
   for (const path of ['/artists/a1/today', '/artists/b1/today']) {
@@ -197,7 +197,7 @@ check('the email says what it is about, once per artist, with a link that opens 
 })
 check('one thing reads as one thing', () => {
   const d = digestFor(person({ grants: [grant('legal', 'a1')] }), [A], ctx())!
-  assert.equal(renderDigest(d, { appUrl: 'https://x.test' }).subject, 'Mgmt Path: 1 thing for you today')
+  assert.equal(renderDigest(d, { appUrl: 'https://x.test' }).subject, 'Artist Path: 1 thing for you today')
 })
 check('what the artist\'s own data says cannot break the page (everything is escaped)', () => {
   const nasty = client({ name: 'A <img src=x onerror=alert(1)> & Co', invoices: [invoice('inv-n', { to: '<script>alert(1)</script>' })] })
@@ -212,7 +212,7 @@ check('a very long list is cut and the rest is counted, not listed', () => {
   const mail = renderDigest(d, { appUrl: 'https://x.test' })
   assert.equal(mail.text.split('\n').filter(l => l.startsWith('  • ')).length, MAX_LINES)
   assert.match(mail.text, /and 5 more things in the app/)
-  assert.equal(mail.subject, `Mgmt Path: ${MAX_LINES + 5} things for you today`)
+  assert.equal(mail.subject, `Artist Path: ${MAX_LINES + 5} things for you today`)
 })
 check('the worst thing comes first', () => {
   const c = client({ invoices: [invoice('soon', { dueDate: '2026-10-28' }), invoice('late')] })

@@ -4,7 +4,7 @@
 //
 //  It does not invent a method: the money in and out is the app's own profit & loss (lib/ledger.ts), the show lines use the same cut rule
 //  as everywhere else (showCommissions), and unpaid invoices are the ones the Invoices page calls outstanding. Each currency has its own
-//  section; pounds and euros are never added into dollars. It only knows what is entered in Mgmt Path, and says so on the page.
+//  section; pounds and euros are never added into dollars. It only knows what is entered in Artist Path, and says so on the page.
 // ──────────────────────────────────────────────────────────
 
 import type { Client, PLMonth } from '@/types'

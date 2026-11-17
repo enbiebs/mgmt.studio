@@ -2,7 +2,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { useStore } from '@/lib/store'
 import { SHOW_UNFINISHED_KEY, analyticsHasData } from '@/lib/unfinished'
-import { ARTIST_SIDE_NAME, PRODUCT_NAME } from '@/lib/brand'
+import { PRODUCT_NAME } from '@/lib/brand'
 import { BrandMark, Icon } from '@/components/ui/Icon'
 import { ClientSwitcher } from './ClientSwitcher'
 import { OPEN_COMMAND_BAR } from './CommandBar'
@@ -70,7 +70,7 @@ export function AppHeader() {
         {/* Brand: always for artists (they have no rail); on phones for everyone not inside an artist */}
         {(isArtist || !inStudio) && (
           <div className={`flex items-center gap-2 font-serif font-semibold text-base flex-shrink-0 ${isArtist ? '' : 'md:hidden'}`}>
-            <BrandMark className="w-6 h-6" /> {isArtist ? ARTIST_SIDE_NAME : PRODUCT_NAME}
+            <BrandMark className="w-6 h-6" /> {PRODUCT_NAME}
           </div>
         )}
 

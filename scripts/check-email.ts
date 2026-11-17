@@ -25,7 +25,7 @@ async function main() {
     assert.equal(esc(`<a href="x">'&'</a>`), '&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;')
   })
 
-  const ON = { RESEND_API_KEY: 'key', EMAIL_FROM: 'Mgmt Path <n@example.com>' }
+  const ON = { RESEND_API_KEY: 'key', EMAIL_FROM: 'Artist Path <n@example.com>' }
   const msg: Email = { to: 'a@x.org', subject: 'S', text: 'T', html: '<p>H</p>' }
 
   await check('email is off until a key and a from-address are set', async () => {
