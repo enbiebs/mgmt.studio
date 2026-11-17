@@ -64,7 +64,7 @@ const TERM_KEYS: Record<string, string> = {
   setLengthMin: 'set length', bonuses: 'bonuses', groundTransport: 'ground transport', hotel: 'hotel', airfare: 'airfare',
   merchArtistPct: 'merch split', merchSoldBy: 'merch seller', production: 'production', hospitality: 'hospitality',
   payments: 'payment schedule', radiusMiles: 'radius clause', radiusDaysAfter: 'radius days', routingNotes: 'routing notes',
-  alternativeDates: 'alternative dates', respondBy: 'reply-by date',
+  alternativeDates: 'alternative dates', respondBy: 'reply-by date', holdUntil: 'hold-until date', holdPosition: 'place in line',
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)

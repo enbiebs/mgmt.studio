@@ -56,6 +56,7 @@ import type { InboxChoice } from '@/lib/inbox'
 import { SHOW_UNFINISHED_KEY } from '@/lib/unfinished'
 import { buildOfferSheetSnapshot } from '@/lib/offer-sheet'
 import { hasDealData, splitDealPatch, withoutDeal } from '@/lib/show-deals'
+import { termsForStatus } from '@/lib/holds'
 import { ownerToCarry, withoutOwners } from '@/lib/item-owner'
 import { rowSaved, saveOwners, trackRow } from '@/lib/owner-save'
 import { contextFields, openableClientIds, pickHomeWorkspace, type CompanyContext, type Membership } from '@/lib/companies'
@@ -2733,6 +2734,7 @@ export const useStore = create<StudioState>((set, get) => ({
   addOffer: (patch) => {
     const { data, clientId, workspaceId } = get()
     const newOffer: TourOffer = { id: 'offer-' + uid(), status: 'inquiry', ...patch }
+    if (newOffer.terms) newOffer.terms = termsForStatus(newOffer.terms, newOffer.status)   // a new offer is not on hold yet, so it carries no hold details
     // A budget is drafted the moment an offer comes in (crew who tour with the
     // artist and their saved rates are already in it).
     const client = data.clients.find(c => c.id === clientId)
@@ -2782,6 +2784,9 @@ export const useStore = create<StudioState>((set, get) => ({
           if (o.id !== offerId) return o
           ownerWas = o.ownerId
           updatedOffer = { ...o, ...patch }
+          // Hold details (until when, our place in line) only belong to an offer that is on hold: leaving hold takes them off.
+          const tidyTerms = termsForStatus(updatedOffer.terms, updatedOffer.status)
+          if (tidyTerms !== updatedOffer.terms) updatedOffer = { ...updatedOffer, terms: tidyTerms }
           // Confirming an offer creates its Show automatically — only on the
           // transition into 'confirmed', not on every edit while confirmed.
           if (patch.status === 'confirmed' && o.status !== 'confirmed' && !updatedOffer.showId && mayMakeShow) {

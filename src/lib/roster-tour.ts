@@ -10,6 +10,7 @@ import type { Client, Currency, MainSection, UserRole } from '@/types'
 import { daysUntil } from '@/lib/date-state'
 import { progressForShow, type ProgressLink } from '@/lib/show-progress'
 import { replyStatus } from '@/lib/offer-terms'
+import { holdClock, holdPlaces, placeLabel, placeTone } from '@/lib/holds'
 import { formatTotals, sumByCurrency } from '@/lib/money'
 
 /**
@@ -59,6 +60,8 @@ export interface OfferCard {
   guarantee: number                                 // US dollars, as the offer form stores it
   viaAgency: boolean
   reply?: { label: string; tone: 'late' | 'soon' | 'ok' }
+  hold?: { label: string; tone: 'late' | 'soon' | 'ok' | 'quiet' }        // a hold: how long the promoter keeps the date
+  holdPlace?: { label: string; tone: 'first' | 'behind' | 'check' }          // a hold on a date another promoter also holds: our place in line
   datePassed: boolean                               // an inquiry or hold whose date has gone by
 }
 
@@ -99,15 +102,20 @@ export function buildRosterTour(inputs: readonly RosterTourInput[], today: strin
     }
 
     if (access.deals) {
+      const places = holdPlaces(client.agentData?.offers ?? [], today)
       for (const o of client.agentData?.offers ?? []) {
         if (!OFFER_COLUMNS.includes(o.status as OfferColumn)) continue
         const open = o.status !== 'confirmed'
         const reply = open ? replyStatus(o.terms?.respondBy, today) : undefined
+        const hold = holdClock(o, today)
+        const place = places.get(o.id)
         offers.push({
           ...who, offerId: o.id, status: o.status as OfferColumn,
           date: o.date, days: daysUntil(o.date, today), venue: o.venue, city: o.city, promoter: o.promoter,
           guarantee: o.guarantee, viaAgency: !!o.viaAgency,
           ...(reply ? { reply } : {}),
+          ...(hold ? { hold: { label: hold.label, tone: hold.tone } } : {}),
+          ...(place ? { holdPlace: { label: placeLabel(place), tone: placeTone(place) } } : {}),
           datePassed: open && o.date < today,
         })
       }

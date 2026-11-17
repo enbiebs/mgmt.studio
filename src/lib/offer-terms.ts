@@ -88,6 +88,7 @@ export interface TermsDraft {
   payments: { when: string; pct: string }[]
   radiusMiles: string; radiusDaysAfter: string
   routingNotes: string; alternativeDates: string; respondBy: string
+  holdUntil: string; holdPosition: string
 }
 
 export function draftFromTerms(t?: OfferTerms): TermsDraft {
@@ -102,6 +103,7 @@ export function draftFromTerms(t?: OfferTerms): TermsDraft {
     payments: (t?.payments ?? []).map(p => ({ when: p.when, pct: s(p.pct) })),
     radiusMiles: s(t?.radiusMiles), radiusDaysAfter: s(t?.radiusDaysAfter),
     routingNotes: t?.routingNotes ?? '', alternativeDates: t?.alternativeDates ?? '', respondBy: t?.respondBy ?? '',
+    holdUntil: t?.holdUntil ?? '', holdPosition: s(t?.holdPosition),
   }
 }
 
@@ -110,6 +112,9 @@ const num = (s: string): number | undefined => {
   const n = Number(s)
   return Number.isFinite(n) ? n : undefined
 }
+
+// Our place in line is a whole number from 1 up; anything else means "not ranked".
+const place = (s: string): number | undefined => { const n = num(s); return n !== undefined && n >= 1 ? Math.round(n) : undefined }
 
 // Keeps only what was filled in, so an offer with no extra terms saves no terms at all.
 export function termsFromDraft(d: TermsDraft): OfferTerms | undefined {
@@ -129,6 +134,7 @@ export function termsFromDraft(d: TermsDraft): OfferTerms | undefined {
       .filter((p): p is OfferPayment => p.when !== '' && !!p.pct),
     radiusMiles: num(d.radiusMiles), radiusDaysAfter: num(d.radiusDaysAfter),
     routingNotes: text(d.routingNotes), alternativeDates: text(d.alternativeDates), respondBy: text(d.respondBy),
+    holdUntil: text(d.holdUntil), holdPosition: place(d.holdPosition),
   }
   // Drop empty values (and empty lists) so the saved JSON only holds real terms.
   const out = Object.fromEntries(

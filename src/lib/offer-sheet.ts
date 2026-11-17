@@ -10,6 +10,7 @@ import type {
   Budget, Client, Currency, OfferSheet, OfferSheetDetail, OfferSheetSnapshot, OfferSheetStatus, TourOffer,
 } from '@/types'
 import { computeBudget, COMMISSION_BASE_LABEL } from '@/lib/budget'
+import { withoutHoldDetails } from '@/lib/holds'
 import { bonusLabel, clock, maxPotential, merchLabel, paymentAmounts, radiusLabel, setTimeLabel } from '@/lib/offer-terms'
 import { today } from '@/lib/utils'
 
@@ -38,7 +39,7 @@ export function buildOfferSheetSnapshot(args: {
     sentOn: today(),
     offer: {
       venue: offer.venue, city: offer.city, country: offer.country, date: offer.date, promoter: offer.promoter,
-      guarantee: offer.guarantee, door: offer.door, buyout: offer.buyout, terms: offer.terms,
+      guarantee: offer.guarantee, door: offer.door, buyout: offer.buyout, terms: withoutHoldDetails(offer.terms),   // how long a promoter holds the date, and our place in line, stay inside the company
     },
     totals: { gross: t.gross, soundLights: t.soundLights, production: t.production, commissions: t.totalCommissions, net: t.net },
   }
