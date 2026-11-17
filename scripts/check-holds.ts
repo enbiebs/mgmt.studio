@@ -1,7 +1,7 @@
 // Checks holds on offers: how long is left, who is first in line when several promoters hold the same date, and keeping hold details off offers that are not on hold.  Run with:  npx tsx scripts/check-holds.ts
 import assert from 'node:assert/strict'
-import { holdClock, holdPlaces, isLiveHold, ordinal, otherHoldsOnDate, othersLine, placeLabel, placeTone, termsForStatus, withoutHoldDetails } from '../src/lib/holds'
-import { draftFromTerms, termsFromDraft } from '../src/lib/offer-terms'
+import { holdClock, holdPlaces, isIsoDay, isLiveHold, ordinal, otherHoldsOnDate, othersLine, placeLabel, placeTone, termsForStatus, withoutHoldDetails } from '../src/lib/holds'
+import { draftForSave, draftFromTerms, draftOnLeavingHold, termsFromDraft } from '../src/lib/offer-terms'
 import { buildOfferSheetSnapshot } from '../src/lib/offer-sheet'
 import { bookingsOf, conflictsFor, splitSameDay } from '../src/lib/intelligence'
 import { useStore } from '../src/lib/store'
@@ -48,8 +48,8 @@ check('a hold on a date by itself has no place in line', () => {
 
 check('two holds on one date, ranked: first and second', () => {
   const p = holdPlaces([offer('a', { holdPosition: 2 }), offer('b', { holdPosition: 1 })], TODAY)
-  assert.deepEqual(p.get('b'), { rank: 1, of: 2, ranked: true, tied: false, others: ['V-a'] })
-  assert.deepEqual(p.get('a'), { rank: 2, of: 2, ranked: true, tied: false, others: ['V-b'] })
+  assert.deepEqual(p.get('b'), { rank: 1, of: 2, ranked: true, tied: false, position: 1, unsure: false, others: ['V-a'] })
+  assert.deepEqual(p.get('a'), { rank: 2, of: 2, ranked: true, tied: false, position: 2, unsure: false, others: ['V-b'] })
   assert.equal(placeLabel(p.get('b')!), '1st hold of 2'); assert.equal(placeLabel(p.get('a')!), '2nd hold of 2')
   assert.equal(placeTone(p.get('b')!), 'first'); assert.equal(placeTone(p.get('a')!), 'behind')
 })
@@ -76,6 +76,39 @@ check('two holds claiming the same place are flagged as tied', () => {
   assert.equal(placeLabel(p.get('a')!), 'Tied for 1st hold')
   assert.equal(placeTone(p.get('a')!), 'check')
   assert.equal(p.get('c')?.rank, 3)       // two are ahead of it
+})
+
+check('a place behind 1st is only a guess while another hold on the date is not ranked', () => {
+  const p = holdPlaces([offer('a'), offer('b', { holdPosition: 2 })], TODAY)       // a was never ranked: it could be the real 1st
+  assert.equal(p.get('b')?.rank, 1)                                                // by arithmetic it comes first among the ranked...
+  assert.equal(p.get('b')?.unsure, true)                                           // ...but the person said 2nd, so we must not claim 1st
+  assert.equal(placeLabel(p.get('b')!), 'Set as 2nd · another hold is not ranked yet')
+  assert.equal(placeTone(p.get('b')!), 'check')
+  assert.equal(p.get('a')?.unsure, false); assert.equal(placeLabel(p.get('a')!), 'Not ranked · 2 holds on this date')
+  const first = holdPlaces([offer('a'), offer('b', { holdPosition: 1 })], TODAY)    // said 1st: nothing can be ahead of that
+  assert.equal(first.get('b')?.unsure, false); assert.equal(placeLabel(first.get('b')!), '1st hold of 2'); assert.equal(placeTone(first.get('b')!), 'first')
+  const allRanked = holdPlaces([offer('a', { holdPosition: 1 }), offer('b', { holdPosition: 2 })], TODAY)
+  assert.equal(allRanked.get('b')?.unsure, false)                                  // everyone ranked: no guess
+  const three = holdPlaces([offer('a', { holdPosition: 1 }), offer('b', { holdPosition: 3 }), offer('c')], TODAY)
+  assert.equal(three.get('b')?.unsure, true)                                       // c is unranked and could sit between 1st and 3rd
+  assert.equal(three.get('a')?.unsure, false)
+})
+
+check('a hold-until that is not a real day is never counted as a date', () => {
+  for (const bad of ['20266-11-20', '2026-02-30', '2026-13-01', '26-11-20', '2026/11/20', 'soon', '', ' 2026-11-20']) assert.equal(isIsoDay(bad), false, bad)
+  for (const good of ['2026-11-20', '2028-02-29', '2026-12-31']) assert.equal(isIsoDay(good), true, good)
+  assert.deepEqual(holdClock(offer('a', { holdUntil: '20266-11-20' }), TODAY), { label: 'No hold-until date', tone: 'quiet', daysLeft: null })
+  const d = draftFromTerms({ holdUntil: '2026-11-20' })
+  assert.equal(termsFromDraft({ ...d, holdUntil: '20266-11-20' }), undefined)       // a typo is not saved at all
+  assert.equal(termsFromDraft({ ...d, holdUntil: ' 2026-11-20 ' })?.holdUntil, '2026-11-20')   // stray spaces are fine
+})
+
+check('the offer form: place in line is dropped when nobody else holds the date, and leaving hold clears the open form', () => {
+  const d = draftFromTerms({ capacity: 500, holdUntil: '2026-11-20', holdPosition: 2 })
+  assert.deepEqual(termsFromDraft(draftForSave(d, true)), { capacity: 500, holdUntil: '2026-11-20', holdPosition: 2 })     // others hold the date: kept
+  assert.deepEqual(termsFromDraft(draftForSave(d, false)), { capacity: 500, holdUntil: '2026-11-20' })                      // alone on the date: the place is dropped, the end date stays
+  assert.deepEqual(termsFromDraft(draftOnLeavingHold(d)), { capacity: 500 })                                                // leaving hold: both go, the rest stays
+  assert.equal(d.holdUntil, '2026-11-20')                                                                                    // the draft passed in was not changed
 })
 
 check('when the first hold goes, the second moves up by itself', () => {

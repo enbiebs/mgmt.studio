@@ -89,6 +89,8 @@ assert.deepEqual(sev({ offers: [holdEnds('2026-10-26')] }, 'hold_expiry'), ['soo
 assert.deepEqual(sev({ offers: [holdEnds('2026-10-27')] }, 'hold_expiry'), [])               // 8 days: not yet
 assert.equal(one({ offers: [holdEnds('2026-10-26')] }, 'hold_expiry').date, '2026-10-26')
 assert.equal(run({ offers: [offer({ status: 'hold', date: '2026-12-01' })] }, 'hold_expiry').length, 0)                // no end date entered: nothing to count down
+assert.equal(run({ offers: [holdEnds('20266-11-20')] }, 'hold_expiry').length, 0)                                     // a typo is not a date: it raises nothing (the card says no date was entered)
+assert.equal(run({ offers: [holdEnds('2026-09-31')] }, 'hold_expiry').length, 0)                                      // September has 30 days: a day that does not exist is not rolled into October
 assert.equal(run({ offers: [holdEnds('2026-10-15', { status: 'inquiry' })] }, 'hold_expiry').length, 0)                // not on hold any more
 assert.equal(run({ offers: [holdEnds('2026-10-15', { status: 'confirmed' })] }, 'hold_expiry').length, 0)
 assert.equal(run({ offers: [holdEnds('2026-10-15', { date: '2026-10-10' })] }, 'hold_expiry').length, 0)              // the show date has passed: the hold is moot

@@ -21,7 +21,7 @@ import { dateToAct, noticeLine } from '@/lib/contract-dates'
 import { CRITICAL_STEPS, releaseStatus } from '@/lib/release-plan'
 import { plainLine } from '@/lib/email-address'
 import { ownerField } from '@/lib/item-owner'
-import { isLiveHold } from '@/lib/holds'
+import { isIsoDay, isLiveHold } from '@/lib/holds'
 import { changesWanted, daysWaiting, NUDGE_DAYS, URGENT_DAYS, waitingForAnswer } from '@/lib/round-approval'
 
 export type InboxSeverity = 'urgent' | 'soon' | 'info'
@@ -159,7 +159,7 @@ export function buildInbox(client: Client, today: string, access: InboxAccess): 
       }
 
       // The promoter will only keep the date for us until a set day (a hold that has run out is flagged, never released by itself).
-      const holdEnd = isLiveHold(o, today) ? o.terms?.holdUntil : undefined
+      const holdEnd = isLiveHold(o, today) && isIsoDay(o.terms?.holdUntil) ? o.terms?.holdUntil : undefined
       if (holdEnd) {
         const left = days(holdEnd, today)
         const go = { section: 'tour' as const, sub: 'offers' }

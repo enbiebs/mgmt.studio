@@ -18,6 +18,13 @@ const diff = (a: string, b: string) => Math.round((Date.parse(a + 'T00:00:00Z') 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 const shortDate = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
+/** A real calendar day written as YYYY-MM-DD. A typo like "20266-11-20" or "2026-02-30" is not one, and must never be counted as a hold date. */
+export function isIsoDay(v: unknown): v is string {
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false
+  const t = Date.parse(v + 'T00:00:00Z')
+  return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === v
+}
+
 /** The most places in line we ask about (nobody holds a date for a 7th promoter). */
 export const MAX_POSITION = 6
 
@@ -46,7 +53,7 @@ export interface HoldClock {
 export function holdClock(o: HoldOffer, today: string): HoldClock | undefined {
   if (!isLiveHold(o, today)) return undefined
   const until = o.terms?.holdUntil
-  if (!until) return { label: 'No hold-until date', tone: 'quiet', daysLeft: null }
+  if (!isIsoDay(until)) return { label: 'No hold-until date', tone: 'quiet', daysLeft: null }
   const left = diff(until, today)
   if (left < 0) return { label: `Hold ran out ${shortDate(until)}`, tone: 'late', daysLeft: left }
   if (left === 0) return { label: 'Hold runs out today', tone: 'soon', daysLeft: 0 }
@@ -63,6 +70,10 @@ export interface HoldPlace {
   ranked: boolean
   /** Another hold on this date claims the same place. */
   tied: boolean
+  /** The place the person chose (null when they did not rank it). */
+  position: number | null
+  /** They chose a place behind 1st while another live hold on the date is not ranked: that other one might really be ahead, so the place is a guess. */
+  unsure: boolean
   /** The other live holds on this date (venue names), for "also held by". */
   others: string[]
 }
@@ -89,6 +100,8 @@ export function holdPlaces(offers: readonly HoldOffer[], today: string): Map<str
         of: group.length,
         ranked: o.terms?.holdPosition !== undefined,
         tied: mine !== Number.POSITIVE_INFINITY && group.some(x => x !== o && key(x) === mine),
+        position: o.terms?.holdPosition ?? null,
+        unsure: mine !== Number.POSITIVE_INFINITY && mine > 1 && group.some(x => x !== o && x.terms?.holdPosition === undefined),
         others: group.filter(x => x !== o).map(x => x.venue ?? ''),
       })
     }
@@ -100,12 +113,13 @@ export function holdPlaces(offers: readonly HoldOffer[], today: string): Map<str
 export function placeLabel(p: HoldPlace): string {
   if (!p.ranked) return `Not ranked · ${p.of} holds on this date`
   if (p.tied) return `Tied for ${ordinal(p.rank)} hold`
+  if (p.unsure && p.position !== null) return `Set as ${ordinal(p.position)} · another hold is not ranked yet`
   return `${ordinal(p.rank)} hold of ${p.of}`
 }
 
-/** How a place in line should look: first in line is calm, a tie or no ranking needs a decision, anything behind is quiet. */
+/** How a place in line should look: first in line is calm, a tie, no ranking or a guess needs a decision, anything behind is quiet. */
 export function placeTone(p: HoldPlace): 'first' | 'behind' | 'check' {
-  if (!p.ranked || p.tied) return 'check'
+  if (!p.ranked || p.tied || p.unsure) return 'check'
   return p.rank === 1 ? 'first' : 'behind'
 }
 
