@@ -20,6 +20,7 @@ import { daysToExpiry, effectiveStatus } from '@/lib/contract-status'
 import { dateToAct, noticeLine } from '@/lib/contract-dates'
 import { CRITICAL_STEPS, releaseStatus } from '@/lib/release-plan'
 import { plainLine } from '@/lib/email-address'
+import { ownerField } from '@/lib/item-owner'
 import { changesWanted, daysWaiting, NUDGE_DAYS, URGENT_DAYS, waitingForAnswer } from '@/lib/round-approval'
 
 export type InboxSeverity = 'urgent' | 'soon' | 'info'
@@ -41,6 +42,7 @@ export interface InboxItem {
   date?: string                       // the date it is about, for ordering
   go: { section: MainSection; sub?: string }   // where "Open" takes you
   demo?: boolean                      // about practice data: shown so the demo looks alive, but the daily email and cash forecast leave it out
+  ownerId?: string                    // the teammate who owns the offer or show this is about (lib/item-owner.ts), if it has one
 }
 
 // What this person may see for this client: money items need Finance, show items need Tour,
@@ -150,27 +152,27 @@ export function buildInbox(client: Client, today: string, access: InboxAccess): 
       const respondBy = o.terms?.respondBy
       if (respondBy) {
         const left = days(respondBy, today)
-        if (left < 0) add('offer_reply', o.id, 'urgent', { title: `Your reply to ${o.venue} was due ${plural(-left, 'day')} ago`, detail: `${o.city} · ${o.promoter}`, date: respondBy, go: { section: 'tour', sub: 'offers' } })
-        else if (left <= 3) add('offer_reply', o.id, 'urgent', { title: `${o.venue} needs your reply ${when(left)}`, detail: `${o.city} · ${o.promoter}`, date: respondBy, go: { section: 'tour', sub: 'offers' } })
-        else if (left <= 7) add('offer_reply', o.id, 'soon', { title: `${o.venue} needs your reply ${when(left)}`, detail: `${o.city} · ${o.promoter}`, date: respondBy, go: { section: 'tour', sub: 'offers' } })
+        if (left < 0) add('offer_reply', o.id, 'urgent', { title: `Your reply to ${o.venue} was due ${plural(-left, 'day')} ago`, detail: `${o.city} · ${o.promoter}`, date: respondBy, go: { section: 'tour', sub: 'offers' }, ...ownerField(o) })
+        else if (left <= 3) add('offer_reply', o.id, 'urgent', { title: `${o.venue} needs your reply ${when(left)}`, detail: `${o.city} · ${o.promoter}`, date: respondBy, go: { section: 'tour', sub: 'offers' }, ...ownerField(o) })
+        else if (left <= 7) add('offer_reply', o.id, 'soon', { title: `${o.venue} needs your reply ${when(left)}`, detail: `${o.city} · ${o.promoter}`, date: respondBy, go: { section: 'tour', sub: 'offers' }, ...ownerField(o) })
       }
 
       // A hold that's close and still not confirmed.
       const away = days(o.date, today)
       if (o.status === 'hold' && away >= 0 && away <= 14) {
-        add('offer_hold', o.id, 'soon', { title: `The hold at ${o.venue} is still unconfirmed (the date is ${when(away)})`, detail: `${o.city} · ${o.promoter}`, date: o.date, go: { section: 'tour', sub: 'offers' } })
+        add('offer_hold', o.id, 'soon', { title: `The hold at ${o.venue} is still unconfirmed (the date is ${when(away)})`, detail: `${o.city} · ${o.promoter}`, date: o.date, go: { section: 'tour', sub: 'offers' }, ...ownerField(o) })
       }
 
       // The artist's answer to an offer sheet (sheets carry budget numbers: Deals & fees + Finance).
       if (access.finance) {
         const sheet = latestSheet(client.tour.offerSheets, o.id)
         if (sheet?.status === 'approved') {
-          add('sheet', sheet.id, 'soon', { title: `${client.name} approved V${sheet.version} for ${o.venue}`, detail: 'Confirm it with the promoter when you are ready', date: sheet.respondedAt ? localDateOf(sheet.respondedAt) : undefined, go: { section: 'tour', sub: 'offers' } })
+          add('sheet', sheet.id, 'soon', { title: `${client.name} approved V${sheet.version} for ${o.venue}`, detail: 'Confirm it with the promoter when you are ready', date: sheet.respondedAt ? localDateOf(sheet.respondedAt) : undefined, go: { section: 'tour', sub: 'offers' }, ...ownerField(o) })
         } else if (sheet?.status === 'passed') {
-          add('sheet', sheet.id, 'info', { title: `${client.name} passed on ${o.venue}`, detail: sheet.responseNote ? `"${sheet.responseNote}"` : 'You may want to close the offer', date: sheet.respondedAt ? localDateOf(sheet.respondedAt) : undefined, go: { section: 'tour', sub: 'offers' } })
+          add('sheet', sheet.id, 'info', { title: `${client.name} passed on ${o.venue}`, detail: sheet.responseNote ? `"${sheet.responseNote}"` : 'You may want to close the offer', date: sheet.respondedAt ? localDateOf(sheet.respondedAt) : undefined, go: { section: 'tour', sub: 'offers' }, ...ownerField(o) })
         } else if (sheet?.status === 'sent') {
           const waiting = days(today, localDateOf(sheet.sentAt))
-          if (waiting >= 3) add('sheet', sheet.id, 'soon', { title: `Waiting on ${client.name} to answer V${sheet.version} for ${o.venue}`, detail: `Sent ${plural(waiting, 'day')} ago`, date: localDateOf(sheet.sentAt), go: { section: 'tour', sub: 'offers' } })
+          if (waiting >= 3) add('sheet', sheet.id, 'soon', { title: `Waiting on ${client.name} to answer V${sheet.version} for ${o.venue}`, detail: `Sent ${plural(waiting, 'day')} ago`, date: localDateOf(sheet.sentAt), go: { section: 'tour', sub: 'offers' }, ...ownerField(o) })
         }
       }
     }
@@ -185,13 +187,13 @@ export function buildInbox(client: Client, today: string, access: InboxAccess): 
       // The show happened but no settlement has been entered.
       if (since >= 3 && !settledShowIds.has(show.id) && !settlementForShow(client, show.id)) {
         const severity: InboxSeverity = since > 21 ? 'urgent' : since > 7 ? 'soon' : 'info'
-        add('no_settlement', show.id, severity, { title: `No settlement yet for ${show.venue}`, detail: `${show.city} · the show was ${plural(since, 'day')} ago`, date: show.date, go: { section: 'tour', sub: 'settlements' } })
+        add('no_settlement', show.id, severity, { title: `No settlement yet for ${show.venue}`, detail: `${show.city} · the show was ${plural(since, 'day')} ago`, date: show.date, go: { section: 'tour', sub: 'settlements' }, ...ownerField(show) })
       }
 
       // A show coming up with no budget.
       const away = -since
       if (away >= 0 && away <= 30 && !(client.finance.budgets ?? []).some(b => b.showId === show.id)) {
-        add('no_budget', show.id, 'info', { title: `No budget yet for ${show.venue}`, detail: `${show.city} · ${away === 0 ? 'today' : `in ${plural(away, 'day')}`}`, date: show.date, go: { section: 'tour', sub: 'budget' } })
+        add('no_budget', show.id, 'info', { title: `No budget yet for ${show.venue}`, detail: `${show.city} · ${away === 0 ? 'today' : `in ${plural(away, 'day')}`}`, date: show.date, go: { section: 'tour', sub: 'budget' }, ...ownerField(show) })
       }
     }
 

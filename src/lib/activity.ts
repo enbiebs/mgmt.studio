@@ -51,7 +51,7 @@ const FIELD: Record<string, string> = {
   expiry_date: 'expiry date', flagged: 'flag', payments: 'payments', total_due: 'total due', balance_due: 'balance due',
   drive_url: 'folder link', event_name: 'event', prepared_on: 'statement date', payout: 'payout', summary: 'summary', deal: 'deal', fx: 'exchange rates',
   auto_renews: 'automatic renewal', renewal_months: 'renewal length (months)', notice_days: 'notice period (days)', files: 'attached files', reminder_emails: 'people to remind',
-  response_note: 'artist\'s note', responded_at: 'answer date', message: 'message', detail: 'detail level',
+  owner_user: 'owner', response_note: 'artist\'s note', responded_at: 'answer date', message: 'message', detail: 'detail level',
 }
 // Behind-the-scenes links and copies: recorded, but meaningless to read ("set the show link to show-x5coe98").
 const HIDDEN = new Set(['show_id', 'tour_offer_id', 'invoice_id', 'run_id', 'original', 'vendor_id', 'bill_file_path', 'file_path', 'vendor_flags', 'offer_id'])
@@ -100,6 +100,7 @@ function describeChange(field: string, change: unknown): string {
     if (field === 'paid') return to ? 'marked it paid' : 'marked it unpaid'
     if (field === 'drive_url') return to ? 'linked a folder' : 'removed the folder link'
     if (field === 'history_only') return to ? 'kept it as history only' : 'took it out of history'
+    if (field === 'owner_user') return !to ? 'took off the owner' : from ? 'changed the owner' : 'gave it an owner'   // never the login id itself
     if (field === 'via_agency') return to ? 'marked it as booked through an agency' : 'marked it as booked direct'
     if (field === 'locked_at') return to ? 'locked the budget\'s Original' : 'unlocked the budget'
     if (field === 'flagged') return to ? 'flagged it for review' : 'cleared the review flag'

@@ -56,6 +56,8 @@ import type { InboxChoice } from '@/lib/inbox'
 import { SHOW_UNFINISHED_KEY } from '@/lib/unfinished'
 import { buildOfferSheetSnapshot } from '@/lib/offer-sheet'
 import { hasDealData, splitDealPatch, withoutDeal } from '@/lib/show-deals'
+import { ownerToCarry, withoutOwners } from '@/lib/item-owner'
+import { rowSaved, saveOwners, trackRow } from '@/lib/owner-save'
 import { contextFields, openableClientIds, pickHomeWorkspace, type CompanyContext, type Membership } from '@/lib/companies'
 import {
   SECTION_TO_GRANT_KEY, findException, filterClientForViewer,
@@ -294,12 +296,14 @@ function accessFor(s: Pick<StudioState, 'clientWorkspace' | 'workspaceId' | 'pre
 }
 
 /** Reads one company in full for the person's membership in it: its artists, templates, name, their pages and the team. */
-async function loadCompany(m: Membership) {
-  const [data, loadedTemplates, company] = await Promise.all([
+export async function loadCompany(m: Membership) {
+  const [loaded, loadedTemplates, company] = await Promise.all([
     loadWorkspaceData(m.workspaceId),
     loadLegalTemplates(m.workspaceId),
     loadCompanyInfo(m.workspaceId).catch(() => ({ name: '', ownerUserId: null as string | null })),
   ])
+  // The artist's own login never holds who owns what on the management side (the database sends the owner's id with each row; it is dropped here).
+  const data = m.role === 'artist' ? withoutOwners(loaded) : loaded
   // First load for this workspace — seed the starter templates and
   // persist them so they're real, editable workspace rows from here on.
   let legalTemplates = loadedTemplates
@@ -600,13 +604,15 @@ interface StudioState {
   // Adds many shows at once (the spreadsheet import). Resolves with how many were saved and how many weren't.
   importShows: (shows: Show[]) => Promise<{ saved: number; failed: number }>
   updateShowStatus: (showId: string, status: ShowStatus) => void
+  /** Gives a show to a teammate (their login id), or to nobody (null). */
+  setShowOwner: (showId: string, ownerId: string | null) => void
   updateShowFinancials: (showId: string, patch: { guarantee?: number; deposit?: number; received?: number; currency?: Currency; viaAgency?: boolean; agencyName?: string; agencyCommissionPct?: number; managementCommissionPct?: number; historyOnly?: boolean; driveUrl?: string }) => void
   /** No-ops if the show has no guarantee yet, or already has a generated invoice. */
   generateInvoiceFromShow: (showId: string) => void
   deleteShow: (showId: string) => void
 
   // ── Tour offers ──
-  addOffer: (patch: { venue: string; city: string; country: string; date: string; promoter: string; guarantee: number; door?: number; buyout?: number; notes?: string; viaAgency?: boolean; agencyName?: string; agencyCommissionPct?: number; managementCommissionPct?: number; terms?: OfferTerms }) => void
+  addOffer: (patch: { venue: string; city: string; country: string; date: string; promoter: string; guarantee: number; door?: number; buyout?: number; notes?: string; viaAgency?: boolean; agencyName?: string; agencyCommissionPct?: number; managementCommissionPct?: number; terms?: OfferTerms; ownerId?: string }) => void
   /** Editing an offer's status into 'confirmed' also creates the matching Show. */
   updateOffer: (offerId: string, patch: Partial<Omit<TourOffer, 'id'>>) => void
   deleteOffer: (offerId: string) => void
@@ -720,6 +726,27 @@ interface StudioState {
 
 // ── Store ───────────────────────────────────────────────────
 const now = new Date()
+
+/** Puts an owner on a show or an offer on screen (and in the copy kept on this device), without saving it to the database. Used to put the old owner back when a save is refused. */
+function showOwnerOnScreen(kind: 'show' | 'offer', clientId: string, id: string, ownerId: string | undefined) {
+  const { data } = useStore.getState()
+  const updated = {
+    clients: data.clients.map(c => {
+      if (c.id !== clientId) return c
+      return kind === 'show'
+        ? { ...c, tour: { ...c.tour, shows: c.tour.shows.map(s => (s.id === id ? { ...s, ownerId } : s)) } }
+        : { ...c, agentData: { ...c.agentData, offers: c.agentData.offers.map(o => (o.id === id ? { ...o, ownerId } : o)) } }
+    }),
+  }
+  useStore.setState({ data: updated })
+  saveData(updated)
+}
+
+/** Who the screen shows as the owner of this show or offer right now. */
+function ownerOnScreen(kind: 'show' | 'offer', clientId: string, id: string): string | undefined {
+  const c = useStore.getState().data.clients.find(x => x.id === clientId)
+  return kind === 'show' ? c?.tour.shows.find(s => s.id === id)?.ownerId : c?.agentData?.offers.find(o => o.id === id)?.ownerId
+}
 
 export const useStore = create<StudioState>((set, get) => ({
   data: defaultData(),
@@ -920,7 +947,8 @@ export const useStore = create<StudioState>((set, get) => ({
       if (workspaceId) {
         try {
           const ids = Object.keys(get().contexts)
-          const all = await Promise.all((ids.length > 0 ? ids : [workspaceId]).map(id => loadWorkspaceData(id)))
+          // (a company where this login is an artist's own login never holds owners)
+          const all = await Promise.all((ids.length > 0 ? ids : [workspaceId]).map(async id => { const d = await loadWorkspaceData(id); return get().contexts[id]?.role === 'artist' ? withoutOwners(d) : d }))
           data = { clients: all.flatMap(d => d.clients) }
         } catch (e) { console.error(e) }
       }
@@ -1063,7 +1091,10 @@ export const useStore = create<StudioState>((set, get) => ({
     const ws = clientWorkspace[clientId] ?? workspaceId
     if (!ws || previewMemberId) return false              // while previewing as someone else the screen shows their view, not fresh rows
     try {
-      const fresh = (await loadWorkspaceData(ws)).clients.find(c => c.id === clientId)
+      const loaded = await loadWorkspaceData(ws)
+      // The artist's own login never holds who owns what on the management side (same rule as when everything first loads).
+      const data = accessFor(get(), clientId).role === 'artist' ? withoutOwners(loaded) : loaded
+      const fresh = data.clients.find(c => c.id === clientId)
       if (!fresh) return false
       const updated = { clients: get().data.clients.map(c => (c.id === clientId ? fresh : c)) }
       set({ data: updated })
@@ -2572,6 +2603,36 @@ export const useStore = create<StudioState>((set, get) => ({
     if (clientId && updatedShow) upsertShow(updatedShow, clientId).catch(console.error)
   },
 
+  setShowOwner: (showId, ownerId) => {
+    const { data, clientId, workspaceId } = get()
+    let updatedShow: Show | undefined
+    let was: string | undefined
+    const updated = {
+      clients: data.clients.map(c => {
+        if (c.id !== clientId) return c
+        return {
+          ...c,
+          tour: {
+            ...c.tour,
+            shows: c.tour.shows.map(s => {
+              if (s.id !== showId) return s
+              was = s.ownerId
+              updatedShow = { ...s, ownerId: ownerId ?? undefined }
+              return updatedShow
+            }),
+          },
+        }
+      }),
+    }
+    set({ data: updated })
+    saveData(updated)
+    // Who owns a show is not on the pushed Google event, so nothing is pushed. Only the owner is saved (never the rest of the row).
+    if (workspaceId && clientId && updatedShow && was !== updatedShow.ownerId) {
+      const now = updatedShow.ownerId
+      saveOwners(rowSaved('shows', showId), [{ table: 'shows', id: showId, ownerId: now, was, restore: o => showOwnerOnScreen('show', clientId, showId, o), stillShown: () => ownerOnScreen('show', clientId, showId) === now }])
+    }
+  },
+
   // Guarantee/deposit/currency don't appear on the pushed Google event
   // either, for the same reason — no push here.
   updateShowFinancials: (showId, change) => {
@@ -2692,9 +2753,14 @@ export const useStore = create<StudioState>((set, get) => ({
     saveData(updated)
     if (workspaceId && clientId) {
       // budgets.offer_id is a foreign key to the offer, so the offer goes first.
-      upsertOffer(newOffer, clientId)
-        .then(() => { if (newBudget) return upsertBudget(newBudget, clientId) })
-        .catch(console.error)
+      const offerSaved = upsertOffer(newOffer, clientId)
+      trackRow('tour_offers', newOffer.id, offerSaved)
+      offerSaved.then(() => { if (newBudget) return upsertBudget(newBudget, clientId) }).catch(console.error)
+      // The owner is saved on its own, as soon as the offer itself exists (not after the budget, which someone without Finance cannot save).
+      if (newOffer.ownerId) {
+        const now = newOffer.ownerId
+        saveOwners(offerSaved, [{ table: 'tour_offers', id: newOffer.id, ownerId: now, was: undefined, restore: o => showOwnerOnScreen('offer', clientId, newOffer.id, o), stillShown: () => ownerOnScreen('offer', clientId, newOffer.id) === now }])
+      }
     }
   },
 
@@ -2705,6 +2771,7 @@ export const useStore = create<StudioState>((set, get) => ({
     let lockedBudget: Budget | undefined
     let newAdvance: ShowAdvance | undefined
     let withdrewSheets = false
+    let ownerWas: string | undefined
     // Confirming an offer also adds its show, which is Tour. Someone with Deals & fees but no Tour edit can confirm the offer; the show is left for the team.
     const mayMakeShow = get().hasAccess('tour', clientId ?? undefined, true)
     const wasConfirmed = data.clients.find(c => c.id === clientId)?.agentData?.offers.find(o => o.id === offerId)?.status === 'confirmed'
@@ -2713,6 +2780,7 @@ export const useStore = create<StudioState>((set, get) => ({
         if (c.id !== clientId || !c.agentData) return c
         const offers = c.agentData.offers.map(o => {
           if (o.id !== offerId) return o
+          ownerWas = o.ownerId
           updatedOffer = { ...o, ...patch }
           // Confirming an offer creates its Show automatically — only on the
           // transition into 'confirmed', not on every edit while confirmed.
@@ -2724,6 +2792,7 @@ export const useStore = create<StudioState>((set, get) => ({
               viaAgency: updatedOffer.viaAgency, agencyName: updatedOffer.agencyName,
               agencyCommissionPct: updatedOffer.agencyCommissionPct,
               managementCommissionPct: updatedOffer.managementCommissionPct,
+              ...ownerToCarry(updatedOffer, get().workspacePeople, clientId ?? ''),   // the person handling the offer keeps the ball when it becomes a show (unless they can no longer open the artist)
             }
             updatedOffer = { ...updatedOffer, showId: newShow.id }
             // ...and starts its advance, with what the offer already says filled in.
@@ -2769,15 +2838,23 @@ export const useStore = create<StudioState>((set, get) => ({
     set({ data: updated })
     saveData(updated)
     if (workspaceId && withdrewSheets) withdrawOfferSheets(offerId).catch(console.error)
+    // The saves of the offer's own row and of the new show's own row. Owners are written after THEIR row, not after the rest of
+    // what a confirm saves (the budget lock, the advance), which someone without those pages' edit access cannot save.
+    let offerSaved: Promise<unknown> = Promise.resolve()
+    let showSaved: Promise<unknown> = Promise.resolve()
     if (clientId && newShow) {
       // The offer's row references the new show's id via a foreign key, so
       // the show must land in the DB first — write them in sequence, not
       // fire-and-forget in parallel, or the offer write can lose the race
       // and get rejected for pointing at a show that doesn't exist yet.
       const madeShow = newShow
-      upsertShow(madeShow, clientId)
+      showSaved = upsertShow(madeShow, clientId)
+      trackRow('shows', madeShow.id, showSaved)
+      offerSaved = showSaved
         .then(() => hasDealData(madeShow) ? upsertShowDeal(madeShow, clientId) : undefined)    // its fee comes from the offer
         .then(() => { if (workspaceId && updatedOffer) return upsertOffer(updatedOffer, clientId) })
+      trackRow('tour_offers', offerId, offerSaved)
+      offerSaved
         .then(() => { if (workspaceId && lockedBudget) return upsertBudget(lockedBudget, clientId) })
         .then(() => { if (workspaceId && newAdvance) return upsertAdvance(newAdvance) })
         .catch(console.error)
@@ -2788,9 +2865,23 @@ export const useStore = create<StudioState>((set, get) => ({
         { label: 'Open show', run: () => { const st = get(); st.setSection('tour'); st.setTourSub('tour'); st.setSelectedShow(showId) } },
       )
     } else if (workspaceId && clientId && updatedOffer) {
-      upsertOffer(updatedOffer, clientId).catch(console.error)
+      offerSaved = upsertOffer(updatedOffer, clientId)
+      trackRow('tour_offers', offerId, offerSaved)
+      offerSaved.catch(console.error)
       if (patch.status === 'confirmed' && !wasConfirmed && !mayMakeShow) {
         notify('Confirmed. The show itself still needs adding by someone with Tour access.')
+      }
+    }
+    // Owners: saved on their own, only what changed (the offer's owner if it was changed, and the owner the new show started with).
+    if (workspaceId && clientId && updatedOffer) {
+      if ('ownerId' in patch && patch.ownerId !== ownerWas) {
+        const now = patch.ownerId
+        saveOwners(offerSaved, [{ table: 'tour_offers', id: offerId, ownerId: now, was: ownerWas, restore: o => showOwnerOnScreen('offer', clientId, offerId, o), stillShown: () => ownerOnScreen('offer', clientId, offerId) === now }])
+      }
+      const madeShowId = newShow?.id
+      const madeOwner = newShow?.ownerId
+      if (madeShowId && madeOwner) {
+        saveOwners(showSaved, [{ table: 'shows', id: madeShowId, ownerId: madeOwner, was: undefined, restore: o => showOwnerOnScreen('show', clientId, madeShowId, o), stillShown: () => ownerOnScreen('show', clientId, madeShowId) === madeOwner }])
       }
     }
   },

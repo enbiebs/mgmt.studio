@@ -12,6 +12,9 @@ import { useTourTabs } from '@/components/tour/useTourTabs'
 import { effectiveSub } from '@/lib/item-access'
 import { ShowProgressPanel } from '@/components/tour/ShowProgressPanel'
 import { ShowFolderLink } from '@/components/tour/ShowFolderLink'
+import { JustMineToggle, ShowOwnerCell } from '@/components/tour/OwnerField'
+import { justMine, ownerWords, resolveOwner } from '@/lib/item-owner'
+import { useMe } from '@/lib/useToday'
 import { BackToList, detailPaneClass, listPaneClass, useMobilePane } from '@/components/ui/MobilePanes'
 import { Modal, FormField, inputClass, selectClass } from '@/components/ui/Modal'
 import { MONTH_NAMES, MONTH_SHORT, fmt, today } from '@/lib/utils'
@@ -39,6 +42,9 @@ export function TourView() {
   const [copied, setCopied] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [hidePlayed, setHidePlayed] = useState(false)
+  const [mineOnly, setMineOnly] = useState(false)
+  const people = useStore(s => s.workspacePeople)
+  const me = useMe()
 
   // The screen inside Shows: the show's details, or one of its steps (each person gets only the ones they can open).
   const tabs = useTourTabs()
@@ -47,8 +53,10 @@ export function TourView() {
 
   if (!client) return null
   const allShows = client.tour.shows
-  const shows    = allShows.filter(s => !s.historyOnly)      // shows that still need work
-  const history  = allShows.filter(s => s.historyOnly)       // past shows kept for fee comparisons
+  // "Just mine" narrows the list and the numbers above it; the picked show is always looked up among all of them.
+  const listed   = mineOnly && people.length > 0 ? justMine(allShows, me, people, client.id) : allShows
+  const shows    = listed.filter(s => !s.historyOnly)        // shows that still need work
+  const history  = listed.filter(s => s.historyOnly)         // past shows kept for fee comparisons
   // Shows still ahead come first (soonest at the top); shows already past sit in a group below (most recent first) that stays open unless you fold it away.
   // "Upcoming" counts only shows that are still going to happen, so a cancelled show is never counted.
   const { upcoming: ahead, past: played } = splitShows(shows, today())
@@ -91,6 +99,12 @@ export function TourView() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // " · Jen" after the city when someone owns the show (nothing when nobody does, so the list stays quiet).
+  const ownerPart = (s: Show) => {
+    const o = resolveOwner(s.ownerId, people, client.id)
+    return o.state === 'set' ? ` · ${ownerWords(o.person, me)}` : ''
+  }
+
   const showRow = (s: Show, dim = false) => {
     const d = new Date(s.date + 'T00:00:00')
     return (
@@ -107,7 +121,7 @@ export function TourView() {
         </div>
         <div className="min-w-0 flex-1">
           <div className={`truncate text-sm font-medium leading-tight ${s.status === 'cancelled' ? 'line-through text-gray-400' : ''}`}>{s.venue}</div>
-          <div className="truncate text-xs text-gray-400 mt-0.5">{s.city}{dim ? ` · ${d.getFullYear()}` : ''}</div>
+          <div className="truncate text-xs text-gray-400 mt-0.5">{s.city}{dim ? ` · ${d.getFullYear()}` : ''}{ownerPart(s)}</div>
         </div>
         <div className="flex-shrink-0 text-right">
           <div className={`text-[10px] font-bold uppercase tracking-wider ${s.status === 'confirmed' ? 'text-green-600' : s.status === 'cancelled' ? 'text-red-500' : 'text-amber-500'}`}>{s.status}</div>
@@ -123,6 +137,7 @@ export function TourView() {
       <div className={`${listPaneClass(showDetail)} w-full md:w-[272px] flex-shrink-0 border-r border-gray-100 flex-col`}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Shows</span>
+          <JustMineToggle on={mineOnly} onChange={setMineOnly} />
         </div>
 
         <div className="flex-1 overflow-auto">
@@ -312,6 +327,7 @@ export function TourView() {
                   </div>
                 )}
               </div>
+              <ShowOwnerCell key={selected.id} show={selected} clientId={client.id} editable={editable} />
             </div>
 
             {canSeeDeals && <ShowFinancials key={selected.id} show={selected} editable={canEditDeals} onViewOffer={() => setTourSub('offers')} />}
