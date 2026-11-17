@@ -829,6 +829,9 @@ export interface OfferTerms {
   routingNotes?:     string          // "Cancun is the next day, 7:30 PM set"
   alternativeDates?: string          // "December is open except 12/14"
   respondBy?:        string          // ISO date: the buyer wants an answer by then
+  // Only while the offer is on hold (lib/holds.ts keeps them off anything else)
+  holdUntil?:        string          // ISO date: the promoter keeps the date for us until then
+  holdPosition?:     number          // our place in line when several promoters hold the same date (1 = first)
 }
 
 export interface TourOffer {

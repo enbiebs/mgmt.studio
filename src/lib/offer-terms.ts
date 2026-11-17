@@ -5,6 +5,7 @@
 // ──────────────────────────────────────────────────────────
 
 import type { OfferBonus, OfferPayment, OfferTerms } from '@/types'
+import { isIsoDay } from '@/lib/holds'
 
 export const AGE_LIMITS = ['All ages', '18+', '21+']
 export const BILLINGS = ['Headline', 'Direct support', 'Support', 'Festival set']
@@ -88,6 +89,7 @@ export interface TermsDraft {
   payments: { when: string; pct: string }[]
   radiusMiles: string; radiusDaysAfter: string
   routingNotes: string; alternativeDates: string; respondBy: string
+  holdUntil: string; holdPosition: string
 }
 
 export function draftFromTerms(t?: OfferTerms): TermsDraft {
@@ -102,6 +104,7 @@ export function draftFromTerms(t?: OfferTerms): TermsDraft {
     payments: (t?.payments ?? []).map(p => ({ when: p.when, pct: s(p.pct) })),
     radiusMiles: s(t?.radiusMiles), radiusDaysAfter: s(t?.radiusDaysAfter),
     routingNotes: t?.routingNotes ?? '', alternativeDates: t?.alternativeDates ?? '', respondBy: t?.respondBy ?? '',
+    holdUntil: t?.holdUntil ?? '', holdPosition: s(t?.holdPosition),
   }
 }
 
@@ -110,6 +113,9 @@ const num = (s: string): number | undefined => {
   const n = Number(s)
   return Number.isFinite(n) ? n : undefined
 }
+
+// Our place in line is a whole number from 1 up; anything else means "not ranked".
+const place = (s: string): number | undefined => { const n = num(s); return n !== undefined && n >= 1 ? Math.round(n) : undefined }
 
 // Keeps only what was filled in, so an offer with no extra terms saves no terms at all.
 export function termsFromDraft(d: TermsDraft): OfferTerms | undefined {
@@ -129,10 +135,22 @@ export function termsFromDraft(d: TermsDraft): OfferTerms | undefined {
       .filter((p): p is OfferPayment => p.when !== '' && !!p.pct),
     radiusMiles: num(d.radiusMiles), radiusDaysAfter: num(d.radiusDaysAfter),
     routingNotes: text(d.routingNotes), alternativeDates: text(d.alternativeDates), respondBy: text(d.respondBy),
+    holdUntil: isIsoDay(d.holdUntil.trim()) ? d.holdUntil.trim() : undefined, holdPosition: place(d.holdPosition),
   }
   // Drop empty values (and empty lists) so the saved JSON only holds real terms.
   const out = Object.fromEntries(
     Object.entries(t).filter(([, v]) => v !== undefined && !(Array.isArray(v) && v.length === 0)),
   ) as OfferTerms
   return Object.keys(out).length > 0 ? out : undefined
+}
+
+// ── the offer form's hold rules (kept here, not in the screen, so a check can prove them) ──
+/** What the form saves. Our place in line only means something while another promoter holds the same date: with the question hidden, it is not saved. */
+export function draftForSave(d: TermsDraft, otherHoldOnDate: boolean): TermsDraft {
+  return otherHoldOnDate ? d : { ...d, holdPosition: '' }
+}
+
+/** Leaving hold takes the hold details off the offer, so a form that is still open must not keep them (saving would put them back). */
+export function draftOnLeavingHold(d: TermsDraft): TermsDraft {
+  return { ...d, holdUntil: '', holdPosition: '' }
 }

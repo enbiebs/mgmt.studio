@@ -26,7 +26,8 @@ const STATE: Record<ShowState, { label: string; variant: 'green' | 'amber' | 're
   lapsed:    { label: 'Hold passed', variant: 'amber' },
 }
 const COLUMN_LABEL: Record<OfferColumn, string> = { inquiry: 'Inquiry', hold: 'Hold', confirmed: 'Confirmed' }
-const REPLY_TONE = { late: 'text-red-600', soon: 'text-amber-700', ok: 'text-gray-500' } as const
+const REPLY_TONE = { late: 'text-red-600', soon: 'text-amber-700', ok: 'text-gray-500', quiet: 'text-gray-400' } as const
+const PLACE_TONE = { first: 'text-green-700', behind: 'text-gray-500', check: 'text-amber-700' } as const
 const PAGE = 150   // rows drawn at a time, so a long history (Played, All) stays quick
 
 const SEGMENT = 'inline-flex p-0.5 bg-gray-100 rounded-lg text-xs font-medium'
@@ -222,6 +223,8 @@ export function RosterTour() {
                         <span className="text-sm font-semibold tabular-nums">{money(o.guarantee, 'USD')}</span>
                       </span>
                       {o.reply && <span className={`block mt-1 text-[11px] font-medium ${REPLY_TONE[o.reply.tone]}`}>{o.reply.label}</span>}
+                      {o.hold && <span className={`block mt-1 text-[11px] font-medium ${REPLY_TONE[o.hold.tone]}`}>{o.hold.label}</span>}
+                      {o.holdPlace && <span className={`block mt-1 text-[11px] font-medium ${PLACE_TONE[o.holdPlace.tone]}`}>{o.holdPlace.label}</span>}
                     </button>
                   ))}
                 </div>

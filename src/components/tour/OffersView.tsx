@@ -13,12 +13,14 @@ import { PasteOfferModal } from '@/components/tour/PasteOfferModal'
 import { OfferIntelligence } from '@/components/tour/OfferIntelligence'
 import type { OfferPrefill } from '@/lib/offer-paste'
 import { OfferTermsFields } from '@/components/tour/OfferTermsFields'
-import { draftFromTerms, termsFromDraft, maxPotential, replyStatus } from '@/lib/offer-terms'
+import { draftFromTerms, draftForSave, draftOnLeavingHold, termsFromDraft, maxPotential, replyStatus } from '@/lib/offer-terms'
 import { latestSheet, longDate, SHEET_STATUS_LABEL, SHEET_STATUS_STYLE } from '@/lib/offer-sheet'
 import { RowMenu } from '@/components/ui/RowMenu'
 import { JustMineToggle, OwnerChip, OwnerFormField, useStartingOwner } from '@/components/tour/OwnerField'
 import { justMine, offerNeedsOwner, ownerPatch } from '@/lib/item-owner'
 import { useMe } from '@/lib/useToday'
+import { HoldChips, HoldFormFields } from '@/components/tour/HoldFields'
+import { holdPlaces, otherHoldsOnDate, type HoldPlace } from '@/lib/holds'
 import { askConfirm } from '@/lib/confirm'
 import { offerImpact, staysLine } from '@/lib/delete-effects'
 import type { TourOffer, OfferStatus } from '@/types'
@@ -69,6 +71,7 @@ export function OffersView() {
   // "Just mine" narrows the pipeline and the routing calendar; the stats and the history stay whole.
   const shown = mineOnly && people.length > 0 ? justMine(offers, me, people, client.id) : offers   // (no teammates loaded = no switch on screen, so the filter must not stay on)
 
+  const places = holdPlaces(offers, localToday())      // worked out from every offer, so "Just mine" never changes who is first in line
   const pipeline   = shown.filter(o => PIPELINE_STAGES.includes(o.status))
   const settled    = offers.filter(o => o.status === 'settled')
   const cancelled  = offers.filter(o => o.status === 'cancelled')
@@ -116,7 +119,7 @@ export function OffersView() {
       </div>
 
       <div className="p-4 md:p-6">
-        {tab === 'pipeline' && <PipelineTab offers={pipeline} editable={editable} onEdit={setEditingOffer} />}
+        {tab === 'pipeline' && <PipelineTab offers={pipeline} places={places} editable={editable} onEdit={setEditingOffer} />}
         {tab === 'routing'  && <RoutingTab  offers={shown.filter(o => o.status !== 'cancelled')} editable={editable} onEdit={setEditingOffer} />}
         {tab === 'settled'  && <HistoryTab  settled={settled} cancelled={cancelled} />}
       </div>
@@ -169,6 +172,8 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
   const [ownerChoice, setOwnerChoice] = useState<string | null>(null)   // null = untouched: keep what it had
   const owner = ownerChoice ?? startingOwner
   const [terms, setTerms] = useState(() => draftFromTerms(seed?.terms))
+  // The status buttons below save straight away, so the form reads the offer's CURRENT status (not the one it was opened with).
+  const liveStatus = useStore(s => (initial ? s.getClient()?.agentData?.offers.find(o => o.id === initial.id)?.status ?? initial.status : undefined))
   const [triedSave, setTriedSave] = useState(false)
   const missing = [
     !f.venue && 'venue', !f.city && 'city', !f.date && 'date', !f.promoter && 'promoter', !f.guarantee && 'guarantee',
@@ -183,7 +188,7 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
       viaAgency: f.viaAgency, agencyName: f.viaAgency ? (f.agencyName || undefined) : undefined,
       agencyCommissionPct: f.viaAgency && f.agencyCommissionPct ? Number(f.agencyCommissionPct) : undefined,
       managementCommissionPct: f.viaAgency && f.managementCommissionPct ? Number(f.managementCommissionPct) : undefined,
-      terms: termsFromDraft(terms),
+      terms: termsFromDraft(draftForSave(terms, otherHoldsOnDate(client?.agentData?.offers ?? [], f.date, localToday(), initial?.id).length > 0)),
       ...ownerPatch(ownerChoice),   // untouched = not mentioned, so saving a typo fix never changes who owns it
     }
     if (initial) updateOffer(initial.id, patch)
@@ -194,6 +199,7 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
   function handleStatusChange(status: OfferStatus) {
     if (!initial) return
     updateOffer(initial.id, { status })
+    if (status !== 'hold') setTerms(draftOnLeavingHold)      // the offer lets go of its hold details, so the open form must too (going back on hold starts with none)
   }
 
   async function handleDelete() {
@@ -244,7 +250,7 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
                 key={s}
                 onClick={() => handleStatusChange(s)}
                 className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
-                  initial.status === s ? `${STATUS_CONFIG[s].bg} ${STATUS_CONFIG[s].color}` : 'text-gray-400 hover:text-gray-600'
+                  liveStatus === s ? `${STATUS_CONFIG[s].bg} ${STATUS_CONFIG[s].color}` : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
                 {STATUS_CONFIG[s].label}
@@ -256,6 +262,7 @@ function OfferFormModal({ initial, prefill, onClose, onSendSheet }: {
           )}
         </FormField>
       )}
+      {initial && liveStatus === 'hold' && <HoldFormFields draft={terms} onChange={setTerms} date={f.date} offerId={initial.id} />}
       {initial && canSendSheets && initial.status !== 'cancelled' && initial.status !== 'settled' && (
         <FormField label="Offer sheet">
           <div className="border border-gray-100 rounded-lg p-2.5 space-y-2">
@@ -326,7 +333,7 @@ function StatPill({ label, value, color }: { label: string; value: string; color
 }
 
 // ── Pipeline (kanban columns) ───────────────────────────────
-function PipelineTab({ offers, editable, onEdit }: { offers: TourOffer[]; editable: boolean; onEdit: (o: TourOffer) => void }) {
+function PipelineTab({ offers, places, editable, onEdit }: { offers: TourOffer[]; places: Map<string, HoldPlace>; editable: boolean; onEdit: (o: TourOffer) => void }) {
   const byStatus = (s: OfferStatus) => offers.filter(o => o.status === s)
 
   return (
@@ -350,7 +357,7 @@ function PipelineTab({ offers, editable, onEdit }: { offers: TourOffer[]; editab
               </div>
             )}
             <div className="space-y-2">
-              {items.map(o => <OfferCard key={o.id} offer={o} editable={editable} onEdit={onEdit} />)}
+              {items.map(o => <OfferCard key={o.id} offer={o} place={places.get(o.id)} editable={editable} onEdit={onEdit} />)}
             </div>
             {items.length > 0 && (
               <div className="mt-3 text-right text-xs text-gray-400">
@@ -364,7 +371,7 @@ function PipelineTab({ offers, editable, onEdit }: { offers: TourOffer[]; editab
   )
 }
 
-function OfferCard({ offer: o, editable, onEdit }: { offer: TourOffer; editable: boolean; onEdit: (o: TourOffer) => void }) {
+function OfferCard({ offer: o, place, editable, onEdit }: { offer: TourOffer; place?: HoldPlace; editable: boolean; onEdit: (o: TourOffer) => void }) {
   const cfg = STATUS_CONFIG[o.status]
   const clientId = useStore(s => s.getClient()?.id)
   const sheet = useStore(s => latestSheet(s.getClient()?.tour.offerSheets, o.id))
@@ -403,6 +410,7 @@ function OfferCard({ offer: o, editable, onEdit }: { offer: TourOffer; editable:
           <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${reply.tone === 'late' ? 'bg-red-50 text-red-600' : reply.tone === 'soon' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>{reply.label}</span>
         </div>
       )}
+      <HoldChips offer={o} place={place} />
       {o.notes && (
         <div className="mt-2 text-xs text-amber-600 bg-amber-50 rounded-lg px-2 py-1">{o.notes}</div>
       )}

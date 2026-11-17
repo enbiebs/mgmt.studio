@@ -104,6 +104,14 @@ export function conflictsFor(all: Booking[], date: string, window = 3): Conflict
   return { sameDay, nearby }
 }
 
+/**
+ * The bookings on the same day, split into firm ones (a confirmed show or offer: the date is taken) and open ones (a hold or an inquiry:
+ * another promoter is also asking for the date, which is ordinary and is sorted out by the place in line, not a clash).
+ */
+export function splitSameDay(bookings: readonly Booking[]): { firm: Booking[]; open: Booking[] } {
+  return { firm: bookings.filter(b => b.status === 'confirmed'), open: bookings.filter(b => b.status !== 'confirmed') }
+}
+
 // ── What this artist was paid before ─────────────────────────
 export interface FeePoint {
   showId: string

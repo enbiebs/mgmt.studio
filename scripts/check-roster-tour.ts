@@ -109,6 +109,20 @@ assert.equal(card('o-late').reply, undefined, 'no reply-by date: no badge')
 assert.deepEqual([card('o-old').datePassed, card('o-soon').datePassed, card('o-conf').datePassed, card('o-conf-past').datePassed], [true, false, false, false], 'only an inquiry or hold can have its date pass; a confirmed offer is a show')
 assert.equal(card('o-conf').reply, undefined, 'a confirmed offer is not waiting for a reply, even with a reply-by date on it')
 assert.deepEqual([card('o-conf').guarantee, card('o-conf').clientName, card('o-conf').days], [9000, 'Gamma', 12])
+// holds: how long the promoter keeps the date, and our place in line when two promoters hold the same date
+const heldArtist = artist('h', 'Held', { offers: [
+  offer({ id: 'h1', date: '2026-11-12', status: 'hold', terms: { holdUntil: '2026-10-23', holdPosition: 1 } }),
+  offer({ id: 'h2', date: '2026-11-12', status: 'hold', terms: { holdPosition: 2 } }),
+  offer({ id: 'h3', date: '2026-11-20', status: 'hold' }),
+  offer({ id: 'h4', date: '2026-11-25', status: 'inquiry', terms: { holdUntil: '2026-10-23' } }),
+] })
+const heldBoard = buildRosterTour([{ client: heldArtist, access: FULL }], TODAY).offers
+const held = (id: string) => heldBoard.find(o => o.offerId === id)!
+assert.deepEqual(held('h1').hold, { label: 'Held until Oct 23 (2 days left)', tone: 'soon' })
+assert.deepEqual(held('h2').hold, { label: 'No hold-until date', tone: 'quiet' })
+assert.deepEqual([held('h1').holdPlace, held('h2').holdPlace], [{ label: '1st hold of 2', tone: 'first' }, { label: '2nd hold of 2', tone: 'behind' }])
+assert.equal(held('h3').holdPlace, undefined, 'a hold on a date by itself has no place in line')
+assert.equal(held('h4').hold, undefined, 'an inquiry is not a hold, whatever is left in its terms')
 // offers are Deals & fees: not with Tour alone
 assert.deepEqual(buildRosterTour([{ client: gamma, access: { ...FULL, deals: false, dealsFully: false } }], TODAY).offers, [])
 // Deals & fees without Tour: the offers, and no shows
