@@ -8,7 +8,7 @@
 import { useEffect, useMemo } from 'react'
 import { useStore } from '@/lib/store'
 import { financeSettings } from '@/lib/budget'
-import { bookingsOf, conflictsFor, feeHistory, summarize, vsMedian, type Booking } from '@/lib/intelligence'
+import { bookingsOf, conflictsFor, feeHistory, splitSameDay, summarize, vsMedian, type Booking } from '@/lib/intelligence'
 import { milesBetween, radiusIssues, travelVerdict } from '@/lib/geo'
 import { useLocated } from '@/lib/places'
 import { fromDateStr, today } from '@/lib/utils'
@@ -70,10 +70,16 @@ export function OfferIntelligence({ client, date, city, venue, guarantee, radius
     <div className="rounded-xl border border-gray-100 p-3 space-y-2.5 text-xs">
       <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">What we know</div>
 
-      {conflicts && conflicts.sameDay.length > 0 && (
+      {conflicts && splitSameDay(conflicts.sameDay).firm.length > 0 && (
         <div className="rounded-lg border border-red-200 text-red-600 px-2.5 py-2">
           <div className="font-semibold">Already booked on this date</div>
-          {conflicts.sameDay.map(b => <div key={b.key}>{what(b)}</div>)}
+          {splitSameDay(conflicts.sameDay).firm.map(b => <div key={b.key}>{what(b)}</div>)}
+        </div>
+      )}
+      {conflicts && splitSameDay(conflicts.sameDay).open.length > 0 && (
+        <div className="rounded-lg border border-amber-200 text-amber-700 px-2.5 py-2">
+          <div className="font-semibold">Also held or offered for this date</div>
+          {splitSameDay(conflicts.sameDay).open.map(b => <div key={b.key}>{what(b)}</div>)}
         </div>
       )}
       {conflicts && conflicts.sameDay.length === 0 && conflicts.nearby.length === 0 && (

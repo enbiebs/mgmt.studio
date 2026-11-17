@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { holdClock, holdPlaces, isLiveHold, ordinal, otherHoldsOnDate, othersLine, placeLabel, placeTone, termsForStatus, withoutHoldDetails } from '../src/lib/holds'
 import { draftFromTerms, termsFromDraft } from '../src/lib/offer-terms'
 import { buildOfferSheetSnapshot } from '../src/lib/offer-sheet'
+import { bookingsOf, conflictsFor, splitSameDay } from '../src/lib/intelligence'
 import { useStore } from '../src/lib/store'
 import type { Budget, Client, OfferTerms, TourOffer } from '../src/types'
 
@@ -132,6 +133,18 @@ check('an offer sheet never carries the hold details, but keeps the rest of the 
   }
   assert.equal(withTerms.terms?.holdUntil, '2026-10-30')           // the offer itself still has them
   assert.equal(buildOfferSheetSnapshot({ client, offer: { ...held, terms: { holdUntil: '2026-10-30' } } as TourOffer, budget, detail: 'summary' }).offer.terms, undefined)   // nothing else in the terms: none at all
+})
+
+check('another promoter holding the same date is not called "already booked"; only a firm booking is', () => {
+  const client = {
+    tour: { shows: [{ id: 's1', date: '2026-11-12', city: 'Rome', venue: 'Rome Hall', time: '20:00', status: 'confirmed' }, { id: 's2', date: '2026-11-12', city: 'Oslo', venue: 'Oslo Hall', time: '20:00', status: 'hold' }] },
+    agentData: { offers: [offer('h1'), offer('i1', { status: 'inquiry' }), offer('c1', { status: 'confirmed' }), offer('x1', { status: 'cancelled' })] },
+  } as unknown as Client
+  const sameDay = conflictsFor(bookingsOf(client), '2026-11-12').sameDay
+  const { firm, open } = splitSameDay(sameDay)
+  assert.deepEqual(firm.map(b => b.key).sort(), ['offer:c1', 'show:s1'])                    // a confirmed show, a confirmed offer
+  assert.deepEqual(open.map(b => b.key).sort(), ['offer:h1', 'offer:i1', 'show:s2'])        // a hold offer, an inquiry, a held show
+  assert.equal(firm.length + open.length, sameDay.length)                                   // nothing is lost between the two lists (a cancelled offer was never in)
 })
 
 // ── in the app: hold details follow the status ──
